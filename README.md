@@ -21,10 +21,18 @@ open index.html
 
 ```
 TraningCoach/
-├── index.html        # cała aplikacja (one-file)
-├── CHANGELOG.md      # historia zmian
+├── index.html          # landing page + analizator treningowy
+├── tri-coach.html      # podstrona Tri Coach
+├── run-coach.html      # podstrona Run Coach
+├── swim-coach.html     # podstrona Swim Coach
+├── bike-coach.html     # podstrona Bike Coach
+├── css/
+│   └── style.css       # wspólne style dla wszystkich stron
+├── js/
+│   └── analyzer.js     # logika analizatora treningowego
 ├── docs/
-│   └── features.md   # szczegółowy opis funkcji
+│   └── features.md     # szczegółowy opis funkcji i logiki
+├── CHANGELOG.md        # historia zmian
 └── README.md
 ```
 

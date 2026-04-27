@@ -5,6 +5,24 @@ Wersjonowanie: `MAJOR.MINOR.PATCH`.
 
 ---
 
+## [0.3.0] — 2026-04-27
+
+### Dodano
+- **Podstrony** — każdy coach ma dedykowaną stronę HTML z unikalną treścią
+  - `tri-coach.html` — tabela dystansów, fazy periodyzacji, przejścia T1/T2, brick, odżywianie wyścigowe
+  - `run-coach.html` — 5 stref tętna, typy biegów, biomechanika biegu off-bike, najczęstsze błędy
+  - `swim-coach.html` — fundamenty techniki, 6 dryli technicznych, plany dystansów, wody otwarte
+  - `bike-coach.html` — 7 stref FTP, typy treningów, tabela prędkości/FTP, pacing wyścigowy, odżywianie
+- `css/style.css` — wspólny arkusz stylów dla wszystkich stron (eliminacja duplikacji)
+- `js/analyzer.js` — logika analizatora wydzielona do osobnego pliku
+
+### Zmieniono
+- `index.html` — sekcje coachów zastąpione siatką 4 kart linkujących do podstron
+- Nawigacja wyróżnia aktywną stronę klasą `.active`
+- Linki CTA w nawigacji i kartach kierują do odpowiednich podstron lub `index.html#analyzer`
+
+---
+
 ## [0.2.0] — 2026-04-27
 
 ### Dodano

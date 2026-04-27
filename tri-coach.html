@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tri Coach — TriCoach</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="nav-logo">TriCoach</a>
+  <ul class="nav-links">
+    <li><a href="tri-coach.html" class="active">Tri Coach</a></li>
+    <li><a href="run-coach.html">Run Coach</a></li>
+    <li><a href="swim-coach.html">Swim Coach</a></li>
+    <li><a href="bike-coach.html">Bike Coach</a></li>
+  </ul>
+  <a href="index.html#analyzer" class="nav-cta">Analizuj trening</a>
+</nav>
+
+<!-- HERO -->
+<div class="hero-sm">
+  <span class="section-label tri">Tri Coach</span>
+  <h1>Triathlon jako<br><em class="tri">jeden sport</em></h1>
+  <p>Trzy dyscypliny, jedna strategia. Naucz się łączyć pływanie, rower i bieg w spójny plan, który prowadzi prosto na metę.</p>
+</div>
+
+<!-- DYSTANSE -->
+<section class="alt">
+  <div class="section-inner">
+    <div class="section-header">
+      <span class="section-label tri">Dystanse wyścigu</span>
+      <h2>Cztery formaty — jeden sport</h2>
+      <p>Każdy dystans wymaga innej strategii treningowej i wyścigowej. Znajdź swój cel i planuj z wyprzedzeniem.</p>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Format</th>
+          <th>Pływanie</th>
+          <th>Rower</th>
+          <th>Bieg</th>
+          <th>Czas amatora</th>
+          <th>Proporcja treningu (S/B/R)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Sprint</td>
+          <td>0.75 km</td>
+          <td>20 km</td>
+          <td>5 km</td>
+          <td>~1h 15 min</td>
+          <td>15% / 45% / 40%</td>
+        </tr>
+        <tr>
+          <td>Olympic</td>
+          <td>1.5 km</td>
+          <td>40 km</td>
+          <td>10 km</td>
+          <td>~2h 30 min</td>
+          <td>18% / 42% / 40%</td>
+        </tr>
+        <tr>
+          <td>Half Ironman</td>
+          <td>1.9 km</td>
+          <td>90 km</td>
+          <td>21.1 km</td>
+          <td>~5–6 godz.</td>
+          <td>20% / 45% / 35%</td>
+        </tr>
+        <tr>
+          <td>Full Ironman</td>
+          <td>3.8 km</td>
+          <td>180 km</td>
+          <td>42.2 km</td>
+          <td>~10–14 godz.</td>
+          <td>18% / 50% / 32%</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- PERIODYZACJA -->
+<section>
+  <div class="section-inner">
+    <div class="coach-layout">
+      <div class="coach-text">
+        <span class="section-label tri">Periodyzacja</span>
+        <h2>Fazy przygotowań do wyścigu</h2>
+        <p>
+          Skuteczne przygotowanie do triathlonu opiera się na świadomym planowaniu obciążeń.
+          Każda faza ma określony cel — nie można budować szczytu przez cały rok.
+        </p>
+        <div class="phases">
+          <div class="phase">
+            <div class="phase-num tri">1</div>
+            <div class="phase-body">
+              <h4>Baza (Base) — 8–16 tygodni</h4>
+              <p>Niska intensywność, duża objętość. Budowanie silnika tlenowego. Minimum 80% czasu w strefie 1–2. Kluczowe dla trwałego postępu.</p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="phase-num tri">2</div>
+            <div class="phase-body">
+              <h4>Budowanie (Build) — 6–10 tygodni</h4>
+              <p>Wzrost intensywności przy utrzymaniu objętości. Sesje sweet spot, treningi brick, długi bieg i jazda w tempie wyścigowym.</p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="phase-num tri">3</div>
+            <div class="phase-body">
+              <h4>Szczyt (Peak) — 2–3 tygodnie</h4>
+              <p>Najwyższa jakość, lekko zredukowana objętość. Symulacje wyścigu, treningi w docelowym tempie, testy przejść T1/T2.</p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="phase-num tri">4</div>
+            <div class="phase-body">
+              <h4>Tapering — 1–2 tygodnie</h4>
+              <p>Drastyczne obcięcie objętości, zachowanie intensywności. Odpoczynek, sen, odżywianie. Brak nowych bodźców treningowych.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="coach-visual">
+        <div class="visual-icon">📅</div>
+        <p style="font-size:13px;color:var(--text-secondary);line-height:1.6">Przykładowy roczny plan (Half Ironman w czerwcu)</p>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:0.5rem">
+          <div style="background:var(--bg);border-radius:var(--radius-md);padding:10px 12px;border:0.5px solid var(--border)">
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px">Styczeń–Marzec</div>
+            <div style="font-size:12px;color:var(--text-secondary)">Faza Bazy — technika, niskie tętno</div>
+          </div>
+          <div style="background:var(--bg);border-radius:var(--radius-md);padding:10px 12px;border:0.5px solid var(--border)">
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px">Kwiecień–Maj</div>
+            <div style="font-size:12px;color:var(--text-secondary)">Faza Budowania — brick, intensywność</div>
+          </div>
+          <div style="background:var(--bg);border-radius:var(--radius-md);padding:10px 12px;border:0.5px solid var(--border)">
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px">Koniec Maja</div>
+            <div style="font-size:12px;color:var(--text-secondary)">Szczyt — symulacje, testy sprzętu</div>
+          </div>
+          <div style="background:var(--bg);border-radius:var(--radius-md);padding:10px 12px;border:0.5px solid var(--border)">
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px">1–2 tyg. przed</div>
+            <div style="font-size:12px;color:var(--text-secondary)">Tapering — odpoczynek, ładowanie</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRZEJŚCIA -->
+<section class="alt">
+  <div class="section-inner">
+    <div class="section-header">
+      <span class="section-label tri">Przejścia</span>
+      <h2>T1 i T2 — czwarty sport triathlonu</h2>
+      <p>Każda minuta zaoszczędzona w przejściu to minuta na mecie. Amatorzy tracą tu często 5–8 minut, które można odzyskać bez żadnego treningu fizycznego.</p>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="info-card">
+        <h4>T1 — Pływanie → Rower</h4>
+        <p>Zdejmij piankę zanim wyjdziesz z wody (za pomocą zamka od góry, nie od dołu). Przygotuj buty już w blokach na rowerze. Kask zakładaj przed dotknięciem roweru — dyskwalifikacja grozi za odwrotną kolejność. Ćwicz T1 co najmniej 3–4 razy przed wyścigiem.</p>
+      </div>
+      <div class="info-card">
+        <h4>T2 — Rower → Bieg</h4>
+        <p>Zacznij zdejmować buty rowerowe 1 km przed strefą. Wbiegnij boso lub w skarpetkach — szybciej niż zmienianie butów w strefie. Miej numer startowy już na gumce, nie zapinaj agrafkami. Pierwsze 2 km biegu zawsze spokojnie — nogi potrzebują adaptacji.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BRICK -->
+<section>
+  <div class="section-inner">
+    <div class="section-header center">
+      <span class="section-label tri">Brick</span>
+      <h2>Trening kluczowy dla triathlonisty</h2>
+      <p>Brick to jazda na rowerze zakończona biegiem bez przerwy. Uczy ciało zmiany wzorca ruchowego i eliminuje uczucie „cegły w nogach" na początku biegu.</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+      <div class="info-card">
+        <h4>Brick krótki</h4>
+        <p>Rower 30–45 min + bieg 15–20 min. Dobry do nauki przejścia. Można robić co tydzień bez dużego obciążenia.</p>
+      </div>
+      <div class="info-card">
+        <h4>Brick wyścigowy</h4>
+        <p>60–80% długości dystansu docelowego. Ćwicz pełny rytuał T2, odżywianie i nawodnienie na rowerze, start biegu w tempie wyścigowym.</p>
+      </div>
+      <div class="info-card">
+        <h4>Brick pełny (symulacja)</h4>
+        <p>Pływanie + rower + bieg w tempie docelowym. Raz lub dwa razy w sezonie, 3–4 tygodnie przed wyścigiem. Najważniejszy trening w roku.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ODŻYWIANIE -->
+<section class="alt">
+  <div class="section-inner">
+    <div class="section-header">
+      <span class="section-label tri">Odżywianie wyścigowe</span>
+      <h2>Nie można wygrać na pusto, ale można przegrać na pełno</h2>
+      <p>Strategia żywieniowa jest tak samo ważna jak trening fizyczny — szczególnie dla dystansów powyżej 2 godzin.</p>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Segment</th>
+          <th>Kalorie/h</th>
+          <th>Płyny/h</th>
+          <th>Sód/h</th>
+          <th>Wskazówka</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Pływanie</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>Brak możliwości jedzenia — zjedz 90 min przed startem.</td>
+        </tr>
+        <tr>
+          <td>Rower (Sprint/Oly)</td>
+          <td>150–200 kcal</td>
+          <td>500–700 ml</td>
+          <td>400–600 mg</td>
+          <td>Żele lub batony energetyczne. Jedz co 20 min.</td>
+        </tr>
+        <tr>
+          <td>Rower (Half/Full)</td>
+          <td>250–350 kcal</td>
+          <td>600–900 ml</td>
+          <td>600–900 mg</td>
+          <td>Solidne jedzenie pierwsze 2h, żele na końcu. Nigdy nie eksperymentuj w dniu wyścigu.</td>
+        </tr>
+        <tr>
+          <td>Bieg</td>
+          <td>100–200 kcal</td>
+          <td>400–600 ml</td>
+          <td>400–600 mg</td>
+          <td>Żele + cola na końcowych kilometrach. Biegaj przez punkty z napojami.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- CTA -->
+<section>
+  <div class="section-inner">
+    <div class="cta-banner">
+      <h2>Sprawdź swoje proporcje treningowe</h2>
+      <p>Analizator TriCoach wyliczy, czy Twoje treningi mają odpowiedni podział między dyscypliny względem Twojego wyścigu docelowego.</p>
+      <a href="index.html#analyzer" class="btn-light">Otwórz analizator →</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-inner">
+    <div>
+      <div class="footer-brand">TriCoach</div>
+      <p class="footer-tagline">Profesjonalne plany treningowe dla triathlonistów amatorów.</p>
+    </div>
+    <div class="footer-links">
+      <a href="tri-coach.html">Tri Coach</a>
+      <a href="run-coach.html">Run Coach</a>
+      <a href="swim-coach.html">Swim Coach</a>
+      <a href="bike-coach.html">Bike Coach</a>
+      <a href="index.html#analyzer">Analizator</a>
+    </div>
+  </div>
+  <div class="footer-copy">
+    <span>© 2026 TriCoach — Zbudowany z Claude</span>
+    <span>Dla triathlonistów amatorów</span>
+  </div>
+</footer>
+
+</body>
+</html>
