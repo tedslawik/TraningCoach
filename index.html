@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TriCoach — Analizator treningu triathlonowego</title>
+  <title>TriCoach — Coaching triathlonowy</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -13,11 +13,17 @@
       --bg-tertiary: #eeece6;
       --text: #1a1a18;
       --text-secondary: #6b6b67;
-      --border: rgba(0,0,0,0.12);
-      --border-md: rgba(0,0,0,0.22);
+      --border: rgba(0,0,0,0.10);
+      --border-md: rgba(0,0,0,0.20);
       --radius-md: 8px;
       --radius-lg: 12px;
+      --radius-xl: 20px;
       --font: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      --nav-h: 60px;
+      --swim: #2563eb;
+      --bike: #16a34a;
+      --run:  #dc2626;
+      --tri:  #7c3aed;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -27,39 +33,408 @@
         --bg-tertiary: #2e2e2b;
         --text: #f0ede6;
         --text-secondary: #9a9990;
-        --border: rgba(255,255,255,0.1);
-        --border-md: rgba(255,255,255,0.2);
+        --border: rgba(255,255,255,0.08);
+        --border-md: rgba(255,255,255,0.18);
       }
     }
 
+    html { scroll-behavior: smooth; }
+
     body {
       font-family: var(--font);
-      background: var(--bg-tertiary);
+      background: var(--bg);
       color: var(--text);
-      min-height: 100vh;
-      padding: 2rem 1rem;
     }
 
-    .container {
-      max-width: 720px;
+    /* ── NAV ── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      height: var(--nav-h);
+      background: var(--bg);
+      border-bottom: 0.5px solid var(--border-md);
+      display: flex;
+      align-items: center;
+      padding: 0 5vw;
+      gap: 2rem;
+      backdrop-filter: blur(12px);
+    }
+
+    .nav-logo {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: var(--text);
+      text-decoration: none;
+      margin-right: auto;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 0.25rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      font-size: 14px;
+      color: var(--text-secondary);
+      padding: 6px 14px;
+      border-radius: var(--radius-md);
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .nav-links a:hover {
+      background: var(--bg-secondary);
+      color: var(--text);
+    }
+
+    .nav-cta {
+      padding: 8px 18px;
+      border-radius: var(--radius-md);
+      background: var(--text);
+      color: var(--bg) !important;
+      font-weight: 500;
+      font-size: 14px;
+      text-decoration: none;
+      transition: opacity 0.15s;
+    }
+
+    .nav-cta:hover { opacity: 0.8; background: var(--text) !important; }
+
+    @media (max-width: 640px) {
+      .nav-links { display: none; }
+    }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: calc(90vh - var(--nav-h));
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 6rem 5vw 5rem;
+      background: var(--bg-tertiary);
+    }
+
+    .hero-eyebrow {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      margin-bottom: 1.25rem;
+    }
+
+    .hero h1 {
+      font-size: clamp(36px, 7vw, 72px);
+      font-weight: 700;
+      line-height: 1.08;
+      letter-spacing: -2px;
+      color: var(--text);
+      max-width: 800px;
+      margin-bottom: 1.5rem;
+    }
+
+    .hero h1 em {
+      font-style: normal;
+      color: var(--tri);
+    }
+
+    .hero-sub {
+      font-size: clamp(16px, 2vw, 20px);
+      color: var(--text-secondary);
+      max-width: 560px;
+      line-height: 1.6;
+      margin-bottom: 2.5rem;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .btn-primary {
+      padding: 14px 28px;
+      border-radius: var(--radius-md);
+      background: var(--text);
+      color: var(--bg);
+      font-size: 15px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: opacity 0.15s;
+    }
+
+    .btn-primary:hover { opacity: 0.82; }
+
+    .btn-secondary {
+      padding: 14px 28px;
+      border-radius: var(--radius-md);
+      background: var(--bg);
+      color: var(--text);
+      border: 0.5px solid var(--border-md);
+      font-size: 15px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+
+    .btn-secondary:hover { background: var(--bg-secondary); }
+
+    .hero-badges {
+      display: flex;
+      gap: 10px;
+      margin-top: 3.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .hero-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      background: var(--bg);
+      border: 0.5px solid var(--border-md);
+      border-radius: 100px;
+      padding: 5px 14px;
+    }
+
+    .hero-badge .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    /* ── SECTION SHARED ── */
+    section {
+      padding: 6rem 5vw;
+    }
+
+    section:nth-child(even) {
+      background: var(--bg-tertiary);
+    }
+
+    .section-inner {
+      max-width: 1100px;
       margin: 0 auto;
     }
 
-    header {
-      margin-bottom: 2rem;
+    .section-label {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 1rem;
     }
 
-    header h1 {
-      font-size: 28px;
-      font-weight: 600;
-      letter-spacing: -0.5px;
+    .section-label.tri   { color: var(--tri); }
+    .section-label.swim  { color: var(--swim); }
+    .section-label.bike  { color: var(--bike); }
+    .section-label.run   { color: var(--run); }
+
+    .coach-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+    }
+
+    @media (max-width: 768px) {
+      .coach-layout { grid-template-columns: 1fr; gap: 2.5rem; }
+    }
+
+    .coach-layout.reverse .coach-text { order: 2; }
+    .coach-layout.reverse .coach-visual { order: 1; }
+
+    @media (max-width: 768px) {
+      .coach-layout.reverse .coach-text  { order: 1; }
+      .coach-layout.reverse .coach-visual { order: 2; }
+    }
+
+    .coach-text h2 {
+      font-size: clamp(28px, 4vw, 42px);
+      font-weight: 700;
+      letter-spacing: -1px;
+      line-height: 1.1;
+      margin-bottom: 1.25rem;
+    }
+
+    .coach-text p {
+      font-size: 16px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      margin-bottom: 1rem;
+    }
+
+    .coach-features {
+      list-style: none;
+      margin: 1.5rem 0 2rem;
+    }
+
+    .coach-features li {
+      font-size: 14px;
+      color: var(--text-secondary);
+      padding: 8px 0;
+      border-bottom: 0.5px solid var(--border);
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .coach-features li:last-child { border-bottom: none; }
+
+    .check {
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+      margin-top: 1px;
+    }
+
+    .check.tri  { background: #ede9fd; color: var(--tri); }
+    .check.swim { background: #dbeafe; color: var(--swim); }
+    .check.bike { background: #dcfce7; color: var(--bike); }
+    .check.run  { background: #fee2e2; color: var(--run); }
+
+    .btn-coach {
+      display: inline-block;
+      padding: 12px 24px;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: opacity 0.15s;
+    }
+
+    .btn-coach.tri  { background: var(--tri);  color: #fff; }
+    .btn-coach.swim { background: var(--swim); color: #fff; }
+    .btn-coach.bike { background: var(--bike); color: #fff; }
+    .btn-coach.run  { background: var(--run);  color: #fff; }
+    .btn-coach:hover { opacity: 0.85; }
+
+    /* ── COACH VISUAL CARD ── */
+    .coach-visual {
+      background: var(--bg-secondary);
+      border: 0.5px solid var(--border-md);
+      border-radius: var(--radius-xl);
+      padding: 2rem;
+      min-height: 340px;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .visual-icon {
+      font-size: 48px;
+      line-height: 1;
+    }
+
+    .visual-stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: auto;
+    }
+
+    .visual-stat {
+      background: var(--bg);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+    }
+
+    .visual-stat-val {
+      font-size: 22px;
+      font-weight: 700;
       color: var(--text);
     }
 
-    header p {
-      font-size: 15px;
+    .visual-stat-lbl {
+      font-size: 11px;
       color: var(--text-secondary);
-      margin-top: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-top: 2px;
+    }
+
+    .visual-bar-group { margin-top: 0.5rem; }
+
+    .v-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .v-bar-lbl {
+      font-size: 12px;
+      color: var(--text-secondary);
+      width: 60px;
+      flex-shrink: 0;
+    }
+
+    .v-bar-track {
+      flex: 1;
+      height: 8px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .v-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+    }
+
+    .fill-tri  { background: var(--tri); }
+    .fill-swim { background: var(--swim); }
+    .fill-bike { background: var(--bike); }
+    .fill-run  { background: var(--run); }
+
+    .v-bar-pct {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      width: 34px;
+      text-align: right;
+    }
+
+    /* ── ANALYZER SECTION ── */
+    #analyzer {
+      background: var(--bg-tertiary);
+    }
+
+    .analyzer-header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    .analyzer-header h2 {
+      font-size: clamp(26px, 4vw, 40px);
+      font-weight: 700;
+      letter-spacing: -1px;
+      margin-bottom: 0.75rem;
+    }
+
+    .analyzer-header p {
+      font-size: 16px;
+      color: var(--text-secondary);
+    }
+
+    .analyzer-wrap {
+      max-width: 720px;
+      margin: 0 auto;
     }
 
     .tabs {
@@ -87,8 +462,8 @@
       border-color: var(--text);
     }
 
-    .section { display: none; }
-    .section.active { display: block; }
+    .az-section { display: none; }
+    .az-section.active { display: block; }
 
     .card {
       background: var(--bg);
@@ -163,9 +538,7 @@
 
     input[type=number] { width: 80px; }
 
-    input:focus, select:focus {
-      border-color: var(--text);
-    }
+    input:focus, select:focus { border-color: var(--text); }
 
     .input-row {
       display: flex;
@@ -338,132 +711,591 @@
 
     .tip-item:last-child { border-bottom: none; }
 
+    /* ── FOOTER ── */
     footer {
-      text-align: center;
+      background: var(--bg);
+      border-top: 0.5px solid var(--border-md);
+      padding: 3rem 5vw;
+    }
+
+    .footer-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 2rem;
+      align-items: start;
+    }
+
+    @media (max-width: 640px) {
+      .footer-inner { grid-template-columns: 1fr; }
+    }
+
+    .footer-brand {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+
+    .footer-tagline {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      max-width: 320px;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      text-align: right;
+    }
+
+    @media (max-width: 640px) {
+      .footer-links { text-align: left; }
+    }
+
+    .footer-links a {
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .footer-links a:hover { color: var(--text); }
+
+    .footer-copy {
+      max-width: 1100px;
+      margin: 2rem auto 0;
+      padding-top: 1.5rem;
+      border-top: 0.5px solid var(--border);
       font-size: 12px;
       color: var(--text-secondary);
-      margin-top: 2rem;
-      padding-top: 1rem;
-      border-top: 0.5px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
     }
   </style>
 </head>
 <body>
-<div class="container">
-  <header>
-    <h1>TriCoach</h1>
-    <p>Analizator treningu i generator planu dla triathlonistów amatorów</p>
-  </header>
 
-  <div class="tabs">
-    <button class="tab active" onclick="switchTab('input', this)">Dane treningowe</button>
-    <button class="tab" onclick="switchTab('analysis', this)">Analiza</button>
-    <button class="tab" onclick="switchTab('plan', this)">Plan tygodnia</button>
+<!-- ════════════════════════════════════════════ NAV -->
+<nav>
+  <a href="#hero" class="nav-logo">TriCoach</a>
+  <ul class="nav-links">
+    <li><a href="#tri-coach">Tri Coach</a></li>
+    <li><a href="#run-coach">Run Coach</a></li>
+    <li><a href="#swim-coach">Swim Coach</a></li>
+    <li><a href="#bike-coach">Bike Coach</a></li>
+  </ul>
+  <a href="#analyzer" class="nav-cta">Analizuj trening</a>
+</nav>
+
+<!-- ════════════════════════════════════════════ HERO -->
+<section id="hero" class="hero">
+  <p class="hero-eyebrow">Profesjonalny coaching sportowy</p>
+  <h1>Trenuj mądrzej.<br><em>Dotrzyj na metę.</em></h1>
+  <p class="hero-sub">
+    Spersonalizowane plany treningowe, analiza wydajności i wskazówki ekspertów
+    dla triathlonistów i sportowców amatorów na każdym poziomie.
+  </p>
+  <div class="hero-actions">
+    <a href="#analyzer" class="btn-primary">Zacznij analizę →</a>
+    <a href="#tri-coach" class="btn-secondary">Poznaj ofertę</a>
   </div>
+  <div class="hero-badges">
+    <div class="hero-badge">
+      <div class="dot" style="background:var(--tri)"></div>
+      Triathlon
+    </div>
+    <div class="hero-badge">
+      <div class="dot" style="background:var(--swim)"></div>
+      Pływanie
+    </div>
+    <div class="hero-badge">
+      <div class="dot" style="background:var(--bike)"></div>
+      Kolarstwo
+    </div>
+    <div class="hero-badge">
+      <div class="dot" style="background:var(--run)"></div>
+      Bieganie
+    </div>
+  </div>
+</section>
 
-  <!-- INPUT -->
-  <div class="section active" id="section-input">
-    <div class="card">
-      <div class="card-title">Twoje treningi z ostatnich 7 dni</div>
-      <div class="workout-grid">
-
-        <div class="workout-item">
-          <div class="disc-badge swim-badge">Pływanie</div>
-          <div class="workout-label">Dystans</div>
-          <div class="input-row">
-            <input type="number" id="swim-dist" value="3.8" min="0" step="0.1">
-            <span class="input-unit">km</span>
-          </div>
-          <div class="workout-label">Czas</div>
-          <div class="input-row">
-            <input type="number" id="swim-time" value="135" min="0">
-            <span class="input-unit">min</span>
-          </div>
-          <div class="workout-label">Liczba sesji</div>
-          <input type="number" id="swim-sessions" value="3" min="0" max="14" style="width:80px">
-        </div>
-
-        <div class="workout-item">
-          <div class="disc-badge bike-badge">Rower</div>
-          <div class="workout-label">Dystans</div>
-          <div class="input-row">
-            <input type="number" id="bike-dist" value="60" min="0">
-            <span class="input-unit">km</span>
-          </div>
-          <div class="workout-label">Czas</div>
-          <div class="input-row">
-            <input type="number" id="bike-time" value="120" min="0">
-            <span class="input-unit">min</span>
-          </div>
-          <div class="workout-label">Liczba sesji</div>
-          <input type="number" id="bike-sessions" value="2" min="0" max="14" style="width:80px">
-        </div>
-
-        <div class="workout-item">
-          <div class="disc-badge run-badge">Bieg</div>
-          <div class="workout-label">Dystans</div>
-          <div class="input-row">
-            <input type="number" id="run-dist" value="15" min="0">
-            <span class="input-unit">km</span>
-          </div>
-          <div class="workout-label">Czas</div>
-          <div class="input-row">
-            <input type="number" id="run-time" value="90" min="0">
-            <span class="input-unit">min</span>
-          </div>
-          <div class="workout-label">Liczba sesji</div>
-          <input type="number" id="run-sessions" value="3" min="0" max="14" style="width:80px">
-        </div>
-
-        <div class="workout-item">
-          <div class="disc-badge race-badge">Wyścig docelowy</div>
-          <div class="workout-label">Data wyścigu</div>
-          <input type="date" id="race-date" style="width:100%">
-          <div class="workout-label">Dystans</div>
-          <select id="race-type" style="width:100%">
-            <option value="half">Half Ironman (1.9/90/21)</option>
-            <option value="full">Full Ironman (3.8/180/42)</option>
-            <option value="olympic">Olympic (1.5/40/10)</option>
-            <option value="sprint">Sprint (0.75/20/5)</option>
-          </select>
-        </div>
-
+<!-- ════════════════════════════════════════════ TRI COACH -->
+<section id="tri-coach">
+  <div class="section-inner">
+    <div class="coach-layout">
+      <div class="coach-text">
+        <p class="section-label tri">Tri Coach</p>
+        <h2>Kompleksowy coaching triathlonowy</h2>
+        <p>
+          Triathlon to sport trzech dyscyplin — każda wymaga osobnej uwagi, a razem
+          tworzą unikalną całość. Nasz Tri Coach integruje pływanie, jazdę na rowerze
+          i bieg w jeden spójny plan periodyzacji, dostosowany do Twojego wyścigu docelowego.
+        </p>
+        <p>
+          Od Sprint po Full Ironman — analizujemy proporcje treningowe, wyznaczamy
+          tempo i generujemy tygodniowe plany z progresją objętości i intensywności.
+        </p>
+        <ul class="coach-features">
+          <li>
+            <span class="check tri">✓</span>
+            Analiza proporcji pływanie/rower/bieg względem dystansu wyścigu
+          </li>
+          <li>
+            <span class="check tri">✓</span>
+            Treningi brick (rower + bieg) dla adaptacji metabolicznej
+          </li>
+          <li>
+            <span class="check tri">✓</span>
+            Automatyczna periodyzacja — peak, build i taper przed wyścigiem
+          </li>
+          <li>
+            <span class="check tri">✓</span>
+            Strategia odżywiania i nawodnienia na długich dystansach
+          </li>
+          <li>
+            <span class="check tri">✓</span>
+            Kalkulacja tempa na każdy segment na podstawie Twoich danych
+          </li>
+        </ul>
+        <a href="#analyzer" class="btn-coach tri">Analizuj moje treningi →</a>
       </div>
-      <button class="analyze-btn" onclick="runAnalysis()">Analizuj i generuj plan →</button>
+
+      <div class="coach-visual">
+        <div class="visual-icon">🏅</div>
+        <p style="font-size:14px;color:var(--text-secondary);line-height:1.6">
+          Przykładowe proporcje dla Half Ironman (1.9 km / 90 km / 21 km)
+        </p>
+        <div class="visual-bar-group">
+          <div class="v-bar-row">
+            <span class="v-bar-lbl">Pływanie</span>
+            <div class="v-bar-track"><div class="v-bar-fill fill-swim" style="width:20%"></div></div>
+            <span class="v-bar-pct">20%</span>
+          </div>
+          <div class="v-bar-row">
+            <span class="v-bar-lbl">Rower</span>
+            <div class="v-bar-track"><div class="v-bar-fill fill-bike" style="width:45%"></div></div>
+            <span class="v-bar-pct">45%</span>
+          </div>
+          <div class="v-bar-row">
+            <span class="v-bar-lbl">Bieg</span>
+            <div class="v-bar-track"><div class="v-bar-fill fill-run" style="width:35%"></div></div>
+            <span class="v-bar-pct">35%</span>
+          </div>
+        </div>
+        <div class="visual-stat-grid">
+          <div class="visual-stat">
+            <div class="visual-stat-val" style="color:var(--tri)">4</div>
+            <div class="visual-stat-lbl">Dystanse wyścigu</div>
+          </div>
+          <div class="visual-stat">
+            <div class="visual-stat-val" style="color:var(--tri)">7</div>
+            <div class="visual-stat-lbl">Dni planu</div>
+          </div>
+          <div class="visual-stat">
+            <div class="visual-stat-val" style="color:var(--tri)">3</div>
+            <div class="visual-stat-lbl">Dyscypliny</div>
+          </div>
+          <div class="visual-stat">
+            <div class="visual-stat-val" style="color:var(--tri)">∞</div>
+            <div class="visual-stat-lbl">Analiz</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
+</section>
 
-  <!-- ANALYSIS -->
-  <div class="section" id="section-analysis">
-    <div class="card">
-      <div class="card-title">Podsumowanie tygodnia</div>
-      <div class="metrics" id="metrics-row"></div>
-      <div id="bar-chart"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Diagnoza</div>
-      <div id="alerts-container"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Twoje tempa</div>
-      <div id="pace-container"></div>
+<!-- ════════════════════════════════════════════ RUN COACH -->
+<section id="run-coach">
+  <div class="section-inner">
+    <div class="coach-layout reverse">
+      <div class="coach-text">
+        <p class="section-label run">Run Coach</p>
+        <h2>Biegaj szybciej, dalej, bez kontuzji</h2>
+        <p>
+          Bieg to najcięższy segment triathlonu — robisz go wtedy, gdy nogi są już
+          zmęczone pływaniem i rowerem. Run Coach skupia się na budowaniu
+          ekonomii biegu i wytrzymałości tlenowej, abyś mógł mocno finiszować.
+        </p>
+        <p>
+          Analizujemy Twoje aktualne tempo, wyznaczamy strefy tętna i proponujemy
+          treningi progresywne — od łatwych przebieżek strefowych po sesje tempo.
+        </p>
+        <ul class="coach-features">
+          <li>
+            <span class="check run">✓</span>
+            Kalkulator tempa wyścigowego i stref tętna
+          </li>
+          <li>
+            <span class="check run">✓</span>
+            Treningi w strefie 2 budujące bazę tlenową
+          </li>
+          <li>
+            <span class="check run">✓</span>
+            Sesje tempo i interwały dla poprawy prędkości progowej
+          </li>
+          <li>
+            <span class="check run">✓</span>
+            Bieg off-bike — adaptacja do zmiany dyscypliny
+          </li>
+          <li>
+            <span class="check run">✓</span>
+            Monitorowanie objętości tygodniowej i zapobieganie przeciążeniom
+          </li>
+        </ul>
+        <a href="#analyzer" class="btn-coach run">Sprawdź moje tempo →</a>
+      </div>
+
+      <div class="coach-visual">
+        <div class="visual-icon">🏃</div>
+        <p style="font-size:14px;color:var(--text-secondary);line-height:1.6">
+          Przykładowe strefy biegowe (na podstawie tętna maksymalnego)
+        </p>
+        <div class="visual-bar-group">
+          <div class="v-bar-row">
+            <span class="v-bar-lbl">Strefa 1</span>
+            <div class="v-bar-track"><div class="v-bar-fill fill-run" style="width:60%;opacity:.3"></div></div>
+            <span class="v-bar-pct" style="font-size:11px">&lt;60%</span>
+          </div>
+          <div class="v-bar-row">
+            <span class="v-bar-lbl">Strefa 2</span>
+            <div class="v-bar-track"><div class="v-bar-fill fill-run" style="width:70%;opacity:.55"></div></div>
+            <span class="v-bar-pct" style="font-size:11px">60–70%</span>
+          </div>
+          <div class="v-bar-row">
+            <span class="v-bar-lbl">Strefa 3</span>
+            <div class="v-bar-track"><div class="v-bar-fill fill-run" style="width:80%;opacity:.75"></div></div>
+            <span class="v-bar-pct" style="font-size:11px">70–80%</span>
+          </div>
+          <div class="v-bar-row">
+            <span class="v-bar-lbl">Strefa 4</span>
+            <div class="v-bar-track"><div class="v-bar-fill fill-run" style="width:90%"></div></div>
+            <span class="v-bar-pct" style="font-size:11px">80–90%</span>
+          </div>
+        </div>
+        <div class="visual-stat-grid">
+          <div class="visual-stat">
+            <div class="visual-stat-val" style="color:var(--run)">5:20</div>
+            <div class="visual-stat-lbl">Cel /km</div>
+          </div>
+          <div class="visual-stat">
+            <div class="visual-stat-val" style="color:var(--run)">42</div>
+            <div class="visual-stat-lbl">km/tydzień</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
+</section>
 
-  <!-- PLAN -->
-  <div class="section" id="section-plan">
-    <div class="card">
-      <div class="card-title">Rekomendowany plan na następny tydzień</div>
-      <div id="plan-container"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Kluczowe wskazówki</div>
-      <div id="tips-container"></div>
+<!-- ════════════════════════════════════════════ SWIM COACH -->
+<section id="swim-coach">
+  <div class="section-inner">
+    <div class="coach-layout">
+      <div class="coach-text">
+        <p class="section-label swim">Swim Coach</p>
+        <h2>Płyń efektywniej, oszczędzaj energię</h2>
+        <p>
+          Pływanie to jedyna dyscyplina triathlonu, gdzie technika dominuje nad
+          kondycją fizyczną. Nawet niewielka poprawa efektywności skoku ramion
+          przekłada się na minuty oszczędności i świeżość na rowerze.
+        </p>
+        <p>
+          Swim Coach analizuje Twoje tempo, wskazuje dysproporcje w sesji
+          i proponuje ćwiczenia drylowe, które skracają dystans na każdy metr wody.
+        </p>
+        <ul class="coach-features">
+          <li>
+            <span class="check swim">✓</span>
+            Kalkulator tempa na 100 m i czas wyścigu w wodzie
+          </li>
+          <li>
+            <span class="check swim">✓</span>
+            Ćwiczenia high elbow catch i rotacji bioder
+          </li>
+          <li>
+            <span class="check swim">✓</span>
+            Plany dystansów tygodniowych z progresją
+          </li>
+          <li>
+            <span class="check swim">✓</span>
+            Treningi z foką i deską do pracy nóg
+          </li>
+          <li>
+            <span class="check swim">✓</span>
+            Adaptacja do pływania w wodach otwartych (bez linii)
+          </li>
+        </ul>
+        <a href="#analyzer" class="btn-coach swim">Oblicz tempo pływania →</a>
+      </div>
+
+      <div class="coach-visual">
+        <div class="visual-icon">🏊</div>
+        <p style="font-size:14px;color:var(--text-secondary);line-height:1.6">
+          Przykładowy tygodniowy plan pływacki
+        </p>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:0.5rem">
+          <div style="background:var(--bg);border-radius:var(--radius-md);padding:10px 12px;border:0.5px solid var(--border)">
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px">Wtorek — Technika</div>
+            <div style="font-size:12px;color:var(--text-secondary)">2.0 km · Dryle + High Elbow Catch</div>
+          </div>
+          <div style="background:var(--bg);border-radius:var(--radius-md);padding:10px 12px;border:0.5px solid var(--border)">
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px">Czwartek — Wytrzymałość</div>
+            <div style="font-size:12px;color:var(--text-secondary)">2.5 km · 5×500 m w tempie wyścigowym</div>
+          </div>
+          <div style="background:var(--bg);border-radius:var(--radius-md);padding:10px 12px;border:0.5px solid var(--border)">
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px">Sobota — Objętość</div>
+            <div style="font-size:12px;color:var(--text-secondary)">3.8 km · Ciągłe, spokojne tempo</div>
+          </div>
+        </div>
+        <div class="visual-stat-grid" style="margin-top:1rem">
+          <div class="visual-stat">
+            <div class="visual-stat-val" style="color:var(--swim)">1:55</div>
+            <div class="visual-stat-lbl">Cel /100 m</div>
+          </div>
+          <div class="visual-stat">
+            <div class="visual-stat-val" style="color:var(--swim)">3×</div>
+            <div class="visual-stat-lbl">Sesje/tydzień</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
+</section>
 
-  <footer>TriCoach MVP &mdash; zbudowany z Claude &mdash; dla triathlonistów amatorów</footer>
-</div>
+<!-- ════════════════════════════════════════════ BIKE COACH -->
+<section id="bike-coach">
+  <div class="section-inner">
+    <div class="coach-layout reverse">
+      <div class="coach-text">
+        <p class="section-label bike">Bike Coach</p>
+        <h2>Rower — Twój największy rezerwuar czasu</h2>
+        <p>
+          W Half i Full Ironie rower to 45–55% całkowitego czasu wyścigu.
+          To tu wygrywasz i przegrywasz. Bike Coach pomaga wycisnąć maksimum
+          z każdej godziny na siodle — bez przepalenia nóg przed biegiem.
+        </p>
+        <p>
+          Od mocy i kadencji po strategię energetyczną — analizujemy Twoje jazdy
+          i budujemy plan, który uczyni z Ciebie silniejszego i efektywniejszego kolarza.
+        </p>
+        <ul class="coach-features">
+          <li>
+            <span class="check bike">✓</span>
+            Kalkulator średniej prędkości i szacowanego czasu segmentu
+          </li>
+          <li>
+            <span class="check bike">✓</span>
+            Długie jazdy w strefie 2 budujące bazę tlenową
+          </li>
+          <li>
+            <span class="check bike">✓</span>
+            Treningi sweet spot i FTP dla wzrostu mocy progowej
+          </li>
+          <li>
+            <span class="check bike">✓</span>
+            Odżywianie na rowerze — kalkulacja kalorii i elektrolitów
+          </li>
+          <li>
+            <span class="check bike">✓</span>
+            Brick — integracja jazdy z biegiem w jednej sesji
+          </li>
+        </ul>
+        <a href="#analyzer" class="btn-coach bike">Sprawdź moje jazdy →</a>
+      </div>
+
+      <div class="coach-visual">
+        <div class="visual-icon">🚴</div>
+        <p style="font-size:14px;color:var(--text-secondary);line-height:1.6">
+          Przykładowy rozkład intensywności tygodnia rowerowego
+        </p>
+        <div class="visual-bar-group">
+          <div class="v-bar-row">
+            <span class="v-bar-lbl">Strefa 1–2</span>
+            <div class="v-bar-track"><div class="v-bar-fill fill-bike" style="width:65%;opacity:.5"></div></div>
+            <span class="v-bar-pct">65%</span>
+          </div>
+          <div class="v-bar-row">
+            <span class="v-bar-lbl">Sweet Spot</span>
+            <div class="v-bar-track"><div class="v-bar-fill fill-bike" style="width:25%"></div></div>
+            <span class="v-bar-pct">25%</span>
+          </div>
+          <div class="v-bar-row">
+            <span class="v-bar-lbl">VO2max</span>
+            <div class="v-bar-track"><div class="v-bar-fill fill-bike" style="width:10%;background:#15803d"></div></div>
+            <span class="v-bar-pct">10%</span>
+          </div>
+        </div>
+        <div class="visual-stat-grid">
+          <div class="visual-stat">
+            <div class="visual-stat-val" style="color:var(--bike)">32.5</div>
+            <div class="visual-stat-lbl">Cel km/h</div>
+          </div>
+          <div class="visual-stat">
+            <div class="visual-stat-val" style="color:var(--bike)">200</div>
+            <div class="visual-stat-lbl">km/tydzień</div>
+          </div>
+          <div class="visual-stat">
+            <div class="visual-stat-val" style="color:var(--bike)">85</div>
+            <div class="visual-stat-lbl">Kadencja rpm</div>
+          </div>
+          <div class="visual-stat">
+            <div class="visual-stat-val" style="color:var(--bike)">280</div>
+            <div class="visual-stat-lbl">FTP Watt</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════ ANALYZER -->
+<section id="analyzer">
+  <div class="analyzer-header">
+    <p class="section-label tri" style="display:block;margin-bottom:0.75rem">Analizator treningowy</p>
+    <h2>Wprowadź swoje treningi</h2>
+    <p>Uzupełnij dane z ostatnich 7 dni, a TriCoach wygeneruje analizę i plan na następny tydzień.</p>
+  </div>
+
+  <div class="analyzer-wrap">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('input', this)">Dane treningowe</button>
+      <button class="tab" onclick="switchTab('analysis', this)">Analiza</button>
+      <button class="tab" onclick="switchTab('plan', this)">Plan tygodnia</button>
+    </div>
+
+    <!-- INPUT -->
+    <div class="az-section active" id="section-input">
+      <div class="card">
+        <div class="card-title">Twoje treningi z ostatnich 7 dni</div>
+        <div class="workout-grid">
+
+          <div class="workout-item">
+            <div class="disc-badge swim-badge">Pływanie</div>
+            <div class="workout-label">Dystans</div>
+            <div class="input-row">
+              <input type="number" id="swim-dist" value="3.8" min="0" step="0.1">
+              <span class="input-unit">km</span>
+            </div>
+            <div class="workout-label">Czas</div>
+            <div class="input-row">
+              <input type="number" id="swim-time" value="135" min="0">
+              <span class="input-unit">min</span>
+            </div>
+            <div class="workout-label">Liczba sesji</div>
+            <input type="number" id="swim-sessions" value="3" min="0" max="14" style="width:80px">
+          </div>
+
+          <div class="workout-item">
+            <div class="disc-badge bike-badge">Rower</div>
+            <div class="workout-label">Dystans</div>
+            <div class="input-row">
+              <input type="number" id="bike-dist" value="60" min="0">
+              <span class="input-unit">km</span>
+            </div>
+            <div class="workout-label">Czas</div>
+            <div class="input-row">
+              <input type="number" id="bike-time" value="120" min="0">
+              <span class="input-unit">min</span>
+            </div>
+            <div class="workout-label">Liczba sesji</div>
+            <input type="number" id="bike-sessions" value="2" min="0" max="14" style="width:80px">
+          </div>
+
+          <div class="workout-item">
+            <div class="disc-badge run-badge">Bieg</div>
+            <div class="workout-label">Dystans</div>
+            <div class="input-row">
+              <input type="number" id="run-dist" value="15" min="0">
+              <span class="input-unit">km</span>
+            </div>
+            <div class="workout-label">Czas</div>
+            <div class="input-row">
+              <input type="number" id="run-time" value="90" min="0">
+              <span class="input-unit">min</span>
+            </div>
+            <div class="workout-label">Liczba sesji</div>
+            <input type="number" id="run-sessions" value="3" min="0" max="14" style="width:80px">
+          </div>
+
+          <div class="workout-item">
+            <div class="disc-badge race-badge">Wyścig docelowy</div>
+            <div class="workout-label">Data wyścigu</div>
+            <input type="date" id="race-date" style="width:100%">
+            <div class="workout-label">Dystans</div>
+            <select id="race-type" style="width:100%">
+              <option value="half">Half Ironman (1.9/90/21)</option>
+              <option value="full">Full Ironman (3.8/180/42)</option>
+              <option value="olympic">Olympic (1.5/40/10)</option>
+              <option value="sprint">Sprint (0.75/20/5)</option>
+            </select>
+          </div>
+
+        </div>
+        <button class="analyze-btn" onclick="runAnalysis()">Analizuj i generuj plan →</button>
+      </div>
+    </div>
+
+    <!-- ANALYSIS -->
+    <div class="az-section" id="section-analysis">
+      <div class="card">
+        <div class="card-title">Podsumowanie tygodnia</div>
+        <div class="metrics" id="metrics-row"></div>
+        <div id="bar-chart"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Diagnoza</div>
+        <div id="alerts-container"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Twoje tempa</div>
+        <div id="pace-container"></div>
+      </div>
+    </div>
+
+    <!-- PLAN -->
+    <div class="az-section" id="section-plan">
+      <div class="card">
+        <div class="card-title">Rekomendowany plan na następny tydzień</div>
+        <div id="plan-container"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Kluczowe wskazówki</div>
+        <div id="tips-container"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════ FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <div>
+      <div class="footer-brand">TriCoach</div>
+      <p class="footer-tagline">
+        Profesjonalne plany treningowe dla triathlonistów amatorów.
+        Zbudowany z pasji do sportu i danych.
+      </p>
+    </div>
+    <div class="footer-links">
+      <a href="#tri-coach">Tri Coach</a>
+      <a href="#run-coach">Run Coach</a>
+      <a href="#swim-coach">Swim Coach</a>
+      <a href="#bike-coach">Bike Coach</a>
+      <a href="#analyzer">Analizator</a>
+    </div>
+  </div>
+  <div class="footer-copy">
+    <span>© 2026 TriCoach — Zbudowany z Claude</span>
+    <span>Dla triathlonistów amatorów</span>
+  </div>
+</footer>
 
 <script>
   (function() {
@@ -474,7 +1306,7 @@
 
   function switchTab(name, el) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.az-section').forEach(s => s.classList.remove('active'));
     el.classList.add('active');
     document.getElementById('section-' + name).classList.add('active');
   }
@@ -513,14 +1345,12 @@
     const days = daysUntil(raceDate);
     const totalSess = swimSess + bikeSess + runSess;
 
-    // Metrics
     document.getElementById('metrics-row').innerHTML = `
       <div class="metric"><div class="metric-val">${Math.round(totalTime)}</div><div class="metric-lbl">min łącznie</div></div>
       <div class="metric"><div class="metric-val">${totalSess}</div><div class="metric-lbl">sesji razem</div></div>
       <div class="metric"><div class="metric-val">${days !== null ? days : '—'}</div><div class="metric-lbl">dni do wyścigu</div></div>
     `;
 
-    // Bar chart
     document.getElementById('bar-chart').innerHTML = ['swim','bike','run'].map((d, i) => {
       const pct  = [swimPct, bikePct, runPct][i];
       const tgt  = [target.swim, target.bike, target.run][i];
@@ -533,7 +1363,6 @@
         </div>`;
     }).join('');
 
-    // Alerts
     const alerts = [];
     if (swimPct < target.swim - 5) alerts.push({ t:'warn', m:`Za mało pływania — masz ${swimPct}%, cel to ${target.swim}%. Dodaj 1 sesję w basenie w kolejnym tygodniu.` });
     else alerts.push({ t:'ok', m:`Pływanie na właściwym poziomie (${swimPct}%).` });
@@ -546,7 +1375,6 @@
     document.getElementById('alerts-container').innerHTML =
       alerts.map(a => `<div class="alert alert-${a.t}">${a.m}</div>`).join('');
 
-    // Paces
     const paceRows = [];
     if (swimDist > 0 && swimTime > 0) {
       const p = swimTime / swimDist;
@@ -565,7 +1393,6 @@
     document.getElementById('pace-container').innerHTML =
       paceRows.length ? paceRows.join('') : '<p style="font-size:13px;color:var(--text-secondary)">Uzupełnij dystans i czas, aby wyliczyć tempo.</p>';
 
-    // Plan
     const needMoreSwim = swimPct < target.swim - 3;
     const needMoreBike = bikePct < target.bike - 5;
     const needMoreRun  = runPct  < target.run  - 3;
@@ -606,9 +1433,8 @@
     document.getElementById('tips-container').innerHTML =
       tips.map(t => `<div class="tip-item">${t}</div>`).join('');
 
-    // Switch to analysis tab
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.az-section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.tab')[1].classList.add('active');
     document.getElementById('section-analysis').classList.add('active');
   }
