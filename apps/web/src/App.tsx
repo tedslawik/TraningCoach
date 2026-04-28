@@ -9,6 +9,7 @@ import TriCoachPage from './pages/TriCoachPage';
 import RunCoachPage from './pages/RunCoachPage';
 import SwimCoachPage from './pages/SwimCoachPage';
 import BikeCoachPage from './pages/BikeCoachPage';
+import AthletePage from './pages/AthletePage';
 
 function ScrollHandler() {
   const { pathname, hash } = useLocation();
@@ -44,6 +45,7 @@ function AppShell() {
         <Route path="/run-coach"   element={<RunCoachPage />} />
         <Route path="/swim-coach"  element={<SwimCoachPage />} />
         <Route path="/bike-coach"  element={<BikeCoachPage />} />
+        <Route path="/athlete"     element={<AthletePage />} />
       </Routes>
       <Footer />
     </>
