@@ -102,22 +102,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     runDist:  Math.round(acc.runDist  * 10) / 10, runTime:  Math.round(acc.runTime),  runSessions:  acc.runSessions,
   };
 
-  // Last 7 individual activities — all already within 7 days from Strava API
+  // Last 7 individual activities — show ALL types, not just swim/bike/run
   const activities = raw
-    .filter(a => typeKey(a.sport_type) !== 'other')
     .slice(0, 7)
     .map(a => {
       const type = typeKey(a.sport_type) as 'swim' | 'bike' | 'run';
       const distKm = a.distance / 1000;
       const timeMin = a.moving_time / 60;
       return {
-        id:           a.id,
-        name:         a.name,
+        id:            a.id,
+        name:          a.name,
         type,
-        date:         a.start_date_local,
-        distanceKm:   Math.round(distKm * 10) / 10,
+        sportType:     a.sport_type,
+        date:          a.start_date_local,
+        distanceKm:    Math.round(distKm * 10) / 10,
         timeFormatted: formatTime(timeMin),
-        paceOrSpeed:  formatPace(distKm, timeMin, type),
+        paceOrSpeed:   type !== 'other' ? formatPace(distKm, timeMin, type) : formatTime(timeMin),
       };
     });
 

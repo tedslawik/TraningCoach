@@ -1,7 +1,8 @@
 export interface ActivityItem {
   id: number;
   name: string;
-  type: 'swim' | 'bike' | 'run';
+  type: 'swim' | 'bike' | 'run' | 'other';
+  sportType: string;
   date: string;
   distanceKm: number;
   timeFormatted: string;
@@ -12,10 +13,11 @@ interface Props {
   activities: ActivityItem[];
 }
 
-const META: Record<ActivityItem['type'], { label: string; icon: string; border: string; badge: string; badgeText: string }> = {
-  swim: { label: 'Pływanie', icon: '🏊', border: '#378add', badge: '#ddeeff', badgeText: '#0a4a8f' },
-  bike: { label: 'Rower',    icon: '🚴', border: '#639922', badge: '#dff2d8', badgeText: '#1e5c0e' },
-  run:  { label: 'Bieg',     icon: '🏃', border: '#d85a30', badge: '#fde8de', badgeText: '#7a2e10' },
+const META: Record<string, { label: string; icon: string; border: string; badge: string; badgeText: string }> = {
+  swim:  { label: 'Pływanie',  icon: '🏊', border: '#378add', badge: '#ddeeff', badgeText: '#0a4a8f' },
+  bike:  { label: 'Rower',     icon: '🚴', border: '#639922', badge: '#dff2d8', badgeText: '#1e5c0e' },
+  run:   { label: 'Bieg',      icon: '🏃', border: '#d85a30', badge: '#fde8de', badgeText: '#7a2e10' },
+  other: { label: 'Trening',   icon: '💪', border: '#9ca3af', badge: '#f3f4f6', badgeText: '#374151' },
 };
 
 function relativeDate(dateStr: string): string {
@@ -34,7 +36,7 @@ export default function ActivitiesPreview({ activities }: Props) {
       <div className="card-title">Ostatnie treningi ze Stravy</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
         {activities.map((a, i) => {
-          const meta = META[a.type];
+          const meta = META[a.type] ?? META.other;
           return (
             <div
               key={a.id}
