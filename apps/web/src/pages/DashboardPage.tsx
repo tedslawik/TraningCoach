@@ -13,6 +13,11 @@ function getMonday(d: Date) {
   const m = new Date(d); m.setDate(m.getDate() - (day - 1)); m.setHours(0, 0, 0, 0); return m;
 }
 
+// Use local date, NOT toISOString() — that converts to UTC which shifts the date for UTC+X timezones
+function toLocalKey(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export default function DashboardPage() {
   const { session, user, stravaToken } = useAuth();
   const [summaries, setSummaries]   = useState<WeeklySummary[]>([]);
@@ -70,12 +75,12 @@ export default function DashboardPage() {
   };
 
   // Current week stats
-  const thisWeekKey  = getMonday(new Date()).toISOString().split('T')[0];
+  const thisMonday   = getMonday(new Date());
+  const lastMonday   = new Date(thisMonday); lastMonday.setDate(lastMonday.getDate() - 7);
+  const thisWeekKey  = toLocalKey(thisMonday);
+  const lastWeekKey  = toLocalKey(lastMonday);
   const thisWeek     = summaries.find(s => s.weekStart === thisWeekKey);
-  const lastWeek     = summaries.find(s => {
-    const d = new Date(thisWeekKey); d.setDate(d.getDate() - 7);
-    return s.weekStart === d.toISOString().split('T')[0];
-  });
+  const lastWeek     = summaries.find(s => s.weekStart === lastWeekKey);
 
   const pmc = calculatePMC(summaries);
   const currentPMC = pmc[pmc.length - 1];

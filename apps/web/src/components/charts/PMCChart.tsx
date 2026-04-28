@@ -23,9 +23,20 @@ export default function PMCChart({ data, height = 200 }: Props) {
   const chartH = height - padT - padB;
 
   const allVals  = data.flatMap(d => [d.ctl, d.atl, d.tsb]);
-  const minVal   = Math.min(...allVals, -20);
-  const maxVal   = Math.max(...allVals, 10);
-  const range    = maxVal - minVal || 1;
+  const rawMin   = Math.min(...allVals);
+  const rawMax   = Math.max(...allVals);
+
+  // Nice scale: pick a step size that gives ~5-6 ticks
+  function niceStep(range: number): number {
+    const rough = range / 5;
+    const candidates = [1, 2, 5, 10, 20, 25, 50, 100];
+    return candidates.find(c => c >= rough) ?? 100;
+  }
+  const range_  = rawMax - rawMin || 40;
+  const step    = niceStep(range_);
+  const minVal  = Math.floor((rawMin - step * 0.3) / step) * step;
+  const maxVal  = Math.ceil ((rawMax + step * 0.3) / step) * step;
+  const range   = maxVal - minVal || 1;
 
   const toY = (v: number) => padT + chartH - ((v - minVal) / range) * chartH;
   const toX = (i: number) => padL + (i / (data.length - 1)) * chartW;
@@ -39,7 +50,8 @@ export default function PMCChart({ data, height = 200 }: Props) {
   const tsbAreaPos = tsbPts.map(([x, y]) => [x, Math.min(y, zeroY)] as [number, number]);
   const tsbAreaNeg = tsbPts.map(([x, y]) => [x, Math.max(y, zeroY)] as [number, number]);
 
-  const yTicks = [-20, 0, 20, 40, 60, 80, 100].filter(v => v >= minVal - 5 && v <= maxVal + 5);
+  const yTicks: number[] = [];
+  for (let v = minVal; v <= maxVal; v += step) yTicks.push(Math.round(v));
   const last   = data.length - 1;
   const latest = data[last];
 

@@ -24,7 +24,18 @@ export default function TrendsChart({ data, metric = 'distance', height = 180 }:
     ? s.swimDistKm + s.bikeDistKm + s.runDistKm
     : (s.swimTimeMin + s.bikeTimeMin + s.runTimeMin) / 60;
 
-  const maxVal = Math.max(...last12.map(getValue), 1);
+  const rawMax = Math.max(...last12.map(getValue), 1);
+
+  // Round up to a nice ceiling so bars never touch the top
+  function niceMax(v: number): number {
+    const step = v <= 20 ? 5 : v <= 50 ? 10 : v <= 200 ? 25 : v <= 500 ? 50 : 100;
+    return Math.ceil(v / step) * step;
+  }
+  const maxVal = niceMax(rawMax);
+
+  // Generate 5 evenly-spaced nice ticks
+  const step    = maxVal / 4;
+  const yTicks  = [0, 1, 2, 3, 4].map(i => Math.round(i * step));
 
   const W      = 800;
   const padL   = 40;
@@ -37,7 +48,6 @@ export default function TrendsChart({ data, metric = 'distance', height = 180 }:
   const gap    = chartW / last12.length;
 
   const barH = (val: number) => (val / maxVal) * chartH;
-  const yTicks = [0, 0.25, 0.5, 0.75, 1].map(p => Math.round(maxVal * p));
 
   return (
     <div>
