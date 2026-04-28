@@ -26,7 +26,7 @@ export default function Nav() {
           </button>
         </div>
       ) : (
-        <Link to="/#analyzer" className="nav-cta">Analizuj trening</Link>
+        <Link to="/analyzer" className="nav-cta">Analizuj trening</Link>
       )}
     </nav>
   );

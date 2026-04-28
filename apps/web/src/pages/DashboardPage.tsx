@@ -232,8 +232,9 @@ export default function DashboardPage() {
               <div className="section-header center">
                 <h2>Coaching</h2>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 12 }}>
                 {[
+                  { to:'/analyzer',   icon:'📊', label:'Analizator', color:'var(--tri)' },
                   { to:'/tri-coach',  icon:'🏅', label:'Tri Coach',  color:'var(--tri)' },
                   { to:'/run-coach',  icon:'🏃', label:'Run Coach',  color:'var(--run)' },
                   { to:'/swim-coach', icon:'🏊', label:'Swim Coach', color:'var(--swim)' },

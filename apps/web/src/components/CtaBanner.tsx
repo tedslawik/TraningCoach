@@ -13,7 +13,7 @@ export default function CtaBanner({ title, description, buttonLabel = 'Otwórz a
         <div className="cta-banner">
           <h2>{title}</h2>
           <p>{description}</p>
-          <Link to="/#analyzer" className="btn-light">{buttonLabel}</Link>
+          <Link to="/analyzer" className="btn-light">{buttonLabel}</Link>
         </div>
       </div>
     </section>

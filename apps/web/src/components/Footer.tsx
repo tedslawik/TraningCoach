@@ -13,7 +13,7 @@ export default function Footer() {
           <Link to="/run-coach">Run Coach</Link>
           <Link to="/swim-coach">Swim Coach</Link>
           <Link to="/bike-coach">Bike Coach</Link>
-          <Link to="/#analyzer">Analizator</Link>
+          <Link to="/analyzer">Analizator</Link>
         </div>
       </div>
       <div className="footer-copy">

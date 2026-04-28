@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import HeroSm from '../components/HeroSm';
 import SectionLabel from '../components/SectionLabel';
 import CtaBanner from '../components/CtaBanner';
@@ -164,7 +165,7 @@ export default function SwimCoachPage() {
                   <li key={f}><span className="check swim">✓</span>{f}</li>
                 ))}
               </ul>
-              <a href="/#analyzer" className="btn-coach swim">Oblicz tempo /100m →</a>
+              <Link to="/analyzer" className="btn-coach swim">Oblicz tempo /100m →</Link>
             </div>
             <div className="coach-visual">
               <div className="visual-icon">🌊</div>
