@@ -91,12 +91,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   catch { return res.status(401).json({ error: 'Token refresh failed' }); }
 
   const headers = { Authorization: `Bearer ${token}` };
-  const after   = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
+
+  // Week range: accepts ?weekStart=YYYY-MM-DD (Monday), defaults to current week
+  function getMondayOf(d: Date): Date {
+    const day = d.getDay() === 0 ? 7 : d.getDay();
+    const m = new Date(d);
+    m.setDate(m.getDate() - (day - 1));
+    m.setHours(0, 0, 0, 0);
+    return m;
+  }
+
+  const weekStartParam = req.query.weekStart as string | undefined;
+  const weekStart = weekStartParam ? new Date(weekStartParam) : getMondayOf(new Date());
+  weekStart.setHours(0, 0, 0, 0);
+  const after  = Math.floor(weekStart.getTime() / 1000);
+  const before = after + 7 * 24 * 60 * 60;
 
   const [athleteRes, zonesRes, activitiesRes] = await Promise.all([
     fetch('https://www.strava.com/api/v3/athlete', { headers }),
     fetch('https://www.strava.com/api/v3/athlete/zones', { headers }),
-    fetch(`https://www.strava.com/api/v3/athlete/activities?after=${after}&per_page=50`, { headers }),
+    fetch(`https://www.strava.com/api/v3/athlete/activities?after=${after}&before=${before}&per_page=50`, { headers }),
   ]);
 
   if (!athleteRes.ok || !activitiesRes.ok)
@@ -181,6 +195,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   res.json({
     profile,
+    weekStart: weekStart.toISOString().split('T')[0],
     zones: { heartRate: hrZones, power: powerZones, hrSource, pwrSource },
     activities,
     weekTotals: {

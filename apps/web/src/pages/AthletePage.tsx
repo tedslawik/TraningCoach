@@ -11,6 +11,7 @@ interface AthleteData {
     weight: number | null; ftp: number | null;
     city: string | null; country: string | null;
   };
+  weekStart: string;
   zones: {
     heartRate: Array<{ min: number; max: number }> | null;
     power:     Array<{ min: number; max: number }> | null;
@@ -43,18 +44,38 @@ const TYPE_META = {
   other: { icon: '💪', color: '#9ca3af', label: 'Trening' },
 };
 
+const DAY_NAMES_SHORT = ['Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Nd'];
+
+function getMonday(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay() === 0 ? 7 : d.getDay();
+  d.setDate(d.getDate() - (day - 1));
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function addDays(d: Date, n: number): Date {
+  const r = new Date(d); r.setDate(r.getDate() + n); return r;
+}
+
+function toDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function fmtWeekRange(monday: Date): string {
+  const sunday = addDays(monday, 6);
+  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+  const m = monday.toLocaleDateString('pl-PL', opts);
+  const s = sunday.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' });
+  return `${m} – ${s}`;
+}
+
 function fmtZone(z: { min: number; max: number }) {
   if (z.min <= 0) return `< ${z.max}`;
   if (z.max <= 0 || z.max === 9999) return `> ${z.min}`;
   return `${z.min} – ${z.max}`;
 }
 
-function relDate(d: string) {
-  const diff = Math.floor((Date.now() - new Date(d).getTime()) / 864e5);
-  if (diff === 0) return 'dziś';
-  if (diff === 1) return 'wczoraj';
-  return `${diff}d temu`;
-}
 
 /* ── Stat pill ──────────────────────────────────────────── */
 function Stat({ label, value, unit }: { label: string; value: string | number | null; unit?: string }) {
@@ -72,26 +93,36 @@ function Stat({ label, value, unit }: { label: string; value: string | number | 
 /* ── Page ───────────────────────────────────────────────── */
 export default function AthletePage() {
   const { session, stravaToken } = useAuth();
-  const handleReconnect = async () => {
+  const handleReconnect = () => {
     if (!session) return;
     window.location.href = `/api/auth/strava?token=${session.access_token}`;
   };
-  const [data, setData]       = useState<AthleteData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
-  const [assessment, setAssessment] = useState<Assessment | null>(null);
 
-  useEffect(() => {
+  const [weekStart, setWeekStart]     = useState<Date>(() => getMonday(new Date()));
+  const [data, setData]               = useState<AthleteData | null>(null);
+  const [loading, setLoading]         = useState(true);
+  const [weekLoading, setWeekLoading] = useState(false);
+  const [error, setError]             = useState<string | null>(null);
+  const [assessment, setAssessment]   = useState<Assessment | null>(null);
+
+  const doFetch = (week: Date, initial = false) => {
     if (!session) { setLoading(false); return; }
-    fetch('/api/strava/athlete', { headers: { Authorization: `Bearer ${session.access_token}` } })
+    if (initial) setLoading(true); else setWeekLoading(true);
+    fetch(`/api/strava/athlete?weekStart=${toDateKey(week)}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then((d: AthleteData) => {
-        setData(d);
-        buildAssessment(d);
-      })
+      .then((d: AthleteData) => { setData(d); buildAssessment(d); })
       .catch(() => setError('Nie udało się pobrać danych zawodnika.'))
-      .finally(() => setLoading(false));
-  }, [session]);
+      .finally(() => { setLoading(false); setWeekLoading(false); });
+  };
+
+  useEffect(() => { doFetch(weekStart, true); }, [session]);        // initial
+  useEffect(() => { if (session && data) doFetch(weekStart); }, [weekStart]); // week nav
+
+  const isCurrentWeek = toDateKey(weekStart) === toDateKey(getMonday(new Date()));
+  const goPrev = () => setWeekStart(w => addDays(w, -7));
+  const goNext = () => { if (!isCurrentWeek) setWeekStart(w => addDays(w, 7)); };
 
   function buildAssessment(d: AthleteData) {
     const swimDist = d.activities.filter(a=>a.type==='swim').reduce((s,a)=>s+a.distanceKm,0);
@@ -335,97 +366,138 @@ export default function AthletePage() {
       {/* ── AKTYWNOŚCI Z DETALAMI ── */}
       <section className="alt">
         <div className="section-inner">
-          <div className="section-header">
-            <SectionLabel discipline="tri">Treningi</SectionLabel>
-            <h2>Szczegóły ostatnich 7 dni</h2>
+          {/* ── WEEK NAVIGATION ── */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', gap: 12 }}>
+            <div>
+              <SectionLabel discipline="tri">Kalendarz treningów</SectionLabel>
+              <h2 style={{ fontSize: 'clamp(20px,3vw,28px)', fontWeight: 700, letterSpacing: -0.8 }}>
+                {weekLoading ? 'Ładowanie…' : fmtWeekRange(weekStart)}
+              </h2>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={goPrev} style={navBtn}>← Poprzedni</button>
+              <button onClick={goNext} disabled={isCurrentWeek} style={{ ...navBtn, opacity: isCurrentWeek ? 0.35 : 1 }}>Następny →</button>
+            </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {activities.map(a => {
-              const meta = TYPE_META[a.type] ?? TYPE_META.other;
-              return (
-                <div key={a.id} style={{ background: 'var(--bg)', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '14px 16px', borderLeft: `4px solid ${meta.color}` }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
 
-                    {/* Left: name + tags */}
-                    <div style={{ flex: 1, minWidth: 200 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>
-                        {meta.icon} {a.name}
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                        <Tag color={meta.color}>{meta.label}</Tag>
-                        {a.distanceKm > 0 && <Tag>{a.distanceKm} km</Tag>}
-                        <Tag>{a.timeFormatted}</Tag>
-                        {a.paceOrSpeed && <Tag>{a.paceOrSpeed}</Tag>}
-                        {a.elevationGain > 0 && <Tag>↑ {a.elevationGain} m</Tag>}
-                      </div>
-                    </div>
-
-                    {/* Right: metrics */}
-                    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-                      {a.avgHeartRate && (
-                        <Metric icon="❤️" label="avg HR" value={`${Math.round(a.avgHeartRate)}`} unit="bpm" />
-                      )}
-                      {a.maxHeartRate && (
-                        <Metric icon="⬆️" label="max HR" value={`${Math.round(a.maxHeartRate)}`} unit="bpm" />
-                      )}
-                      {a.avgWatts && (
-                        <Metric icon="⚡" label="avg" value={`${Math.round(a.avgWatts)}`} unit="W" />
-                      )}
-                      {a.normalizedWatts && (
-                        <Metric icon="📊" label="NP" value={`${Math.round(a.normalizedWatts)}`} unit="W" />
-                      )}
-                      {a.avgCadence && (
-                        <Metric icon="🔄" label="kadencja" value={`${Math.round(a.avgCadence)}`} unit="rpm" />
-                      )}
-                      {a.kilojoules && (
-                        <Metric icon="🔋" label="energia" value={`${a.kilojoules}`} unit="kJ" />
-                      )}
-                      {a.sufferScore && (
-                        <Metric icon="🔥" label="Suffer" value={`${a.sufferScore}`} />
-                      )}
-                      {a.perceivedExertion && (
-                        <Metric icon="💬" label="RPE" value={`${a.perceivedExertion}/10`} />
-                      )}
-                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                        {relDate(a.date as string)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            {activities.length === 0 && (
-              <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Brak aktywności w ostatnich 7 dniach.</p>
-            )}
-          </div>
+          {/* ── CALENDAR GRID ── */}
+          <WeekCalendar activities={activities} weekStart={weekStart} loading={weekLoading} />
         </div>
       </section>
     </>
   );
 }
 
-function Tag({ children, color }: { children: React.ReactNode; color?: string }) {
-  return (
-    <span style={{
-      fontSize: 11, padding: '2px 8px', borderRadius: 4,
-      background: color ? `${color}22` : 'var(--bg-secondary)',
-      color: color ?? 'var(--text-secondary)',
-      fontWeight: color ? 600 : 400, border: `0.5px solid ${color ? `${color}44` : 'var(--border)'}`,
-    }}>
-      {children}
-    </span>
-  );
-}
+/* ── Nav button style ─────────────────────────────────── */
+const navBtn: React.CSSProperties = {
+  padding: '8px 16px', borderRadius: 'var(--radius-md)',
+  border: '0.5px solid var(--border-md)', background: 'var(--bg)',
+  color: 'var(--text)', fontSize: 13, fontWeight: 500,
+  cursor: 'pointer', fontFamily: 'var(--font)', whiteSpace: 'nowrap',
+  transition: 'background 0.15s',
+};
 
-function Metric({ icon, label, value, unit }: { icon: string; label: string; value: string; unit?: string }) {
+/* ── Week Calendar ─────────────────────────────────────── */
+function WeekCalendar({ activities, weekStart, loading }: { activities: Activity[]; weekStart: Date; loading: boolean }) {
+  const today = toDateKey(new Date());
+
+  // Group activities by date key
+  const grouped: Record<string, Activity[]> = {};
+  activities.forEach(a => {
+    const key = (a.date as string).split('T')[0];
+    grouped[key] = grouped[key] ?? [];
+    grouped[key].push(a);
+  });
+
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+
   return (
-    <div style={{ textAlign: 'center', minWidth: 48 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
-        {value}{unit && <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 2 }}>{unit}</span>}
-      </div>
-      <div style={{ fontSize: 10, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-        {icon} {label}
+    <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(120px, 1fr))', gap: 8, minWidth: 700 }}>
+        {days.map((day, i) => {
+          const key   = toDateKey(day);
+          const isToday = key === today;
+          const dayActs = grouped[key] ?? [];
+          return (
+            <div key={key} style={{
+              border: isToday ? '2px solid var(--tri)' : '0.5px solid var(--border-md)',
+              borderRadius: 'var(--radius-lg)',
+              background: isToday ? '#ede9fd22' : 'var(--bg)',
+              display: 'flex', flexDirection: 'column',
+              opacity: loading ? 0.5 : 1, transition: 'opacity 0.2s',
+            }}>
+              {/* Day header */}
+              <div style={{
+                padding: '8px 10px 6px',
+                borderBottom: '0.5px solid var(--border)',
+                textAlign: 'center',
+              }}>
+                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: isToday ? 'var(--tri)' : 'var(--text-secondary)' }}>
+                  {DAY_NAMES_SHORT[i]}
+                </div>
+                <div style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.2, color: isToday ? 'var(--tri)' : 'var(--text)' }}>
+                  {day.getDate()}
+                </div>
+                {dayActs.length > 0 && (
+                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>
+                    {dayActs.length} {dayActs.length === 1 ? 'trening' : 'treningi'}
+                  </div>
+                )}
+              </div>
+
+              {/* Activities or rest */}
+              <div style={{ padding: 6, display: 'flex', flexDirection: 'column', gap: 5, flex: 1 }}>
+                {dayActs.length === 0 ? (
+                  <div style={{ textAlign: 'center', color: 'var(--border-md)', fontSize: 18, padding: '10px 0', userSelect: 'none' }}>—</div>
+                ) : (
+                  dayActs.map(a => <ActivityCard key={a.id} activity={a} />)
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
+
+function ActivityCard({ activity: a }: { activity: Activity }) {
+  const meta = TYPE_META[a.type] ?? TYPE_META.other;
+  return (
+    <div style={{
+      background: 'var(--bg-secondary)',
+      border: `0.5px solid ${meta.color}55`,
+      borderLeft: `3px solid ${meta.color}`,
+      borderRadius: 'var(--radius-sm)',
+      padding: '7px 8px',
+    }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>
+        {meta.icon} {a.name}
+      </div>
+      {a.distanceKm > 0 && (
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{a.distanceKm} km · {a.timeFormatted}</div>
+      )}
+      {a.distanceKm === 0 && (
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{a.timeFormatted}</div>
+      )}
+      {a.paceOrSpeed && (
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{a.paceOrSpeed}</div>
+      )}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+        {a.avgHeartRate && (
+          <span style={{ fontSize: 10, color: '#d85a30' }}>❤️ {Math.round(a.avgHeartRate)}</span>
+        )}
+        {a.avgWatts && (
+          <span style={{ fontSize: 10, color: '#639922' }}>⚡{Math.round(a.avgWatts)}W</span>
+        )}
+        {a.sufferScore && (
+          <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>🔥{a.sufferScore}</span>
+        )}
+        {a.elevationGain > 0 && (
+          <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>↑{a.elevationGain}m</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
