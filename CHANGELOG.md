@@ -5,6 +5,20 @@ Wersjonowanie: `MAJOR.MINOR.PATCH`.
 
 ---
 
+## [0.4.0] — 2026-04-28
+
+### Zmieniono — migracja architektury
+- Przepisano całą aplikację na **React 18 + TypeScript + Vite**
+- Wprowadzono **npm workspaces monorepo** (`apps/web`, `packages/core`)
+- Logika biznesowa (analizator, planer, kalkulatory tempa) wydzielona do `packages/core` jako czysty TypeScript bez zależności od DOM — gotowy do współdzielenia z React Native
+- React Router v6 zastąpił nawigację opartą na plikach HTML
+- `ScrollHandler` w `App.tsx` obsługuje płynne przewijanie do `#analyzer` z dowolnej podstrony
+- Analizator przepisany jako komponenty React ze stanem (`useState`) zamiast mutacji DOM
+- Usunięte: `index.html`, `tri-coach.html`, `run-coach.html`, `swim-coach.html`, `bike-coach.html`, `css/style.css`, `js/analyzer.js`
+- Dodane: `CLAUDE.md` — przewodnik dla przyszłych instancji Claude Code
+
+---
+
 ## [0.3.0] — 2026-04-27
 
 ### Dodano

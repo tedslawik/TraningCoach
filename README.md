@@ -1,55 +1,61 @@
 # TriCoach
 
-Aplikacja webowa dla triathlonistów amatorów — profesjonalny landing page z analizatorem treningowym i generatorem planu tygodniowego.
+Aplikacja webowa dla triathlonistów amatorów — coaching triathlonowy z analizatorem treningowym i generatorem planu tygodniowego.
 
-## Co robi
+## Uruchomienie
 
-- **Landing page** z czterema sekcjami coachingu (Tri / Run / Swim / Bike)
-- **Analizator treningowy** — wpisujesz dane z ostatnich 7 dni, dostajesz diagnozę proporcji i tempa
-- **Generator planu** — tygodniowy plan dopasowany do Twojego wyścigu docelowego i aktualnych braków
-- Obsługa czterech dystansów: Sprint, Olympic, Half Ironman, Full Ironman
-
-## Jak uruchomić
-
-Otwórz `index.html` bezpośrednio w przeglądarce — brak zależności, brak buildu.
-
-```
-open index.html
+```bash
+npm install
+npm run dev        # http://localhost:5173
+npm run build      # produkcja → apps/web/dist/
 ```
 
-## Struktura projektu
+## Struktura monorepo
 
 ```
 TraningCoach/
-├── index.html          # landing page + analizator treningowy
-├── tri-coach.html      # podstrona Tri Coach
-├── run-coach.html      # podstrona Run Coach
-├── swim-coach.html     # podstrona Swim Coach
-├── bike-coach.html     # podstrona Bike Coach
-├── css/
-│   └── style.css       # wspólne style dla wszystkich stron
-├── js/
-│   └── analyzer.js     # logika analizatora treningowego
-├── docs/
-│   └── features.md     # szczegółowy opis funkcji i logiki
-├── CHANGELOG.md        # historia zmian
-└── README.md
+├── apps/
+│   └── web/              # React 18 + TypeScript + Vite + React Router v6
+│       ├── src/
+│       │   ├── components/
+│       │   │   ├── analyzer/   # Analyzer, AnalyzerInput, AnalyzerAnalysis, AnalyzerPlan
+│       │   │   ├── Nav.tsx
+│       │   │   ├── Footer.tsx
+│       │   │   ├── HeroSm.tsx
+│       │   │   ├── CtaBanner.tsx
+│       │   │   └── SectionLabel.tsx
+│       │   ├── pages/          # HomePage, TriCoachPage, RunCoachPage, SwimCoachPage, BikeCoachPage
+│       │   ├── App.tsx         # Router + ScrollHandler
+│       │   ├── index.css       # Design system (CSS custom properties + dark mode)
+│       │   └── main.tsx
+│       └── vite.config.ts
+└── packages/
+    └── core/             # Czysty TypeScript — zero zależności od DOM/React
+        └── src/
+            ├── types.ts        # Wszystkie typy (WorkoutData, AnalysisResult, WeekPlan…)
+            ├── targets.ts      # RACE_TARGETS, RACE_LABELS
+            ├── analyzer.ts     # analyzeWorkouts(), daysUntil()
+            ├── planner.ts      # generateWeekPlan()
+            └── index.ts        # Re-eksport wszystkiego
 ```
 
-## Sekcje landing page
+## Podstrony
 
-| Sekcja | Opis |
-|--------|------|
-| **Tri Coach** | Proporcje swim/bike/run, periodyzacja, brick treningi |
-| **Run Coach** | Strefy tętna, tempo wyścigowe, bieg off-bike |
-| **Swim Coach** | Dryle techniczne, plan dystansów, tempo /100m |
-| **Bike Coach** | FTP, sweet spot, strategia energetyczna |
+| Ścieżka | Strona |
+|---------|--------|
+| `/` | Landing page + analizator treningowy |
+| `/tri-coach` | Periodyzacja, dystanse, T1/T2, brick, odżywianie |
+| `/run-coach` | Strefy tętna, typy biegów, biomechanika, błędy |
+| `/swim-coach` | Technika, dryle, plany dystansów, wody otwarte |
+| `/bike-coach` | Strefy FTP, sweet spot, pacing, odżywianie |
 
 ## Stack
 
-- Czysty HTML/CSS/JS — bez frameworków
-- `prefers-color-scheme` — tryb jasny i ciemny automatycznie
-- Responsywny układ (CSS Grid, `clamp()`)
+- **React 18** + **TypeScript** + **Vite** — apps/web
+- **packages/core** — czyste funkcje TS współdzielone z przyszłą apką mobilną (React Native)
+- **React Router v6** — client-side routing
+- **npm workspaces** — monorepo bez Turborepo (dodać gdy pojawi się apps/mobile)
+- **CSS custom properties** — design tokens + dark mode via `prefers-color-scheme`
 
 ## Changelog
 
