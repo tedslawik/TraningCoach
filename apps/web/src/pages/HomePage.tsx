@@ -1,6 +1,7 @@
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import SectionLabel from '../components/SectionLabel';
 import Analyzer from '../components/analyzer/Analyzer';
+import { useAuth } from '../context/AuthContext';
 
 const coaches = [
   { to: '/tri-coach',  accent: 'tri',  icon: '🏅', title: 'Tri Coach',  link: 'tri',
@@ -14,6 +15,8 @@ const coaches = [
 ] as const;
 
 export default function HomePage() {
+  const { session, loading } = useAuth();
+  if (!loading && session) return <Navigate to="/dashboard" replace />;
   return (
     <>
       {/* HERO */}

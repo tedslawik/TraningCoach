@@ -12,7 +12,8 @@ export default function Nav() {
         <li><NavLink to="/run-coach">Run Coach</NavLink></li>
         <li><NavLink to="/swim-coach">Swim Coach</NavLink></li>
         <li><NavLink to="/bike-coach">Bike Coach</NavLink></li>
-        {user && <li><NavLink to="/athlete">Zawodnik</NavLink></li>}
+        {user && <li><NavLink to="/dashboard">Dashboard</NavLink></li>}
+      {user && <li><NavLink to="/athlete">Zawodnik</NavLink></li>}
       </ul>
       {user ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
