@@ -16,9 +16,9 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession]       = useState<Session | null>(null);
+  const [session, setSession]         = useState<Session | null>(null);
   const [stravaToken, setStravaToken] = useState<StravaToken | null>(null);
-  const [loading, setLoading]       = useState(true);
+  const [loading, setLoading]         = useState(true);
 
   const fetchStravaToken = async (userId: string) => {
     const { data } = await supabase
@@ -31,34 +31,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    supabase.auth.getSession()
-      .then(async ({ data: { session } }) => {
+    // onAuthStateChange fires immediately with INITIAL_SESSION from localStorage
+    // — no extra network round-trip, so loading resolves fast.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
         setSession(session);
-        if (session) await fetchStravaToken(session.user.id);
-      })
-      .catch(err => console.error('Auth init error:', err))
-      .finally(() => setLoading(false));
+        setLoading(false); // unblock UI immediately
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      if (session) {
-        await fetchStravaToken(session.user.id);
-      } else {
-        setStravaToken(null);
-      }
-    });
+        if (session) {
+          fetchStravaToken(session.user.id); // load in background
+        } else {
+          setStravaToken(null);
+        }
+      },
+    );
+
+    // Check ?strava=connected after OAuth redirect
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('strava') === 'connected') {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
 
     return () => subscription.unsubscribe();
   }, []);
-
-  // Check URL for Strava callback success
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('strava') === 'connected' && session) {
-      fetchStravaToken(session.user.id);
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, [session]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -82,14 +77,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      session,
-      user: session?.user ?? null,
-      stravaToken,
-      loading,
-      signIn,
-      signUp,
-      signOut,
-      refreshStravaToken,
+      session, user: session?.user ?? null,
+      stravaToken, loading,
+      signIn, signUp, signOut, refreshStravaToken,
     }}>
       {children}
     </AuthContext.Provider>
