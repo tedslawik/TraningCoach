@@ -182,12 +182,12 @@ export default function AthletePage() {
                 <Stat label="FTP" value={profile.ftp} unit="W" />
                 <Stat label="Sesje / 7 dni" value={weekTotals.sessions} />
               </div>
-              {!profile.weight && (
+              {profile.weight == null && (
                 <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>
                   Waga: ustaw w Strava → Ustawienia → Profil
                 </p>
               )}
-              {!profile.ftp && (
+              {profile.ftp == null && (
                 <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
                   FTP: ustaw w Strava → Ustawienia → Moje osiągi
                 </p>
@@ -307,7 +307,7 @@ export default function AthletePage() {
                 </div>
               ) : (
                 <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                  {profile.ftp
+                  {profile.ftp != null
                     ? 'Strefy mocy niedostępne — sprawdź ustawienia Stravy'
                     : 'Ustaw FTP w Strava → Ustawienia → Moje osiągi → Próg mocy'}
                 </p>

@@ -95,7 +95,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     sex:      athlete.sex ?? null,
   };
 
-  const hrZones    = zonesData?.heart_rate?.zones ?? null;
+  // Debug — visible in Vercel → Deployments → Functions → Logs
+  console.log('[athlete] weight:', athlete.weight, '| ftp:', athlete.ftp);
+  console.log('[athlete] zones raw:', JSON.stringify(zonesData));
+
+  // Strava sometimes wraps zones differently — handle both shapes
+  const hrZones    = zonesData?.heart_rate?.zones
+                  ?? zonesData?.heartrate?.zones
+                  ?? null;
   const powerZones = zonesData?.power?.zones ?? null;
 
   let totalSufferScore = 0;
