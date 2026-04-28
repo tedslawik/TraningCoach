@@ -129,9 +129,9 @@ export default function AthletePage() {
     const swimDist = d.activities.filter(a=>a.type==='swim').reduce((s,a)=>s+a.distanceKm,0);
     const bikeDist = d.activities.filter(a=>a.type==='bike').reduce((s,a)=>s+a.distanceKm,0);
     const runDist  = d.activities.filter(a=>a.type==='run').reduce((s,a)=>s+a.distanceKm,0);
-    const swimT = d.activities.filter(a=>a.type==='swim').reduce((s,a)=>s+parseFloat(a.timeFormatted),0);
-    const bikeT = d.activities.filter(a=>a.type==='bike').reduce((s,a)=>s+parseFloat(a.timeFormatted),0);
-    const runT  = d.activities.filter(a=>a.type==='run').reduce((s,a)=>s+parseFloat(a.timeFormatted),0);
+    const swimT = d.activities.filter(a=>a.type==='swim').reduce((s,a)=>s+(a.movingTimeSec/60),0);
+    const bikeT = d.activities.filter(a=>a.type==='bike').reduce((s,a)=>s+(a.movingTimeSec/60),0);
+    const runT  = d.activities.filter(a=>a.type==='run').reduce((s,a)=>s+(a.movingTimeSec/60),0);
 
     const target = RACE_TARGETS.half;
     const analysis = analyzeWorkouts(
