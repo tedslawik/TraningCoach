@@ -73,8 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try { accessToken = await refreshIfNeeded(tokenRow); }
   catch { return res.status(401).json({ error: 'Token refresh failed — reconnect Strava' }); }
 
-  // Fetch last 14 days to cover last 7 activities + last 7-day aggregation
-  const after = Math.floor(Date.now() / 1000) - 14 * 24 * 60 * 60;
+  const after = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
   const stravaRes = await fetch(
     `https://www.strava.com/api/v3/athlete/activities?after=${after}&per_page=50`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
@@ -106,9 +105,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     runDist:  Math.round(acc.runDist  * 10) / 10, runTime:  Math.round(acc.runTime),  runSessions:  acc.runSessions,
   };
 
-  // Last 7 individual activities (all types, most recent first)
+  // Last 7 individual activities from the same 7-day window
   const activities = raw
-    .filter(a => typeKey(a.sport_type) !== 'other')
+    .filter(a => typeKey(a.sport_type) !== 'other' && new Date(a.start_date_local).getTime() >= sevenDaysAgo)
     .slice(0, 7)
     .map(a => {
       const type = typeKey(a.sport_type) as 'swim' | 'bike' | 'run';
