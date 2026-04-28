@@ -35,6 +35,20 @@ export default function Analyzer() {
   const [stravaFetched, setStravaFetched]   = useState(false);
   const autoFetchedRef = useRef(false);
 
+  // Keep a ref of current inputs so callbacks always see the latest value
+  const inputsRef = useRef(inputs);
+  useEffect(() => { inputsRef.current = inputs; }, [inputs]);
+
+  // Core analysis function — accepts explicit data to avoid stale closures
+  const runAnalysis = useCallback((data: WorkoutData) => {
+    const target = RACE_TARGETS[data.raceType];
+    const r = analyzeWorkouts(data, target);
+    const p = generateWeekPlan({ analysis: r, target, daysUntilRace: daysUntil(data.raceDate) });
+    setResults(r);
+    setPlan(p);
+    setTab('analysis');
+  }, []);
+
   const fetchFromStrava = useCallback(async () => {
     if (!session) return;
     setFetchingStrava(true);
@@ -44,12 +58,18 @@ export default function Analyzer() {
       });
       if (!res.ok) return;
       const data = await res.json();
-      setInputs(prev => ({ ...prev, ...data.summary }));
+
+      // Merge Strava summary with current config (race type, date stay as-is)
+      const merged: WorkoutData = { ...inputsRef.current, ...data.summary };
+      setInputs(merged);
       setActivities(data.activities ?? []);
       setStravaFetched(true);
-    } catch { /* silent fail — manual fetch still available */ }
+
+      // Auto-analyze immediately with fresh merged data
+      runAnalysis(merged);
+    } catch { /* silent — manual button still available */ }
     finally { setFetchingStrava(false); }
-  }, [session]);
+  }, [session, runAnalysis]);
 
   // Auto-fetch once when Strava token becomes available
   useEffect(() => {
@@ -58,15 +78,6 @@ export default function Analyzer() {
       fetchFromStrava();
     }
   }, [session, stravaToken, fetchFromStrava]);
-
-  const handleAnalyze = () => {
-    const target = RACE_TARGETS[inputs.raceType];
-    const r = analyzeWorkouts(inputs, target);
-    const p = generateWeekPlan({ analysis: r, target, daysUntilRace: daysUntil(inputs.raceDate) });
-    setResults(r);
-    setPlan(p);
-    setTab('analysis');
-  };
 
   return (
     <div className="analyzer-wrap">
@@ -85,7 +96,7 @@ export default function Analyzer() {
 
       {fetchingStrava && activities.length === 0 && (
         <div style={{ textAlign: 'center', padding: '1rem 0', fontSize: 13, color: 'var(--text-secondary)' }}>
-          Pobieranie danych ze Stravy…
+          Pobieranie i analiza danych ze Stravy…
         </div>
       )}
 
@@ -103,7 +114,11 @@ export default function Analyzer() {
       </div>
 
       {tab === 'input' && (
-        <AnalyzerInput inputs={inputs} onChange={setInputs} onAnalyze={handleAnalyze} />
+        <AnalyzerInput
+          inputs={inputs}
+          onChange={setInputs}
+          onAnalyze={() => runAnalysis(inputs)}
+        />
       )}
       {tab === 'analysis' && results && (
         <AnalyzerAnalysis
