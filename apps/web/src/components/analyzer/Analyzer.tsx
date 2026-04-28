@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { WorkoutData, AnalysisResult, WeekPlan, RACE_TARGETS } from '@tricoach/core';
 import { analyzeWorkouts, daysUntil, generateWeekPlan } from '@tricoach/core';
+import { useAuth } from '../../context/AuthContext';
+import StravaConnectPrompt from '../auth/StravaConnectPrompt';
 import AnalyzerInput from './AnalyzerInput';
 import AnalyzerAnalysis from './AnalyzerAnalysis';
 import AnalyzerPlan from './AnalyzerPlan';
@@ -14,18 +16,19 @@ function defaultDate() {
 }
 
 const DEFAULTS: WorkoutData = {
-  swimDist: 3.8, swimTime: 135, swimSessions: 3,
-  bikeDist: 60,  bikeTime: 120, bikeSessions: 2,
-  runDist: 15,   runTime: 90,   runSessions: 3,
+  swimDist: 0, swimTime: 0, swimSessions: 0,
+  bikeDist: 0, bikeTime: 0, bikeSessions: 0,
+  runDist:  0, runTime:  0, runSessions:  0,
   raceDate: defaultDate(),
   raceType: 'half',
 };
 
 export default function Analyzer() {
-  const [tab, setTab] = useState<Tab>('input');
+  const { session } = useAuth();
+  const [tab, setTab]       = useState<Tab>('input');
   const [inputs, setInputs] = useState<WorkoutData>(DEFAULTS);
   const [results, setResults] = useState<AnalysisResult | null>(null);
-  const [plan, setPlan] = useState<WeekPlan | null>(null);
+  const [plan, setPlan]     = useState<WeekPlan | null>(null);
 
   const handleAnalyze = () => {
     const target = RACE_TARGETS[inputs.raceType];
@@ -36,8 +39,17 @@ export default function Analyzer() {
     setTab('analysis');
   };
 
+  const handleStravaData = (data: Record<string, number>) => {
+    setInputs(prev => ({ ...prev, ...data }));
+  };
+
   return (
     <div className="analyzer-wrap">
+      {/* Strava connect strip — only if logged in */}
+      {session && (
+        <StravaConnectPrompt onFetched={handleStravaData} />
+      )}
+
       <div className="tabs">
         {(['input', 'analysis', 'plan'] as Tab[]).map((t, i) => (
           <button
@@ -55,7 +67,11 @@ export default function Analyzer() {
         <AnalyzerInput inputs={inputs} onChange={setInputs} onAnalyze={handleAnalyze} />
       )}
       {tab === 'analysis' && results && (
-        <AnalyzerAnalysis results={results} target={RACE_TARGETS[inputs.raceType]} daysUntilRace={daysUntil(inputs.raceDate)} />
+        <AnalyzerAnalysis
+          results={results}
+          target={RACE_TARGETS[inputs.raceType]}
+          daysUntilRace={daysUntil(inputs.raceDate)}
+        />
       )}
       {tab === 'plan' && plan && (
         <AnalyzerPlan plan={plan} />

@@ -10,6 +10,7 @@
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.105.1",
     "@tricoach/core": "*",
     "@types/node": "^25.6.0",
     "react": "^18.3.1",

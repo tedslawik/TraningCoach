@@ -1,6 +1,9 @@
 import { NavLink, Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export default function Nav() {
+  const { user, signOut } = useAuth();
+
   return (
     <nav>
       <Link to="/" className="nav-logo">TriCoach</Link>
@@ -10,7 +13,19 @@ export default function Nav() {
         <li><NavLink to="/swim-coach">Swim Coach</NavLink></li>
         <li><NavLink to="/bike-coach">Bike Coach</NavLink></li>
       </ul>
-      <Link to="/#analyzer" className="nav-cta">Analizuj trening</Link>
+      {user ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{user.email}</span>
+          <button
+            onClick={signOut}
+            style={{ fontSize: 13, color: 'var(--text-secondary)', background: 'none', border: '0.5px solid var(--border-md)', borderRadius: 'var(--radius-md)', padding: '6px 12px', cursor: 'pointer', fontFamily: 'var(--font)' }}
+          >
+            Wyloguj
+          </button>
+        </div>
+      ) : (
+        <Link to="/#analyzer" className="nav-cta">Analizuj trening</Link>
+      )}
     </nav>
   );
 }

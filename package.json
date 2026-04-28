@@ -9,5 +9,11 @@
     "dev": "npm run dev --workspace=apps/web",
     "build": "npm run build --workspace=packages/core && npm run build --workspace=apps/web",
     "preview": "npm run preview --workspace=apps/web"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.105.1"
+  },
+  "devDependencies": {
+    "@vercel/node": "^5.7.13"
   }
 }
