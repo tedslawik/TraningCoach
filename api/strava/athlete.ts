@@ -17,6 +17,30 @@ function typeKey(s: string) {
   return 'other';
 }
 
+function calcPowerZones(ftp: number) {
+  const p = (pct: number) => Math.round(ftp * pct);
+  return [
+    { min: 0,       max: p(0.55) },
+    { min: p(0.56), max: p(0.75) },
+    { min: p(0.76), max: p(0.90) },
+    { min: p(0.91), max: p(1.05) },
+    { min: p(1.06), max: p(1.20) },
+    { min: p(1.21), max: p(1.50) },
+    { min: p(1.51), max: -1      },
+  ];
+}
+
+function calcHRZones(maxHR: number) {
+  const h = (pct: number) => Math.round(maxHR * pct);
+  return [
+    { min: 0,     max: h(0.60) },
+    { min: h(0.60), max: h(0.70) },
+    { min: h(0.70), max: h(0.80) },
+    { min: h(0.80), max: h(0.90) },
+    { min: h(0.90), max: maxHR  },
+  ];
+}
+
 function fmtTime(min: number) {
   if (min < 60) return `${Math.round(min)} min`;
   const h = Math.floor(min / 60), m = Math.round(min % 60);
@@ -95,15 +119,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     sex:      athlete.sex ?? null,
   };
 
-  // Debug — visible in Vercel → Deployments → Functions → Logs
+  console.log('[athlete] status — athlete:', athleteRes.status, 'zones:', zonesRes.status, 'activities:', activitiesRes.status);
   console.log('[athlete] weight:', athlete.weight, '| ftp:', athlete.ftp);
-  console.log('[athlete] zones raw:', JSON.stringify(zonesData));
+  console.log('[athlete] zones keys:', Object.keys(zonesData ?? {}));
 
-  // Strava sometimes wraps zones differently — handle both shapes
-  const hrZones    = zonesData?.heart_rate?.zones
-                  ?? zonesData?.heartrate?.zones
-                  ?? null;
-  const powerZones = zonesData?.power?.zones ?? null;
+  const hrZonesFromAPI    = zonesData?.heart_rate?.zones ?? zonesData?.heartrate?.zones ?? null;
+  const powerZonesFromAPI = zonesData?.power?.zones ?? null;
+
+  // Fallback: calculate zones when Strava API returns null
+  // Power: from FTP; HR: from highest max_heartrate observed in week's activities
+  const maxHRSeen = (raw as Record<string, unknown>[])
+    .map(a => (a.max_heartrate as number | null) ?? 0)
+    .reduce((m, v) => Math.max(m, v), 0);
+
+  const ftp = athlete.ftp && athlete.ftp > 0 ? athlete.ftp : null;
+
+  const hrZones    = hrZonesFromAPI    ?? (maxHRSeen > 100 ? calcHRZones(maxHRSeen) : null);
+  const powerZones = powerZonesFromAPI ?? (ftp ? calcPowerZones(ftp) : null);
+  const hrSource   = hrZonesFromAPI    ? 'strava' : (maxHRSeen > 100 ? 'calculated' : null);
+  const pwrSource  = powerZonesFromAPI ? 'strava' : (ftp ? 'calculated' : null);
+
+  console.log('[athlete] zones — hrSource:', hrSource, '| pwrSource:', pwrSource, '| ftp:', ftp, '| maxHR:', maxHRSeen);
 
   let totalSufferScore = 0;
   let totalKilojoules  = 0;
@@ -145,7 +181,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   res.json({
     profile,
-    zones: { heartRate: hrZones, power: powerZones },
+    zones: { heartRate: hrZones, power: powerZones, hrSource, pwrSource },
     activities,
     weekTotals: {
       sufferScore:  Math.round(totalSufferScore),

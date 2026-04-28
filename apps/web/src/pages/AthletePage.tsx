@@ -14,6 +14,8 @@ interface AthleteData {
   zones: {
     heartRate: Array<{ min: number; max: number }> | null;
     power:     Array<{ min: number; max: number }> | null;
+    hrSource:  'strava' | 'calculated' | null;
+    pwrSource: 'strava' | 'calculated' | null;
   };
   activities: Activity[];
   weekTotals: { sufferScore: number; kilojoules: number; timeFormatted: string; sessions: number };
@@ -70,6 +72,10 @@ function Stat({ label, value, unit }: { label: string; value: string | number | 
 /* ── Page ───────────────────────────────────────────────── */
 export default function AthletePage() {
   const { session, stravaToken } = useAuth();
+  const handleReconnect = async () => {
+    if (!session) return;
+    window.location.href = `/api/auth/strava?token=${session.access_token}`;
+  };
   const [data, setData]       = useState<AthleteData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
@@ -192,6 +198,9 @@ export default function AthletePage() {
                   FTP: ustaw w Strava → Ustawienia → Moje osiągi
                 </p>
               )}
+              <button onClick={handleReconnect} style={{ marginTop: 12, fontSize: 12, color: 'var(--text-secondary)', background: 'none', border: '0.5px solid var(--border-md)', borderRadius: 'var(--radius-md)', padding: '5px 12px', cursor: 'pointer', fontFamily: 'var(--font)' }}>
+                🔄 Reconnect Strava (odśwież uprawnienia)
+              </button>
             </div>
 
             {/* Obciążenie tygodniowe */}
@@ -268,7 +277,11 @@ export default function AthletePage() {
 
             {/* HR Zones */}
             <div className="card">
-              <div className="card-title">Strefy tętna</div>
+              <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Strefy tętna</span>
+                {zones.hrSource === 'calculated' && <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 400 }}>szacowane z max HR</span>}
+                {zones.hrSource === 'strava' && <span style={{ fontSize: 10, color: '#22c55e', fontWeight: 600 }}>● Strava</span>}
+              </div>
               {zones.heartRate ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {zones.heartRate.slice(0, 5).map((z, i) => (
@@ -290,8 +303,10 @@ export default function AthletePage() {
 
             {/* Power Zones */}
             <div className="card">
-              <div className="card-title">
-                Strefy mocy {profile.ftp && <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>· FTP {profile.ftp} W</span>}
+              <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Strefy mocy {profile.ftp != null && <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>· FTP {profile.ftp} W</span>}</span>
+                {zones.pwrSource === 'calculated' && <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 400 }}>wyliczone z FTP</span>}
+                {zones.pwrSource === 'strava' && <span style={{ fontSize: 10, color: '#22c55e', fontWeight: 600 }}>● Strava</span>}
               </div>
               {zones.power ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
