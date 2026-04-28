@@ -381,6 +381,9 @@ export default function AthletePage() {
             </div>
           </div>
 
+          {/* ── WEEKLY ZONE SUMMARY ── */}
+          <WeekZoneSummary activities={activities} />
+
           {/* ── CALENDAR GRID ── */}
           <WeekCalendar activities={activities} weekStart={weekStart} loading={weekLoading} />
         </div>
@@ -397,6 +400,67 @@ const navBtn: React.CSSProperties = {
   cursor: 'pointer', fontFamily: 'var(--font)', whiteSpace: 'nowrap',
   transition: 'background 0.15s',
 };
+
+/* ── Weekly HR Zone Summary ────────────────────────────── */
+function WeekZoneSummary({ activities }: { activities: Activity[] }) {
+  const HR_ZONE_SHORT = ['Z1 Regeneracja', 'Z2 Aerobowa', 'Z3 Tempo', 'Z4 Próg', 'Z5 VO2max'];
+
+  // Sum zone times across all activities
+  const totals = activities.reduce<number[]>((acc, a) => {
+    if (!a.zoneTimes) return acc;
+    a.zoneTimes.forEach((sec, i) => { acc[i] = (acc[i] ?? 0) + sec; });
+    return acc;
+  }, [0, 0, 0, 0, 0]);
+
+  const grandTotal = totals.reduce((s, v) => s + v, 0);
+  if (grandTotal < 60) return null; // no HR data this week
+
+  const fmtMin = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    if (m < 60) return `${m} min`;
+    const h = Math.floor(m / 60), rem = m % 60;
+    return rem > 0 ? `${h}h ${rem}min` : `${h}h`;
+  };
+
+  return (
+    <div style={{ marginBottom: '1.25rem', background: 'var(--bg)', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '14px 16px' }}>
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-secondary)', marginBottom: 10 }}>
+        Strefy tętna — tydzień łącznie · {fmtMin(grandTotal)}
+      </div>
+
+      {/* Stacked bar */}
+      <div style={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden', marginBottom: 10, gap: 1 }}>
+        {totals.map((sec, i) => {
+          const pct = (sec / grandTotal) * 100;
+          if (pct < 1) return null;
+          return (
+            <div key={i} style={{ width: `${pct}%`, background: ZONE_COLORS[i], flexShrink: 0, transition: 'width 0.4s ease' }}
+              title={`${HR_ZONE_SHORT[i]}: ${Math.round(pct)}% (${fmtMin(sec)})`}
+            />
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px' }}>
+        {totals.map((sec, i) => {
+          const pct = grandTotal > 0 ? Math.round((sec / grandTotal) * 100) : 0;
+          if (pct < 1) return null;
+          return (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 10, height: 10, borderRadius: 2, background: ZONE_COLORS[i], flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                {HR_ZONE_SHORT[i]}
+                <strong style={{ color: ZONE_COLORS[i], marginLeft: 4 }}>{pct}%</strong>
+                <span style={{ marginLeft: 4, opacity: 0.65 }}>({fmtMin(sec)})</span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 /* ── Week Calendar ─────────────────────────────────────── */
 function WeekCalendar({ activities, weekStart, loading }: { activities: Activity[]; weekStart: Date; loading: boolean }) {
