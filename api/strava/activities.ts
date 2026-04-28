@@ -102,9 +102,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     runDist:  Math.round(acc.runDist  * 10) / 10, runTime:  Math.round(acc.runTime),  runSessions:  acc.runSessions,
   };
 
-  // Last 7 individual activities — show ALL types, not just swim/bike/run
+  // All activities from last 7 days — show ALL types, no artificial limit
   const activities = raw
-    .slice(0, 7)
     .map(a => {
       const type = typeKey(a.sport_type) as 'swim' | 'bike' | 'run';
       const distKm = a.distance / 1000;

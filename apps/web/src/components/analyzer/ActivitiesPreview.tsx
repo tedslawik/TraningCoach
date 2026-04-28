@@ -13,11 +13,11 @@ interface Props {
   activities: ActivityItem[];
 }
 
-const META: Record<string, { label: string; icon: string; border: string; badge: string; badgeText: string }> = {
-  swim:  { label: 'Pływanie',  icon: '🏊', border: '#378add', badge: '#ddeeff', badgeText: '#0a4a8f' },
-  bike:  { label: 'Rower',     icon: '🚴', border: '#639922', badge: '#dff2d8', badgeText: '#1e5c0e' },
-  run:   { label: 'Bieg',      icon: '🏃', border: '#d85a30', badge: '#fde8de', badgeText: '#7a2e10' },
-  other: { label: 'Trening',   icon: '💪', border: '#9ca3af', badge: '#f3f4f6', badgeText: '#374151' },
+const META: Record<string, { label: string; icon: string; color: string; badge: string; badgeText: string }> = {
+  swim:  { label: 'Pływanie', icon: '🏊', color: '#378add', badge: '#ddeeff', badgeText: '#0a4a8f' },
+  bike:  { label: 'Rower',    icon: '🚴', color: '#639922', badge: '#dff2d8', badgeText: '#1e5c0e' },
+  run:   { label: 'Bieg',     icon: '🏃', color: '#d85a30', badge: '#fde8de', badgeText: '#7a2e10' },
+  other: { label: 'Trening',  icon: '💪', color: '#9ca3af', badge: '#f3f4f6', badgeText: '#374151' },
 };
 
 function relativeDate(dateStr: string): string {
@@ -33,53 +33,55 @@ export default function ActivitiesPreview({ activities }: Props) {
 
   return (
     <div className="card" style={{ marginBottom: '1rem' }}>
-      <div className="card-title">Ostatnie treningi ze Stravy</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        {activities.map((a, i) => {
+      <div className="card-title">
+        Treningi z ostatnich 7 dni
+        <span style={{ fontWeight: 400, marginLeft: 8, color: 'var(--text-secondary)' }}>
+          ({activities.length})
+        </span>
+      </div>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, 1fr)',
+        gap: 8,
+      }}>
+        {activities.map(a => {
           const meta = META[a.type] ?? META.other;
           return (
             <div
               key={a.id}
               style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '10px 12px',
-                borderLeft: `3px solid ${meta.border}`,
+                borderLeft: `3px solid ${meta.color}`,
                 background: 'var(--bg-secondary)',
-                borderRadius: i === 0
-                  ? 'var(--radius-md) var(--radius-md) 0 0'
-                  : i === activities.length - 1
-                  ? '0 0 var(--radius-md) var(--radius-md)'
-                  : '0',
-                marginTop: i === 0 ? 0 : 2,
+                borderRadius: 'var(--radius-md)',
+                padding: '10px 12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
               }}
             >
-              {/* Icon */}
-              <div style={{ fontSize: 20, flexShrink: 0, width: 28, textAlign: 'center' }}>
-                {meta.icon}
-              </div>
-
-              {/* Name + meta */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {a.name}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 4 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', lineHeight: 1.3, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {meta.icon} {a.name}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <span
-                    style={{ background: meta.badge, color: meta.badgeText, padding: '1px 7px', borderRadius: 4, fontWeight: 600, fontSize: 11, letterSpacing: '0.03em' }}
-                  >
-                    {meta.label}
-                  </span>
-                  <span>{a.distanceKm} km</span>
-                  <span>·</span>
-                  <span>{a.timeFormatted}</span>
-                  <span>·</span>
-                  <span>{a.paceOrSpeed}</span>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', flexShrink: 0, marginLeft: 4 }}>
+                  {relativeDate(a.date)}
                 </div>
               </div>
 
-              {/* Date */}
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', flexShrink: 0, textAlign: 'right' }}>
-                {relativeDate(a.date)}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ background: meta.badge, color: meta.badgeText, padding: '1px 6px', borderRadius: 4, fontWeight: 600, fontSize: 10, letterSpacing: '0.03em', textTransform: 'uppercase' }}>
+                  {meta.label}
+                </span>
+                {a.distanceKm > 0 && (
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{a.distanceKm} km</span>
+                )}
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{a.timeFormatted}</span>
+                {a.paceOrSpeed && a.paceOrSpeed !== a.timeFormatted && (
+                  <>
+                    <span style={{ fontSize: 12, color: 'var(--border-md)' }}>·</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{a.paceOrSpeed}</span>
+                  </>
+                )}
               </div>
             </div>
           );
