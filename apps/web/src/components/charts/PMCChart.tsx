@@ -17,7 +17,7 @@ export default function PMCChart({ data, height = 200 }: Props) {
   const W      = 800;
   const padL   = 42;
   const padR   = 12;
-  const padT   = 16;
+  const padT   = 8;
   const padB   = 28;
   const chartW = W - padL - padR;
   const chartH = height - padT - padB;
@@ -32,77 +32,133 @@ export default function PMCChart({ data, height = 200 }: Props) {
 
   const zeroY = toY(0);
 
-  const ctlPts: [number, number][]  = data.map((d, i) => [toX(i), toY(d.ctl)]);
-  const atlPts: [number, number][]  = data.map((d, i) => [toX(i), toY(d.atl)]);
-  const tsbPts: [number, number][]  = data.map((d, i) => [toX(i), toY(d.tsb)]);
+  const ctlPts: [number, number][] = data.map((d, i) => [toX(i), toY(d.ctl)]);
+  const atlPts: [number, number][] = data.map((d, i) => [toX(i), toY(d.atl)]);
+  const tsbPts: [number, number][] = data.map((d, i) => [toX(i), toY(d.tsb)]);
 
-  // TSB fill area (positive = green, negative = red)
   const tsbAreaPos = tsbPts.map(([x, y]) => [x, Math.min(y, zeroY)] as [number, number]);
   const tsbAreaNeg = tsbPts.map(([x, y]) => [x, Math.max(y, zeroY)] as [number, number]);
 
   const yTicks = [-20, 0, 20, 40, 60, 80, 100].filter(v => v >= minVal - 5 && v <= maxVal + 5);
+  const last   = data.length - 1;
+  const latest = data[last];
 
   return (
-    <div style={{ width: '100%', overflowX: 'auto' }}>
-      <svg viewBox={`0 0 ${W} ${height}`} style={{ width: '100%', minWidth: 480, display: 'block' }}>
-        <defs>
-          <linearGradient id="tsb-pos" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#22c55e" stopOpacity="0.4" /><stop offset="100%" stopColor="#22c55e" stopOpacity="0.05" /></linearGradient>
-          <linearGradient id="tsb-neg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ef4444" stopOpacity="0.05" /><stop offset="100%" stopColor="#ef4444" stopOpacity="0.35" /></linearGradient>
-        </defs>
+    <div>
+      {/* Chart */}
+      <div style={{ width: '100%', overflowX: 'auto' }}>
+        <svg viewBox={`0 0 ${W} ${height}`} style={{ width: '100%', minWidth: 480, display: 'block' }}>
+          <defs>
+            <linearGradient id="tsb-pos" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stopColor="#22c55e" stopOpacity="0.35" />
+              <stop offset="100%" stopColor="#22c55e" stopOpacity="0.04" />
+            </linearGradient>
+            <linearGradient id="tsb-neg" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stopColor="#ef4444" stopOpacity="0.04" />
+              <stop offset="100%" stopColor="#ef4444" stopOpacity="0.30" />
+            </linearGradient>
+          </defs>
 
-        {/* Y grid */}
-        {yTicks.map(tick => {
-          const y = toY(tick);
-          return (
-            <g key={tick}>
-              <line x1={padL} y1={y} x2={W - padR} y2={y} stroke={tick === 0 ? 'var(--border-md)' : 'var(--border)'} strokeWidth={tick === 0 ? 1 : 0.5} strokeDasharray={tick === 0 ? '0' : '3,4'} />
-              <text x={padL - 4} y={y + 4} textAnchor="end" fontSize={9} fill="var(--text-secondary)">{tick}</text>
-            </g>
-          );
-        })}
+          {/* Y grid */}
+          {yTicks.map(tick => {
+            const y = toY(tick);
+            return (
+              <g key={tick}>
+                <line
+                  x1={padL} y1={y} x2={W - padR} y2={y}
+                  stroke={tick === 0 ? 'var(--border-md)' : 'var(--border)'}
+                  strokeWidth={tick === 0 ? 1 : 0.5}
+                  strokeDasharray={tick === 0 ? '0' : '3,5'}
+                />
+                <text x={padL - 5} y={y + 4} textAnchor="end" fontSize={10} fill="var(--text-secondary)">{tick}</text>
+              </g>
+            );
+          })}
 
-        {/* TSB fill areas */}
-        <polyline
-          points={[`${toX(0)},${zeroY}`, ...tsbAreaPos.map(([x, y]) => `${x},${y}`), `${toX(data.length - 1)},${zeroY}`].join(' ')}
-          fill="url(#tsb-pos)" stroke="none"
-        />
-        <polyline
-          points={[`${toX(0)},${zeroY}`, ...tsbAreaNeg.map(([x, y]) => `${x},${y}`), `${toX(data.length - 1)},${zeroY}`].join(' ')}
-          fill="url(#tsb-neg)" stroke="none"
-        />
+          {/* TSB gradient fills */}
+          <polyline
+            points={[`${toX(0)},${zeroY}`, ...tsbAreaPos.map(([x, y]) => `${x},${y}`), `${toX(last)},${zeroY}`].join(' ')}
+            fill="url(#tsb-pos)" stroke="none"
+          />
+          <polyline
+            points={[`${toX(0)},${zeroY}`, ...tsbAreaNeg.map(([x, y]) => `${x},${y}`), `${toX(last)},${zeroY}`].join(' ')}
+            fill="url(#tsb-neg)" stroke="none"
+          />
 
-        {/* TSB (Form) dashed line */}
-        <path d={linePath(tsbPts)} fill="none" stroke="#22c55e" strokeWidth={1.5} strokeDasharray="4,3" />
+          {/* Form / TSB — dashed green */}
+          <path d={linePath(tsbPts)} fill="none" stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5,3" />
 
-        {/* ATL (orange) */}
-        <path d={linePath(atlPts)} fill="none" stroke="#fb923c" strokeWidth={1.5} />
+          {/* ATL — orange */}
+          <path d={linePath(atlPts)} fill="none" stroke="#fb923c" strokeWidth={1.5} />
 
-        {/* CTL (blue, thick) */}
-        <path d={linePath(ctlPts)} fill="none" stroke="#60a5fa" strokeWidth={2.5} strokeLinejoin="round" />
+          {/* CTL — blue, thicker */}
+          <path d={linePath(ctlPts)} fill="none" stroke="#60a5fa" strokeWidth={2.5} strokeLinejoin="round" />
 
-        {/* Dots for current week */}
-        {(() => { const last = data.length - 1; return (
-          <>
-            <circle cx={toX(last)} cy={toY(data[last].ctl)} r={4} fill="#60a5fa" />
-            <circle cx={toX(last)} cy={toY(data[last].atl)} r={3} fill="#fb923c" />
-            <circle cx={toX(last)} cy={toY(data[last].tsb)} r={3} fill={data[last].tsb >= 0 ? '#22c55e' : '#ef4444'} />
-          </>
-        ); })()}
+          {/* End-point dots */}
+          <circle cx={toX(last)} cy={toY(latest.ctl)} r={4.5} fill="#60a5fa" stroke="var(--bg)" strokeWidth={1.5} />
+          <circle cx={toX(last)} cy={toY(latest.atl)} r={3.5} fill="#fb923c" stroke="var(--bg)" strokeWidth={1.5} />
+          <circle cx={toX(last)} cy={toY(latest.tsb)} r={3.5} fill={latest.tsb >= 0 ? '#22c55e' : '#ef4444'} stroke="var(--bg)" strokeWidth={1.5} />
 
-        {/* X labels (every 2 weeks) */}
-        {data.map((d, i) => {
-          if (i % 2 !== 0 && i !== data.length - 1) return null;
-          return <text key={i} x={toX(i)} y={padT + chartH + 18} textAnchor="middle" fontSize={9} fill="var(--text-secondary)">{weekLabel(d.weekStart)}</text>;
-        })}
+          {/* End-point value labels */}
+          <text x={toX(last) + 8} y={toY(latest.ctl) + 4} fontSize={10} fontWeight={700} fill="#60a5fa">{latest.ctl}</text>
+          <text x={toX(last) + 8} y={toY(latest.atl) + 4} fontSize={10} fontWeight={700} fill="#fb923c">{latest.atl}</text>
+          <text x={toX(last) + 8} y={toY(latest.tsb) + 4} fontSize={10} fontWeight={700} fill={latest.tsb >= 0 ? '#22c55e' : '#ef4444'}>
+            {latest.tsb > 0 ? '+' : ''}{latest.tsb}
+          </text>
 
-        {/* Legend */}
-        {[['CTL — forma bazowa', '#60a5fa', '0'], ['ATL — zmęczenie', '#fb923c', '90'], ['Form (CTL−ATL)', '#22c55e', '180']].map(([label, color, x]) => (
-          <g key={label} transform={`translate(${padL + +x}, 4)`}>
-            <line x1={0} y1={6} x2={14} y2={6} stroke={color} strokeWidth={label.includes('Form') ? 1.5 : 2} strokeDasharray={label.includes('Form') ? '4,3' : '0'} />
-            <text x={18} y={10} fontSize={9} fill="var(--text-secondary)">{label}</text>
-          </g>
-        ))}
+          {/* X labels every 2 weeks */}
+          {data.map((d, i) => {
+            if (i % 2 !== 0 && i !== last) return null;
+            return (
+              <text key={i} x={toX(i)} y={padT + chartH + 18} textAnchor="middle" fontSize={9} fill="var(--text-secondary)">
+                {weekLabel(d.weekStart)}
+              </text>
+            );
+          })}
+        </svg>
+      </div>
+
+      {/* Legend — HTML below chart */}
+      <div style={{ display: 'flex', gap: 24, justifyContent: 'center', marginTop: 10, flexWrap: 'wrap' }}>
+        <LegendLine color="#60a5fa" strokeWidth={3} label="CTL — forma bazowa" />
+        <LegendLine color="#fb923c" strokeWidth={2} label="ATL — zmęczenie" />
+        <LegendDashed color="#22c55e" label="Form (CTL − ATL)" />
+        <LegendArea colorPos="#22c55e" colorNeg="#ef4444" label="Obszar formy" />
+      </div>
+    </div>
+  );
+}
+
+function LegendLine({ color, strokeWidth, label }: { color: string; strokeWidth: number; label: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <svg width={28} height={14}>
+        <line x1={0} y1={7} x2={28} y2={7} stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
       </svg>
+      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{label}</span>
+    </div>
+  );
+}
+
+function LegendDashed({ color, label }: { color: string; label: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <svg width={28} height={14}>
+        <line x1={0} y1={7} x2={28} y2={7} stroke={color} strokeWidth={2} strokeDasharray="5,3" strokeLinecap="round" />
+      </svg>
+      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{label}</span>
+    </div>
+  );
+}
+
+function LegendArea({ colorPos, colorNeg, label }: { colorPos: string; colorNeg: string; label: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+        <div style={{ width: 12, height: 14, background: colorPos, opacity: 0.35, borderRadius: '2px 0 0 2px' }} />
+        <div style={{ width: 12, height: 14, background: colorNeg, opacity: 0.30, borderRadius: '0 2px 2px 0' }} />
+      </div>
+      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{label}</span>
     </div>
   );
 }
