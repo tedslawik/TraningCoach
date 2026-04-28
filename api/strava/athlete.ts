@@ -17,6 +17,21 @@ function typeKey(s: string) {
   return 'other';
 }
 
+function calcZoneTimes(hr: number[], time: number[], zones: Array<{min: number; max: number}>): number[] {
+  const totals = new Array(zones.length).fill(0);
+  for (let i = 0; i < hr.length - 1; i++) {
+    const dt = time[i + 1] - time[i];
+    if (dt <= 0 || dt > 60) continue; // skip gaps / pauses
+    const h = hr[i];
+    for (let z = 0; z < zones.length; z++) {
+      const lo = zones[z].min <= 0 ? 0    : zones[z].min;
+      const hi = zones[z].max <= 0 ? 9999 : zones[z].max;
+      if (h >= lo && h < hi) { totals[z] += dt; break; }
+    }
+  }
+  return totals;
+}
+
 function calcPowerZones(ftp: number) {
   const p = (pct: number) => Math.round(ftp * pct);
   return [
@@ -188,10 +203,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       kilojoules:        kj ? Math.round(kj) : null,
       avgCadence:        (a.average_cadence as number | null) ?? null,
       perceivedExertion: (a.perceived_exertion as number | null) ?? null,
+      movingTimeSec:     (a.moving_time as number) ?? 0,
       hasHeartRate:      (a.has_heartrate as boolean) ?? false,
       deviceWatts:       (a.device_watts as boolean) ?? false,
+      zoneTimes:         null as number[] | null,
     };
   });
+
+  // Fetch HR streams for activities with heart rate data (max 15 in parallel)
+  if (hrZones) {
+    const hrActivities = activities.filter(a => a.hasHeartRate).slice(0, 15);
+    const streamResults = await Promise.allSettled(
+      hrActivities.map(a =>
+        fetch(
+          `https://www.strava.com/api/v3/activities/${a.id}/streams?keys=heartrate,time&series_type=time&resolution=medium`,
+          { headers }
+        ).then(r => r.ok ? r.json() as Promise<Array<{ type: string; data: number[] }>> : null)
+      )
+    );
+
+    streamResults.forEach((result, idx) => {
+      if (result.status !== 'fulfilled' || !result.value) return;
+      const streams   = result.value;
+      const hrStream  = streams.find(s => s.type === 'heartrate')?.data;
+      const timStream = streams.find(s => s.type === 'time')?.data;
+      if (hrStream && timStream) {
+        hrActivities[idx].zoneTimes = calcZoneTimes(hrStream, timStream, hrZones);
+      }
+    });
+  }
 
   res.json({
     profile,

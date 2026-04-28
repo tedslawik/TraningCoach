@@ -29,7 +29,8 @@ interface Activity {
   sufferScore: number | null; avgHeartRate: number | null; maxHeartRate: number | null;
   avgWatts: number | null; normalizedWatts: number | null; kilojoules: number | null;
   avgCadence: number | null; perceivedExertion: number | null;
-  hasHeartRate: boolean; deviceWatts: boolean;
+  movingTimeSec: number; hasHeartRate: boolean; deviceWatts: boolean;
+  zoneTimes: number[] | null; // seconds per HR zone [Z1..Z5]
 }
 
 /* ── Constants ──────────────────────────────────────────── */
@@ -463,6 +464,8 @@ function WeekCalendar({ activities, weekStart, loading }: { activities: Activity
 
 function ActivityCard({ activity: a }: { activity: Activity }) {
   const meta = TYPE_META[a.type] ?? TYPE_META.other;
+  const totalZoneSec = a.zoneTimes ? a.zoneTimes.reduce((s, v) => s + v, 0) : 0;
+
   return (
     <div style={{
       background: 'var(--bg-secondary)',
@@ -471,32 +474,56 @@ function ActivityCard({ activity: a }: { activity: Activity }) {
       borderRadius: 'var(--radius-sm)',
       padding: '7px 8px',
     }}>
+      {/* Name */}
       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>
         {meta.icon} {a.name}
       </div>
-      {a.distanceKm > 0 && (
-        <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{a.distanceKm} km · {a.timeFormatted}</div>
-      )}
-      {a.distanceKm === 0 && (
-        <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{a.timeFormatted}</div>
-      )}
-      {a.paceOrSpeed && (
-        <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{a.paceOrSpeed}</div>
-      )}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
-        {a.avgHeartRate && (
-          <span style={{ fontSize: 10, color: '#d85a30' }}>❤️ {Math.round(a.avgHeartRate)}</span>
-        )}
-        {a.avgWatts && (
-          <span style={{ fontSize: 10, color: '#639922' }}>⚡{Math.round(a.avgWatts)}W</span>
-        )}
-        {a.sufferScore && (
-          <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>🔥{a.sufferScore}</span>
-        )}
-        {a.elevationGain > 0 && (
-          <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>↑{a.elevationGain}m</span>
-        )}
+
+      {/* Distance · time · pace */}
+      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+        {a.distanceKm > 0 ? `${a.distanceKm} km · ` : ''}{a.timeFormatted}
+        {a.paceOrSpeed ? ` · ${a.paceOrSpeed}` : ''}
       </div>
+
+      {/* Quick metrics row */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
+        {a.avgHeartRate && <span style={{ fontSize: 10, color: '#d85a30' }}>❤️ {Math.round(a.avgHeartRate)}</span>}
+        {a.avgWatts     && <span style={{ fontSize: 10, color: '#639922' }}>⚡{Math.round(a.avgWatts)}W</span>}
+        {a.sufferScore  && <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>🔥{a.sufferScore}</span>}
+        {a.elevationGain > 0 && <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>↑{a.elevationGain}m</span>}
+      </div>
+
+      {/* HR Zone breakdown */}
+      {a.zoneTimes && totalZoneSec > 0 && (
+        <div style={{ marginTop: 6 }}>
+          {/* Stacked bar */}
+          <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', gap: 1, marginBottom: 4 }}>
+            {a.zoneTimes.map((sec, i) => {
+              const pct = (sec / totalZoneSec) * 100;
+              if (pct < 1) return null;
+              return <div key={i} style={{ width: `${pct}%`, background: ZONE_COLORS[i], flexShrink: 0 }} />;
+            })}
+          </div>
+          {/* Labels: Z1 15% (8min) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {a.zoneTimes.map((sec, i) => {
+              const pct = totalZoneSec > 0 ? Math.round((sec / totalZoneSec) * 100) : 0;
+              if (pct < 1) return null;
+              const min = Math.floor(sec / 60);
+              const s   = Math.round(sec % 60);
+              const timeStr = min > 0 ? `${min}min${s > 0 ? ` ${s}s` : ''}` : `${s}s`;
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 2, background: ZONE_COLORS[i], flexShrink: 0 }} />
+                  <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+                    Z{i + 1} <strong style={{ color: ZONE_COLORS[i] }}>{pct}%</strong> <span style={{ opacity: 0.7 }}>({timeStr})</span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

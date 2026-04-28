@@ -1,50 +1,21 @@
-import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import type { ActivityItem } from '../analyzer/ActivitiesPreview';
 
 interface Props {
-  onFetched: (summary: Record<string, number>, activities: ActivityItem[]) => void;
+  fetching: boolean;
+  fetched: boolean;
+  onFetch: () => void;
 }
 
-export default function StravaConnectPrompt({ onFetched }: Props) {
-  const { session, stravaToken, refreshStravaToken } = useAuth();
-  const [fetching, setFetching] = useState(false);
-  const [error, setError]       = useState<string | null>(null);
-  const [fetched, setFetched]   = useState(false);
+export default function StravaConnectPrompt({ fetching, fetched, onFetch }: Props) {
+  const { session, stravaToken } = useAuth();
 
   const clientId = import.meta.env.VITE_STRAVA_CLIENT_ID as string;
+  if (!clientId) return null;
 
   const handleConnect = () => {
     if (!session) return;
     window.location.href = `/api/auth/strava?token=${session.access_token}`;
   };
-
-  const handleFetch = async () => {
-    const current = stravaToken ?? await refreshStravaToken();
-    if (!current || !session) return;
-
-    setFetching(true);
-    setError(null);
-
-    try {
-      const res = await fetch('/api/strava/activities', {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-
-      if (res.status === 401) { setError('Sesja Stravy wygasła — połącz ponownie.'); return; }
-      if (!res.ok) throw new Error('Błąd serwera');
-
-      const data = await res.json();
-      onFetched(data.summary, data.activities ?? []);
-      setFetched(true);
-    } catch {
-      setError('Nie udało się pobrać danych ze Stravy. Spróbuj ponownie.');
-    } finally {
-      setFetching(false);
-    }
-  };
-
-  if (!clientId) return null;
 
   return (
     <div style={wrapper}>
@@ -55,25 +26,26 @@ export default function StravaConnectPrompt({ onFetched }: Props) {
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={greenDot} />
                 {stravaToken.athlete_name} · Strava
-                {fetched && <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>· dane załadowane</span>}
+                {fetched && <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}> · dane załadowane</span>}
+                {fetching && <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}> · pobieranie…</span>}
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-                {fetched ? 'Formularz wypełniony danymi z ostatnich 7 dni' : 'Kliknij, aby pobrać ostatnie treningi'}
+                {fetched ? 'Formularz wypełniony danymi z ostatnich 7 dni' : 'Automatyczne pobieranie…'}
               </div>
             </>
           ) : (
             <>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Połącz ze Stravą</div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-                Dane z ostatnich 7 dni załadują się automatycznie
+                Dane z ostatnich 7 dni załadują się automatycznie po połączeniu
               </div>
             </>
           )}
         </div>
 
         {stravaToken ? (
-          <button onClick={handleFetch} disabled={fetching} style={{ ...stravaBtn, opacity: fetching ? 0.7 : 1 }}>
-            {fetching ? 'Pobieranie…' : fetched ? '↻ Odśwież' : '↓ Pobierz treningi'}
+          <button onClick={onFetch} disabled={fetching} style={{ ...stravaBtn, opacity: fetching ? 0.7 : 1 }}>
+            {fetching ? 'Pobieranie…' : '↻ Odśwież dane'}
           </button>
         ) : (
           <button onClick={handleConnect} style={stravaBtn}>
@@ -81,8 +53,6 @@ export default function StravaConnectPrompt({ onFetched }: Props) {
           </button>
         )}
       </div>
-
-      {error && <div className="alert alert-warn" style={{ marginTop: 10, marginBottom: 0 }}>{error}</div>}
     </div>
   );
 }

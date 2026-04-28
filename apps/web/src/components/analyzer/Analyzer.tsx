@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { WorkoutData, AnalysisResult, WeekPlan, RACE_TARGETS } from '@tricoach/core';
 import { analyzeWorkouts, daysUntil, generateWeekPlan } from '@tricoach/core';
 import { useAuth } from '../../context/AuthContext';
@@ -25,12 +25,39 @@ const DEFAULTS: WorkoutData = {
 };
 
 export default function Analyzer() {
-  const { session } = useAuth();
-  const [tab, setTab]           = useState<Tab>('input');
-  const [inputs, setInputs]     = useState<WorkoutData>(DEFAULTS);
-  const [results, setResults]   = useState<AnalysisResult | null>(null);
-  const [plan, setPlan]         = useState<WeekPlan | null>(null);
+  const { session, stravaToken } = useAuth();
+  const [tab, setTab]               = useState<Tab>('input');
+  const [inputs, setInputs]         = useState<WorkoutData>(DEFAULTS);
+  const [results, setResults]       = useState<AnalysisResult | null>(null);
+  const [plan, setPlan]             = useState<WeekPlan | null>(null);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [fetchingStrava, setFetchingStrava] = useState(false);
+  const [stravaFetched, setStravaFetched]   = useState(false);
+  const autoFetchedRef = useRef(false);
+
+  const fetchFromStrava = useCallback(async () => {
+    if (!session) return;
+    setFetchingStrava(true);
+    try {
+      const res = await fetch('/api/strava/activities', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setInputs(prev => ({ ...prev, ...data.summary }));
+      setActivities(data.activities ?? []);
+      setStravaFetched(true);
+    } catch { /* silent fail — manual fetch still available */ }
+    finally { setFetchingStrava(false); }
+  }, [session]);
+
+  // Auto-fetch once when Strava token becomes available
+  useEffect(() => {
+    if (session && stravaToken && !autoFetchedRef.current) {
+      autoFetchedRef.current = true;
+      fetchFromStrava();
+    }
+  }, [session, stravaToken, fetchFromStrava]);
 
   const handleAnalyze = () => {
     const target = RACE_TARGETS[inputs.raceType];
@@ -41,20 +68,25 @@ export default function Analyzer() {
     setTab('analysis');
   };
 
-  const handleStravaData = (summary: Record<string, number>, acts: ActivityItem[]) => {
-    setInputs(prev => ({ ...prev, ...summary }));
-    setActivities(acts);
-  };
-
   return (
     <div className="analyzer-wrap">
 
       {session && (
-        <StravaConnectPrompt onFetched={handleStravaData} />
+        <StravaConnectPrompt
+          fetching={fetchingStrava}
+          fetched={stravaFetched}
+          onFetch={fetchFromStrava}
+        />
       )}
 
       {activities.length > 0 && (
         <ActivitiesPreview activities={activities} />
+      )}
+
+      {fetchingStrava && activities.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '1rem 0', fontSize: 13, color: 'var(--text-secondary)' }}>
+          Pobieranie danych ze Stravy…
+        </div>
       )}
 
       <div className="tabs">
