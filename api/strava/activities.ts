@@ -85,12 +85,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     start_date_local: string; distance: number; moving_time: number;
   }>;
 
-  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-
-  // Aggregate last 7 days
+  // All returned activities are already within 7 days (Strava API filters via `after`)
   const acc = { swimDist:0,swimTime:0,swimSessions:0,bikeDist:0,bikeTime:0,bikeSessions:0,runDist:0,runTime:0,runSessions:0 };
   for (const a of raw) {
-    if (new Date(a.start_date_local).getTime() < sevenDaysAgo) continue;
     const dist = a.distance / 1000;
     const time = a.moving_time / 60;
     const key  = typeKey(a.sport_type);
@@ -105,9 +102,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     runDist:  Math.round(acc.runDist  * 10) / 10, runTime:  Math.round(acc.runTime),  runSessions:  acc.runSessions,
   };
 
-  // Last 7 individual activities from the same 7-day window
+  // Last 7 individual activities — all already within 7 days from Strava API
   const activities = raw
-    .filter(a => typeKey(a.sport_type) !== 'other' && new Date(a.start_date_local).getTime() >= sevenDaysAgo)
+    .filter(a => typeKey(a.sport_type) !== 'other')
     .slice(0, 7)
     .map(a => {
       const type = typeKey(a.sport_type) as 'swim' | 'bike' | 'run';
