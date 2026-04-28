@@ -6,17 +6,41 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!,
 );
 
-const SWIM_TYPES  = new Set(['Swim']);
-const BIKE_TYPES  = new Set(['Ride', 'VirtualRide', 'EBikeRide', 'Velomobile', 'Handcycle']);
-const RUN_TYPES   = new Set(['Run', 'TrailRun', 'VirtualRun']);
+const SWIM_TYPES = new Set(['Swim']);
+const BIKE_TYPES = new Set(['Ride', 'VirtualRide', 'EBikeRide', 'Velomobile', 'Handcycle']);
+const RUN_TYPES  = new Set(['Run', 'TrailRun', 'VirtualRun']);
 
-async function refreshIfNeeded(row: Record<string, unknown>) {
-  const expiresAt = row.expires_at as number;
-  if (Date.now() / 1000 < expiresAt - 300) {
-    return row.access_token as string; // still valid
+function typeKey(sportType: string): 'swim' | 'bike' | 'run' | 'other' {
+  if (SWIM_TYPES.has(sportType)) return 'swim';
+  if (BIKE_TYPES.has(sportType)) return 'bike';
+  if (RUN_TYPES.has(sportType))  return 'run';
+  return 'other';
+}
+
+function formatTime(minutes: number): string {
+  if (minutes < 60) return `${Math.round(minutes)} min`;
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  return m > 0 ? `${h}h ${m} min` : `${h}h`;
+}
+
+function formatPace(distKm: number, timeMin: number, type: 'swim' | 'bike' | 'run'): string {
+  if (distKm === 0 || timeMin === 0) return '—';
+  if (type === 'bike') {
+    return `${(distKm / (timeMin / 60)).toFixed(1)} km/h`;
   }
+  const base   = type === 'swim' ? distKm * 10 : distKm; // per 100m or per 1km
+  const pace   = timeMin / base;
+  const m      = Math.floor(pace);
+  const s      = Math.round((pace - m) * 60);
+  const unit   = type === 'swim' ? '/100m' : '/km';
+  return `${m}:${String(s).padStart(2, '0')}${unit}`;
+}
 
-  // Refresh the token
+async function refreshIfNeeded(row: Record<string, unknown>): Promise<string> {
+  if (Date.now() / 1000 < (row.expires_at as number) - 300) {
+    return row.access_token as string;
+  }
   const res = await fetch('https://www.strava.com/oauth/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -27,96 +51,79 @@ async function refreshIfNeeded(row: Record<string, unknown>) {
       refresh_token: row.refresh_token,
     }),
   });
-
   if (!res.ok) throw new Error('Token refresh failed');
   const data = await res.json();
-
   await supabase.from('strava_tokens').update({
-    access_token:  data.access_token,
-    refresh_token: data.refresh_token,
-    expires_at:    data.expires_at,
-    updated_at:    new Date().toISOString(),
+    access_token: data.access_token, refresh_token: data.refresh_token,
+    expires_at: data.expires_at, updated_at: new Date().toISOString(),
   }).eq('user_id', row.user_id);
-
   return data.access_token as string;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Authenticate via Supabase JWT
-  const authHeader = req.headers.authorization ?? '';
-  const jwt = authHeader.replace('Bearer ', '');
-
+  const jwt = (req.headers.authorization ?? '').replace('Bearer ', '');
   const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
-  if (authError || !user) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  if (authError || !user) return res.status(401).json({ error: 'Unauthorized' });
 
-  // Get Strava token from DB
   const { data: tokenRow, error: dbError } = await supabase
-    .from('strava_tokens')
-    .select('*')
-    .eq('user_id', user.id)
-    .single();
+    .from('strava_tokens').select('*').eq('user_id', user.id).single();
+  if (dbError || !tokenRow) return res.status(404).json({ error: 'Strava not connected' });
 
-  if (dbError || !tokenRow) {
-    return res.status(404).json({ error: 'Strava not connected' });
-  }
-
-  // Refresh if expired
   let accessToken: string;
-  try {
-    accessToken = await refreshIfNeeded(tokenRow);
-  } catch {
-    return res.status(401).json({ error: 'Token refresh failed — reconnect Strava' });
-  }
+  try { accessToken = await refreshIfNeeded(tokenRow); }
+  catch { return res.status(401).json({ error: 'Token refresh failed — reconnect Strava' }); }
 
-  // Fetch last 7 days
-  const after = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
-
-  const activitiesRes = await fetch(
+  // Fetch last 14 days to cover last 7 activities + last 7-day aggregation
+  const after = Math.floor(Date.now() / 1000) - 14 * 24 * 60 * 60;
+  const stravaRes = await fetch(
     `https://www.strava.com/api/v3/athlete/activities?after=${after}&per_page=50`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
+  if (!stravaRes.ok) return res.status(502).json({ error: 'Strava API error' });
 
-  if (!activitiesRes.ok) {
-    return res.status(502).json({ error: 'Strava API error' });
-  }
-
-  const activities = await activitiesRes.json() as Array<{
-    sport_type: string;
-    distance: number;
-    moving_time: number;
+  const raw = await stravaRes.json() as Array<{
+    id: number; name: string; sport_type: string;
+    start_date_local: string; distance: number; moving_time: number;
   }>;
 
-  // Aggregate by discipline
-  const acc = {
-    swimDist: 0, swimTime: 0, swimSessions: 0,
-    bikeDist: 0, bikeTime: 0, bikeSessions: 0,
-    runDist:  0, runTime:  0, runSessions:  0,
-  };
+  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
-  for (const a of activities) {
-    const dist = a.distance / 1000;       // m → km
-    const time = a.moving_time / 60;      // s → min
-
-    if (SWIM_TYPES.has(a.sport_type)) {
-      acc.swimDist += dist; acc.swimTime += time; acc.swimSessions++;
-    } else if (BIKE_TYPES.has(a.sport_type)) {
-      acc.bikeDist += dist; acc.bikeTime += time; acc.bikeSessions++;
-    } else if (RUN_TYPES.has(a.sport_type)) {
-      acc.runDist  += dist; acc.runTime  += time; acc.runSessions++;
-    }
+  // Aggregate last 7 days
+  const acc = { swimDist:0,swimTime:0,swimSessions:0,bikeDist:0,bikeTime:0,bikeSessions:0,runDist:0,runTime:0,runSessions:0 };
+  for (const a of raw) {
+    if (new Date(a.start_date_local).getTime() < sevenDaysAgo) continue;
+    const dist = a.distance / 1000;
+    const time = a.moving_time / 60;
+    const key  = typeKey(a.sport_type);
+    if (key === 'swim') { acc.swimDist += dist; acc.swimTime += time; acc.swimSessions++; }
+    else if (key === 'bike') { acc.bikeDist += dist; acc.bikeTime += time; acc.bikeSessions++; }
+    else if (key === 'run')  { acc.runDist  += dist; acc.runTime  += time; acc.runSessions++;  }
   }
 
-  res.json({
-    swimDist:     Math.round(acc.swimDist * 10) / 10,
-    swimTime:     Math.round(acc.swimTime),
-    swimSessions: acc.swimSessions,
-    bikeDist:     Math.round(acc.bikeDist * 10) / 10,
-    bikeTime:     Math.round(acc.bikeTime),
-    bikeSessions: acc.bikeSessions,
-    runDist:      Math.round(acc.runDist * 10) / 10,
-    runTime:      Math.round(acc.runTime),
-    runSessions:  acc.runSessions,
-  });
+  const summary = {
+    swimDist: Math.round(acc.swimDist * 10) / 10, swimTime: Math.round(acc.swimTime), swimSessions: acc.swimSessions,
+    bikeDist: Math.round(acc.bikeDist * 10) / 10, bikeTime: Math.round(acc.bikeTime), bikeSessions: acc.bikeSessions,
+    runDist:  Math.round(acc.runDist  * 10) / 10, runTime:  Math.round(acc.runTime),  runSessions:  acc.runSessions,
+  };
+
+  // Last 7 individual activities (all types, most recent first)
+  const activities = raw
+    .filter(a => typeKey(a.sport_type) !== 'other')
+    .slice(0, 7)
+    .map(a => {
+      const type = typeKey(a.sport_type) as 'swim' | 'bike' | 'run';
+      const distKm = a.distance / 1000;
+      const timeMin = a.moving_time / 60;
+      return {
+        id:           a.id,
+        name:         a.name,
+        type,
+        date:         a.start_date_local,
+        distanceKm:   Math.round(distKm * 10) / 10,
+        timeFormatted: formatTime(timeMin),
+        paceOrSpeed:  formatPace(distKm, timeMin, type),
+      };
+    });
+
+  res.json({ summary, activities });
 }

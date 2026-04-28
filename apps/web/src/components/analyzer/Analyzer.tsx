@@ -3,6 +3,7 @@ import { WorkoutData, AnalysisResult, WeekPlan, RACE_TARGETS } from '@tricoach/c
 import { analyzeWorkouts, daysUntil, generateWeekPlan } from '@tricoach/core';
 import { useAuth } from '../../context/AuthContext';
 import StravaConnectPrompt from '../auth/StravaConnectPrompt';
+import ActivitiesPreview, { type ActivityItem } from './ActivitiesPreview';
 import AnalyzerInput from './AnalyzerInput';
 import AnalyzerAnalysis from './AnalyzerAnalysis';
 import AnalyzerPlan from './AnalyzerPlan';
@@ -25,10 +26,11 @@ const DEFAULTS: WorkoutData = {
 
 export default function Analyzer() {
   const { session } = useAuth();
-  const [tab, setTab]       = useState<Tab>('input');
-  const [inputs, setInputs] = useState<WorkoutData>(DEFAULTS);
-  const [results, setResults] = useState<AnalysisResult | null>(null);
-  const [plan, setPlan]     = useState<WeekPlan | null>(null);
+  const [tab, setTab]           = useState<Tab>('input');
+  const [inputs, setInputs]     = useState<WorkoutData>(DEFAULTS);
+  const [results, setResults]   = useState<AnalysisResult | null>(null);
+  const [plan, setPlan]         = useState<WeekPlan | null>(null);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
 
   const handleAnalyze = () => {
     const target = RACE_TARGETS[inputs.raceType];
@@ -39,15 +41,20 @@ export default function Analyzer() {
     setTab('analysis');
   };
 
-  const handleStravaData = (data: Record<string, number>) => {
-    setInputs(prev => ({ ...prev, ...data }));
+  const handleStravaData = (summary: Record<string, number>, acts: ActivityItem[]) => {
+    setInputs(prev => ({ ...prev, ...summary }));
+    setActivities(acts);
   };
 
   return (
     <div className="analyzer-wrap">
-      {/* Strava connect strip — only if logged in */}
+
       {session && (
         <StravaConnectPrompt onFetched={handleStravaData} />
+      )}
+
+      {activities.length > 0 && (
+        <ActivitiesPreview activities={activities} />
       )}
 
       <div className="tabs">
