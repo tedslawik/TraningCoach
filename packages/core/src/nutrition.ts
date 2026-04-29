@@ -26,7 +26,6 @@ export interface NutritionPlan {
 
   // Products to carry
   bikeGels:    number;
-  bikeBars:    number;
   bikeBottles: number;
   runGels:     number;
 
@@ -53,7 +52,6 @@ const RUN_CARBS_PH: Record<RaceType, number> = {
   sprint: 30, olympic: 40, half: 50, full: 60,
 };
 
-const BAR_CARBS = 45;   // g per bar (generic estimate)
 
 export interface ProductConfig {
   gelCarbs:   number;  // g carbs per gel
@@ -106,15 +104,10 @@ export function generateNutritionPlan(
   const runSodium  = Math.round(runH  * runSodium_ph);
 
   // Bike bottles — carbs from drink reduce gel needs
-  const bikeBottles      = Math.ceil(bikeFluids / 500);
-  const carbsFromDrink   = bikeBottles * DRINK_CARBS;
+  const bikeBottles       = Math.ceil(bikeFluids / 500);
+  const carbsFromDrink    = bikeBottles * DRINK_CARBS;
   const carbsFromGelsBike = Math.max(0, bikeCarbs - carbsFromDrink);
-
-  // Bars only for half/full (too hard to eat bars on sprint/olympic)
-  const bikeBars  = raceType === 'sprint' || raceType === 'olympic'
-    ? 0
-    : Math.round(bikeH * 0.7);
-  const bikeGels  = Math.max(0, Math.round((carbsFromGelsBike - bikeBars * BAR_CARBS) / GEL_CARBS));
+  const bikeGels          = Math.max(0, Math.round(carbsFromGelsBike / GEL_CARBS));
 
   // Run products: gels only (aid stations for fluids)
   const runGels = Math.max(0, Math.round(runCarbs / GEL_CARBS));
@@ -128,7 +121,7 @@ export function generateNutritionPlan(
     `Żel co ${gelInterval} min na rowerze, co 30–35 min na biegu.`,
     `Pij co 10–15 min na rowerze (${Math.round(bikeFluids_ph / 4)} ml na łyk), nie czekaj na pragnienie.`,
     raceType === 'full' || raceType === 'half'
-      ? `Na pierwszej połowie roweru jedz solid food (batony), na drugiej przejdź na żele — żołądek będzie mniej tolerancyjny.`
+      ? `Na pierwszej połowie roweru jedz regularnie co 25 min, na drugiej możesz zwiększyć tempo żelowania.`
       : `Skorzystaj z izotonika zamiast wody — mniej tabletek elektrolitowych do pamiętania.`,
     `Przetestuj KAŻDY produkt w treningach. Zero eksperymentów w dniu wyścigu.`,
     `Kola i żele z kofeiną — zostaw na ostatnie 10–15 km biegu jako boost.`,
@@ -141,7 +134,7 @@ export function generateNutritionPlan(
     runCarbs_ph, runFluids_ph, runSodium_ph,
     bikeCarbs, bikeFluids, bikeSodium,
     runCarbs, runFluids, runSodium,
-    bikeGels, bikeBars, bikeBottles, runGels,
+    bikeGels, bikeBottles, runGels,
     preRaceCarbs: 200,
     preRaceMin:   90,
     keyRules,

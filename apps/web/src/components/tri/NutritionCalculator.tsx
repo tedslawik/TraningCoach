@@ -12,6 +12,7 @@ interface GelProduct  { id: string; name: string; brand: string; carbs: number; 
 interface DrinkProduct { id: string; name: string; brand: string; carbs: number; } // per 500ml
 
 const GEL_PRODUCTS: GelProduct[] = [
+  { id: 'sis-beta',    brand: 'SiS',       name: 'Beta Fuel',          carbs: 40 },
   { id: 'sis-go',      brand: 'SiS',       name: 'GO Isotonic',        carbs: 22 },
   { id: 'maurten100',  brand: 'Maurten',   name: 'Gel 100',            carbs: 25 },
   { id: 'gu',          brand: 'GU Energy', name: 'Energy Gel',         carbs: 22 },
@@ -268,10 +269,9 @@ export default function NutritionCalculator() {
               <StatCard label="Płyny / h" value={`${plan.bikeFluids_ph} ml`} color="var(--bike)" />
               <StatCard label="Sód / h" value={`${plan.bikeSodium_ph} mg`} color="var(--bike)" />
             </div>
-            <div style={{display:'grid', gridTemplateColumns:'repeat(2,1fr) repeat(2,1fr)', gap:10}}>
+            <div style={{display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10}}>
               <StatCard label={gelLabel} value={`${plan.bikeGels} szt.`} sub={`co ~${Math.round(plan.bikeMin/Math.max(plan.bikeGels,1))} min`} />
-              {plan.bikeBars>0 && <StatCard label="Baton energetyczny" value={`${plan.bikeBars} szt.`} sub="pierwsze 2/3 trasy" />}
-              <StatCard label={`${drinkLabel} (bidon)`} value={`${plan.bikeBottles} szt.`} sub={`${drinkCarbs}g węgli/bidon`} />
+              <StatCard label={`${drinkLabel}`} value={`${plan.bikeBottles} szt.`} sub={`${drinkCarbs}g węgli/bidon`} />
               <StatCard label="Łącznie węgle" value={`${plan.bikeCarbs} g`} sub={`≈ ${Math.round(plan.bikeCarbs*4)} kcal`} />
             </div>
           </div>
@@ -298,7 +298,6 @@ export default function NutritionCalculator() {
             <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(100px, 1fr))', gap:12}}>
               {[
                 [`${gelLabel}`, `${plan.bikeGels + plan.runGels} szt.`],
-                ...(plan.bikeBars>0 ? [['Batony', `${plan.bikeBars} szt.`]] : []),
                 [`${drinkLabel}`, `${plan.bikeBottles} szt.`],
                 ['Węgle razem', `${plan.bikeCarbs + plan.runCarbs} g`],
                 ['Energia razem', `${Math.round((plan.bikeCarbs+plan.runCarbs)*4)} kcal`],
