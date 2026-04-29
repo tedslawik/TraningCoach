@@ -53,15 +53,31 @@ const RUN_CARBS_PH: Record<RaceType, number> = {
   sprint: 30, olympic: 40, half: 50, full: 60,
 };
 
-const GEL_CARBS = 22;   // g per gel
-const BAR_CARBS = 45;   // g per bar
+const BAR_CARBS = 45;   // g per bar (generic estimate)
+
+export interface ProductConfig {
+  gelCarbs:   number;  // g carbs per gel
+  gelName:    string;
+  drinkCarbs: number;  // g carbs per 500ml bottle
+  drinkName:  string;
+}
+
+export const DEFAULT_PRODUCTS: ProductConfig = {
+  gelCarbs:   22,
+  gelName:    'Żel energetyczny',
+  drinkCarbs: 36,
+  drinkName:  'Napój izotoniczny',
+};
 
 export function generateNutritionPlan(
   raceType:  RaceType,
   totalMin:  number,
   weightKg:  number,
   splits?:   { swimMin?: number | null; bikeMin?: number | null; runMin?: number | null },
+  products?: Partial<ProductConfig>,
 ): NutritionPlan {
+  const GEL_CARBS  = products?.gelCarbs   ?? DEFAULT_PRODUCTS.gelCarbs;
+  const DRINK_CARBS = products?.drinkCarbs ?? DEFAULT_PRODUCTS.drinkCarbs;
   const [sp, bp, rp] = SPLIT_PCT[raceType];
 
   const swimMin = splits?.swimMin ?? Math.round(totalMin * sp);
@@ -89,12 +105,16 @@ export function generateNutritionPlan(
   const runFluids  = Math.round(runH  * runFluids_ph);
   const runSodium  = Math.round(runH  * runSodium_ph);
 
-  // Bike products: bars are more practical for long segments
+  // Bike bottles — carbs from drink reduce gel needs
+  const bikeBottles      = Math.ceil(bikeFluids / 500);
+  const carbsFromDrink   = bikeBottles * DRINK_CARBS;
+  const carbsFromGelsBike = Math.max(0, bikeCarbs - carbsFromDrink);
+
+  // Bars only for half/full (too hard to eat bars on sprint/olympic)
   const bikeBars  = raceType === 'sprint' || raceType === 'olympic'
     ? 0
-    : Math.round(bikeH * 0.7);   // ~1 bar/70 min on bike
-  const bikeGels  = Math.max(0, Math.round((bikeCarbs - bikeBars * BAR_CARBS) / GEL_CARBS));
-  const bikeBottles = Math.ceil(bikeFluids / 500);
+    : Math.round(bikeH * 0.7);
+  const bikeGels  = Math.max(0, Math.round((carbsFromGelsBike - bikeBars * BAR_CARBS) / GEL_CARBS));
 
   // Run products: gels only (aid stations for fluids)
   const runGels = Math.max(0, Math.round(runCarbs / GEL_CARBS));
