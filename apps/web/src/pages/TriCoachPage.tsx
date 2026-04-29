@@ -1,6 +1,7 @@
 import HeroSm from '../components/HeroSm';
 import SectionLabel from '../components/SectionLabel';
 import CtaBanner from '../components/CtaBanner';
+import NutritionCalculator from '../components/tri/NutritionCalculator';
 
 const distances = [
   { name: 'Sprint',       swim: '0.75 km', bike: '20 km',  run: '5 km',    time: '~1h 15 min',   target: '15% / 45% / 40%' },
@@ -22,12 +23,6 @@ const bricks = [
   { title: 'Brick pełny (symulacja)', desc: 'Pływanie + rower + bieg w tempie docelowym. Raz lub dwa razy w sezonie, 3–4 tygodnie przed wyścigiem. Najważniejszy trening w roku.' },
 ];
 
-const nutrition = [
-  { segment: 'Pływanie',           cal: '—',        fluids: '—',          sodium: '—',          tip: 'Brak możliwości jedzenia — zjedz 90 min przed startem.' },
-  { segment: 'Rower (Sprint/Oly)', cal: '150–200',  fluids: '500–700 ml', sodium: '400–600 mg', tip: 'Żele lub batony energetyczne. Jedz co 20 min.' },
-  { segment: 'Rower (Half/Full)',  cal: '250–350',  fluids: '600–900 ml', sodium: '600–900 mg', tip: 'Solidne jedzenie pierwsze 2h, żele na końcu. Nigdy nie eksperymentuj w dniu wyścigu.' },
-  { segment: 'Bieg',              cal: '100–200',  fluids: '400–600 ml', sodium: '400–600 mg', tip: 'Żele + cola na końcowych kilometrach. Biegaj przez punkty z napojami.' },
-];
 
 export default function TriCoachPage() {
   return (
@@ -130,23 +125,19 @@ export default function TriCoachPage() {
         </div>
       </section>
 
-      {/* ODŻYWIANIE */}
+      {/* ODŻYWIANIE — kalkulator */}
       <section className="alt">
         <div className="section-inner">
           <div className="section-header">
             <SectionLabel discipline="tri">Odżywianie wyścigowe</SectionLabel>
             <h2>Nie można wygrać na pusto, ale można przegrać na pełno</h2>
+            <p>
+              Wybierz format i planowany czas — kalkulator przeliczy dokładne ilości żeli,
+              batonów i bidonów na podstawie Twojej wagi i dystansu.
+              {' '}Jeśli masz połączoną Stravę, przewidziany czas pojawi się automatycznie.
+            </p>
           </div>
-          <table className="data-table">
-            <thead>
-              <tr><th>Segment</th><th>Kalorie/h</th><th>Płyny/h</th><th>Sód/h</th><th>Wskazówka</th></tr>
-            </thead>
-            <tbody>
-              {nutrition.map(n => (
-                <tr key={n.segment}><td>{n.segment}</td><td>{n.cal}</td><td>{n.fluids}</td><td>{n.sodium}</td><td>{n.tip}</td></tr>
-              ))}
-            </tbody>
-          </table>
+          <NutritionCalculator />
         </div>
       </section>
 
