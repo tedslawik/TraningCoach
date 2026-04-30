@@ -17,10 +17,11 @@ export interface CalendarActivity {
 }
 
 interface Props {
-  activities: CalendarActivity[];
-  weekStart: Date;
-  loading?: boolean;
-  emptyLabel?: string;
+  activities:      CalendarActivity[];
+  weekStart:       Date;
+  loading?:        boolean;
+  emptyLabel?:     string;
+  onActivityClick?: (activity: CalendarActivity) => void;
 }
 
 const HR_ZONE_COLORS  = ['#60a5fa', '#34d399', '#fbbf24', '#fb923c', '#f87171'];
@@ -46,7 +47,7 @@ function addDays(d: Date, n: number) {
   const r = new Date(d); r.setDate(r.getDate() + n); return r;
 }
 
-export default function WeekCalendar({ activities, weekStart, loading = false, emptyLabel = '—' }: Props) {
+export default function WeekCalendar({ activities, weekStart, loading = false, emptyLabel = '—', onActivityClick }: Props) {
   const today = toDateKey(new Date());
   const grouped: Record<string, CalendarActivity[]> = {};
   activities.forEach(a => {
@@ -73,7 +74,7 @@ export default function WeekCalendar({ activities, weekStart, loading = false, e
               <div style={{ padding: 6, display: 'flex', flexDirection: 'column', gap: 5, flex: 1 }}>
                 {dayActs.length === 0
                   ? <div style={{ textAlign: 'center', color: 'var(--border-md)', fontSize: 18, padding: '10px 0', userSelect: 'none' }}>{emptyLabel}</div>
-                  : dayActs.map(a => <ActivityCard key={a.id} activity={a} />)
+                  : dayActs.map(a => <ActivityCard key={a.id} activity={a} onClick={onActivityClick} />)
                 }
               </div>
             </div>
@@ -113,10 +114,15 @@ function ZoneBar({ times, colors, labels, title }: { times: number[]; colors: st
   );
 }
 
-function ActivityCard({ activity: a }: { activity: CalendarActivity }) {
+function ActivityCard({ activity: a, onClick }: { activity: CalendarActivity; onClick?: (a: CalendarActivity) => void }) {
   const meta = TYPE_META[a.type] ?? TYPE_META.other;
   return (
-    <div style={{ background: 'var(--bg-secondary)', border: `0.5px solid ${meta.color}55`, borderLeft: `3px solid ${meta.color}`, borderRadius: 'var(--radius-sm)', padding: '7px 8px' }}>
+    <div
+      onClick={() => onClick?.(a)}
+      style={{ background: 'var(--bg-secondary)', border: `0.5px solid ${meta.color}55`, borderLeft: `3px solid ${meta.color}`, borderRadius: 'var(--radius-sm)', padding: '7px 8px', cursor: onClick ? 'pointer' : 'default', transition: 'opacity 0.15s' }}
+      onMouseEnter={e => { if (onClick) (e.currentTarget as HTMLElement).style.opacity = '0.8'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+    >
       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>
         {meta.icon} {a.name}
       </div>

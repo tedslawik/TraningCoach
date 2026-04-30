@@ -3,6 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { assessAthlete, analyzeWorkouts, RACE_TARGETS } from '@tricoach/core';
 import type { Assessment } from '@tricoach/core';
 import SectionLabel from '../components/SectionLabel';
+import ActivityDetailModal from '../components/athlete/ActivityDetailModal';
+import type { CalendarActivity } from '../components/shared/WeekCalendar';
 
 /* ── Types ─────────────────────────────────────────────── */
 interface AthleteData {
@@ -116,6 +118,7 @@ export default function AthletePage() {
   const [weekLoading, setWeekLoading] = useState(false);
   const [error, setError]             = useState<string | null>(null);
   const [assessment, setAssessment]   = useState<Assessment | null>(null);
+  const [selectedActivity, setSelectedActivity] = useState<CalendarActivity | null>(null);
 
   const doFetch = (week: Date, initial = false) => {
     if (!session) { setLoading(false); return; }
@@ -442,11 +445,25 @@ export default function AthletePage() {
           <WeekZoneSummary activities={activities} />
 
           {/* ── CALENDAR GRID ── */}
-          <WeekCalendar activities={activities} weekStart={weekStart} loading={weekLoading} />
+          <WeekCalendar
+            activities={activities}
+            weekStart={weekStart}
+            loading={weekLoading}
+            onActivityClick={a => setSelectedActivity(a as unknown as CalendarActivity)}
+          />
         </div>
       </section>
 
       </>); })() /* end stravaToken+data block */}
+
+      {selectedActivity && (
+        <ActivityDetailModal
+          activityId={selectedActivity.id}
+          activityName={selectedActivity.name}
+          sportType={(selectedActivity as unknown as {sportType?: string}).sportType ?? selectedActivity.type}
+          onClose={() => setSelectedActivity(null)}
+        />
+      )}
     </>
   );
 }
@@ -522,7 +539,7 @@ function WeekZoneSummary({ activities }: { activities: Activity[] }) {
 }
 
 /* ── Week Calendar ─────────────────────────────────────── */
-function WeekCalendar({ activities, weekStart, loading }: { activities: Activity[]; weekStart: Date; loading: boolean }) {
+function WeekCalendar({ activities, weekStart, loading, onActivityClick }: { activities: Activity[]; weekStart: Date; loading: boolean; onActivityClick?: (a: Activity) => void }) {
   const today = toDateKey(new Date());
 
   // Group activities by date key
@@ -574,7 +591,7 @@ function WeekCalendar({ activities, weekStart, loading }: { activities: Activity
                 {dayActs.length === 0 ? (
                   <div style={{ textAlign: 'center', color: 'var(--border-md)', fontSize: 18, padding: '10px 0', userSelect: 'none' }}>—</div>
                 ) : (
-                  dayActs.map(a => <ActivityCard key={a.id} activity={a} />)
+                  dayActs.map(a => <ActivityCard key={a.id} activity={a} onClick={onActivityClick} />)
                 )}
               </div>
             </div>
@@ -585,18 +602,27 @@ function WeekCalendar({ activities, weekStart, loading }: { activities: Activity
   );
 }
 
-function ActivityCard({ activity: a }: { activity: Activity }) {
+function ActivityCard({ activity: a, onClick }: { activity: Activity; onClick?: (a: Activity) => void }) {
   const meta = TYPE_META[a.type] ?? TYPE_META.other;
   const totalZoneSec = a.zoneTimes ? a.zoneTimes.reduce((s, v) => s + v, 0) : 0;
 
+  const cardStyle: React.CSSProperties = {
+    background: 'var(--bg-secondary)',
+    border: `0.5px solid ${meta.color}55`,
+    borderLeft: `3px solid ${meta.color}`,
+    borderRadius: 'var(--radius-sm)',
+    padding: '7px 8px',
+    cursor: onClick ? 'pointer' : 'default',
+    transition: 'opacity 0.15s',
+  };
+
   return (
-    <div style={{
-      background: 'var(--bg-secondary)',
-      border: `0.5px solid ${meta.color}55`,
-      borderLeft: `3px solid ${meta.color}`,
-      borderRadius: 'var(--radius-sm)',
-      padding: '7px 8px',
-    }}>
+    <div
+      onClick={() => onClick?.(a)}
+      style={cardStyle}
+      onMouseEnter={e => { if (onClick) (e.currentTarget as HTMLElement).style.opacity = '0.8'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+    >
       {/* Name */}
       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>
         {meta.icon} {a.name}
