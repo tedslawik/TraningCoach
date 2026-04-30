@@ -7,7 +7,7 @@ interface Props {
 }
 
 export default function StravaConnectPrompt({ fetching, fetched, onFetch }: Props) {
-  const { session, stravaToken } = useAuth();
+  const { stravaToken } = useAuth();
 
   const clientId = import.meta.env.VITE_STRAVA_CLIENT_ID as string;
   if (!clientId) return null;
