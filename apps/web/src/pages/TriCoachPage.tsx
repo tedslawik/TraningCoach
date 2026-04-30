@@ -34,6 +34,22 @@ export default function TriCoachPage() {
         subtitle="Trzy dyscypliny, jedna strategia. Naucz się łączyć pływanie, rower i bieg w spójny plan, który prowadzi prosto na metę."
       />
 
+      {/* ODŻYWIANIE — kalkulator */}
+      <section>
+        <div className="section-inner">
+          <div className="section-header">
+            <SectionLabel discipline="tri">Odżywianie wyścigowe</SectionLabel>
+            <h2>Nie można wygrać na pusto, ale można przegrać na pełno</h2>
+            <p>
+              Wybierz format i planowany czas — kalkulator przeliczy dokładne ilości żeli
+              i bidonów na podstawie Twojej wagi i dystansu.
+              {' '}Jeśli masz połączoną Stravę, przewidziany czas pojawi się automatycznie.
+            </p>
+          </div>
+          <NutritionCalculator />
+        </div>
+      </section>
+
       {/* DYSTANSE */}
       <section className="alt">
         <div className="section-inner">
@@ -122,22 +138,6 @@ export default function TriCoachPage() {
               <div key={b.title} className="info-card"><h4>{b.title}</h4><p>{b.desc}</p></div>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* ODŻYWIANIE — kalkulator */}
-      <section className="alt">
-        <div className="section-inner">
-          <div className="section-header">
-            <SectionLabel discipline="tri">Odżywianie wyścigowe</SectionLabel>
-            <h2>Nie można wygrać na pusto, ale można przegrać na pełno</h2>
-            <p>
-              Wybierz format i planowany czas — kalkulator przeliczy dokładne ilości żeli,
-              batonów i bidonów na podstawie Twojej wagi i dystansu.
-              {' '}Jeśli masz połączoną Stravę, przewidziany czas pojawi się automatycznie.
-            </p>
-          </div>
-          <NutritionCalculator />
         </div>
       </section>
 

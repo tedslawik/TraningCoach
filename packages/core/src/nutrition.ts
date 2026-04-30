@@ -8,36 +8,30 @@ export interface NutritionPlan {
   bikeMin:     number;
   runMin:      number;
 
-  // Per-hour targets
-  bikeCarbs_ph:  number;  // g carbs per hour
-  bikeFluids_ph: number;  // ml per hour
-  bikeSodium_ph: number;  // mg per hour
+  bikeCarbs_ph:  number;
+  bikeFluids_ph: number;
+  bikeSodium_ph: number;
   runCarbs_ph:   number;
   runFluids_ph:  number;
   runSodium_ph:  number;
 
-  // Total per segment
-  bikeCarbs:  number;
-  bikeFluids: number;
-  bikeSodium: number;
-  runCarbs:   number;
-  runFluids:  number;
-  runSodium:  number;
+  bikeCarbs:   number;
+  bikeFluids:  number;
+  bikeSodium:  number;
+  runCarbs:    number;
+  runFluids:   number;
+  runSodium:   number;
 
-  // Products to carry
   bikeGels:    number;
-  bikeBottles: number;
+  bikeBottles: number;   // × 750 ml
   runGels:     number;
+  runBottles:  number;   // 0 when runLiquidCarbs=false, × 500 ml when true
 
-  // Pre-race
   preRaceCarbs: number;
-  preRaceMin:   number;  // minutes before start to eat main meal
-
-  // Tips
-  keyRules: string[];
+  preRaceMin:   number;
+  keyRules:     string[];
 }
 
-// Typical amateur split percentages (swim / bike / run)
 const SPLIT_PCT: Record<RaceType, [number, number, number]> = {
   sprint:  [0.15, 0.46, 0.39],
   olympic: [0.14, 0.45, 0.41],
@@ -52,19 +46,23 @@ const RUN_CARBS_PH: Record<RaceType, number> = {
   sprint: 30, olympic: 40, half: 50, full: 60,
 };
 
+const BIKE_BOTTLE_ML = 750;
+const RUN_BOTTLE_ML  = 500;  // race-belt bottle
 
 export interface ProductConfig {
-  gelCarbs:   number;  // g carbs per gel
-  gelName:    string;
-  drinkCarbs: number;  // g carbs per 500ml bottle
-  drinkName:  string;
+  gelCarbs:       number;
+  gelName:        string;
+  drinkCarbs:     number;  // g per 500ml (scale to actual bottle size in calc)
+  drinkName:      string;
+  runLiquidCarbs: boolean; // carry liquid carbs on the run?
 }
 
 export const DEFAULT_PRODUCTS: ProductConfig = {
-  gelCarbs:   22,
-  gelName:    'Żel energetyczny',
-  drinkCarbs: 36,
-  drinkName:  'Napój izotoniczny',
+  gelCarbs:       22,
+  gelName:        'Żel energetyczny',
+  drinkCarbs:     36,
+  drinkName:      'Napój izotoniczny',
+  runLiquidCarbs: false,
 };
 
 export function generateNutritionPlan(
@@ -74,10 +72,15 @@ export function generateNutritionPlan(
   splits?:   { swimMin?: number | null; bikeMin?: number | null; runMin?: number | null },
   products?: Partial<ProductConfig>,
 ): NutritionPlan {
-  const GEL_CARBS  = products?.gelCarbs   ?? DEFAULT_PRODUCTS.gelCarbs;
-  const DRINK_CARBS = products?.drinkCarbs ?? DEFAULT_PRODUCTS.drinkCarbs;
-  const [sp, bp, rp] = SPLIT_PCT[raceType];
+  const GEL_CARBS       = products?.gelCarbs       ?? DEFAULT_PRODUCTS.gelCarbs;
+  const DRINK_CARBS_500 = products?.drinkCarbs      ?? DEFAULT_PRODUCTS.drinkCarbs;
+  const RUN_LIQUID      = products?.runLiquidCarbs  ?? false;
 
+  // Scale drink carbs to actual bottle size
+  const DRINK_CARBS_BIKE = DRINK_CARBS_500 * (BIKE_BOTTLE_ML / 500);
+  const DRINK_CARBS_RUN  = DRINK_CARBS_500 * (RUN_BOTTLE_ML  / 500);
+
+  const [sp, bp, rp] = SPLIT_PCT[raceType];
   const swimMin = splits?.swimMin ?? Math.round(totalMin * sp);
   const bikeMin = splits?.bikeMin ?? Math.round(totalMin * bp);
   const runMin  = splits?.runMin  ?? Math.round(totalMin * rp);
@@ -85,43 +88,51 @@ export function generateNutritionPlan(
   const bikeH = bikeMin / 60;
   const runH  = runMin  / 60;
 
-  // Per-hour targets (adjusted by weight above 70 kg baseline)
-  const weightFactor = Math.max(0.9, Math.min(1.2, weightKg / 70));
+  const weightFactor  = Math.max(0.9, Math.min(1.2, weightKg / 70));
   const bikeCarbs_ph  = Math.round(BIKE_CARBS_PH[raceType] * weightFactor);
-  const bikeFluids_ph = Math.round(650  * weightFactor);
+  const bikeFluids_ph = Math.round(650 * weightFactor);
   const bikeSodium_ph = 700;
   const runCarbs_ph   = Math.round(RUN_CARBS_PH[raceType]);
   const runFluids_ph  = 500;
   const runSodium_ph  = 500;
 
-  // Totals (bike starts eating at 20 min → subtract 20 min from effective eating time)
+  // Bike (start eating after 20 min)
   const effectiveBikeH = Math.max(0, bikeH - 1 / 3);
   const bikeCarbs  = Math.round(effectiveBikeH * bikeCarbs_ph);
   const bikeFluids = Math.round(bikeH * bikeFluids_ph);
   const bikeSodium = Math.round(bikeH * bikeSodium_ph);
-  const runCarbs   = Math.round(runH  * runCarbs_ph);
-  const runFluids  = Math.round(runH  * runFluids_ph);
-  const runSodium  = Math.round(runH  * runSodium_ph);
 
-  // Bike bottles — carbs from drink reduce gel needs
-  const bikeBottles       = Math.ceil(bikeFluids / 500);
-  const carbsFromDrink    = bikeBottles * DRINK_CARBS;
-  const carbsFromGelsBike = Math.max(0, bikeCarbs - carbsFromDrink);
-  const bikeGels          = Math.max(0, Math.round(carbsFromGelsBike / GEL_CARBS));
+  // Run
+  const runCarbs  = Math.round(runH * runCarbs_ph);
+  const runFluids = Math.round(runH * runFluids_ph);
+  const runSodium = Math.round(runH * runSodium_ph);
 
-  // Run products: gels only (aid stations for fluids)
-  const runGels = Math.max(0, Math.round(runCarbs / GEL_CARBS));
+  // Bike products — 750ml bottles
+  const bikeBottles       = Math.ceil(bikeFluids / BIKE_BOTTLE_ML);
+  const carbsFromBikeDrink = bikeBottles * DRINK_CARBS_BIKE;
+  const bikeGels           = Math.max(0, Math.round(Math.max(0, bikeCarbs - carbsFromBikeDrink) / GEL_CARBS));
 
-  const gelInterval = bikeCarbs_ph > 0
+  // Run products
+  let runBottles = 0;
+  let runGels    = 0;
+  if (RUN_LIQUID) {
+    runBottles = Math.ceil(runFluids / RUN_BOTTLE_ML);
+    const carbsFromRunDrink = runBottles * DRINK_CARBS_RUN;
+    runGels = Math.max(0, Math.round(Math.max(0, runCarbs - carbsFromRunDrink) / GEL_CARBS));
+  } else {
+    runGels = Math.max(0, Math.round(runCarbs / GEL_CARBS));
+  }
+
+  const gelIntervalMin = bikeCarbs_ph > 0
     ? Math.round(60 / (bikeCarbs_ph / GEL_CARBS))
     : 25;
 
   const keyRules: string[] = [
     `Zacznij jeść na rowerze po 20 minutach — nie czekaj na głód.`,
-    `Żel co ${gelInterval} min na rowerze, co 30–35 min na biegu.`,
-    `Pij co 10–15 min na rowerze (${Math.round(bikeFluids_ph / 4)} ml na łyk), nie czekaj na pragnienie.`,
+    `Żel co ${gelIntervalMin} min na rowerze, co 30–35 min na biegu.`,
+    `Pij co 10–15 min na rowerze (~${Math.round(bikeFluids_ph / 4)} ml na łyk), nie czekaj na pragnienie.`,
     raceType === 'full' || raceType === 'half'
-      ? `Na pierwszej połowie roweru jedz regularnie co 25 min, na drugiej możesz zwiększyć tempo żelowania.`
+      ? `Na pierwszej połowie roweru jedz regularnie co ${gelIntervalMin} min, na drugiej możesz zwiększyć tempo żelowania.`
       : `Skorzystaj z izotonika zamiast wody — mniej tabletek elektrolitowych do pamiętania.`,
     `Przetestuj KAŻDY produkt w treningach. Zero eksperymentów w dniu wyścigu.`,
     `Kola i żele z kofeiną — zostaw na ostatnie 10–15 km biegu jako boost.`,
@@ -134,7 +145,7 @@ export function generateNutritionPlan(
     runCarbs_ph, runFluids_ph, runSodium_ph,
     bikeCarbs, bikeFluids, bikeSodium,
     runCarbs, runFluids, runSodium,
-    bikeGels, bikeBottles, runGels,
+    bikeGels, bikeBottles, runGels, runBottles,
     preRaceCarbs: 200,
     preRaceMin:   90,
     keyRules,
