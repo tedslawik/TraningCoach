@@ -64,7 +64,11 @@ function BikeLiveSection() {
   useEffect(()=>{ if(data)doFetch(weekStart); },[weekStart]); // eslint-disable-line
 
   const isCurrentWeek=toKey(weekStart)===toKey(getMonday(new Date()));
-  if(!session||!stravaToken) return null;
+  if (!session || !stravaToken) return (
+    <div style={{textAlign:'center',padding:'2rem',fontSize:14,color:'var(--text-secondary)'}}>
+      Połącz Stravę w <a href="/athlete" style={{color:'var(--bike)',fontWeight:600}}>Profilu Zawodnika →</a>, aby zobaczyć swoje jazdy.
+    </div>
+  );
   if(loading) return <section className="alt"><div className="section-inner"><p style={{fontSize:13,color:'var(--text-secondary)'}}>Pobieranie jazd ze Stravy…</p></div></section>;
   if(!data) return null;
 

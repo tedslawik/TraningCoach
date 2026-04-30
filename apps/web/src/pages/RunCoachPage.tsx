@@ -97,7 +97,11 @@ function RunLiveSection() {
 
   const isCurrentWeek = toKey(weekStart) === toKey(getMonday(new Date()));
 
-  if (!session || !stravaToken) return null;
+  if (!session || !stravaToken) return (
+    <div style={{textAlign:'center',padding:'2rem',fontSize:14,color:'var(--text-secondary)'}}>
+      Połącz Stravę w <a href="/athlete" style={{color:'var(--run)',fontWeight:600}}>Profilu Zawodnika →</a>, aby zobaczyć swoje biegi.
+    </div>
+  );
 
   if (loading) return (
     <section className="alt">

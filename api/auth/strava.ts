@@ -29,7 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   url.searchParams.set('redirect_uri', callbackUri);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('scope', 'read,activity:read_all,profile:read_all');
-  url.searchParams.set('approval_prompt', 'auto');
+  url.searchParams.set('approval_prompt', 'force'); // always show login — prevents sharing accounts between users
   url.searchParams.set('state', state);
 
   res.redirect(302, url.toString());

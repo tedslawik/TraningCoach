@@ -12,46 +12,34 @@ export default function StravaConnectPrompt({ fetching, fetched, onFetch }: Prop
   const clientId = import.meta.env.VITE_STRAVA_CLIENT_ID as string;
   if (!clientId) return null;
 
-  const handleConnect = () => {
-    if (!session) return;
-    window.location.href = `/api/auth/strava?token=${session.access_token}`;
-  };
+  if (!stravaToken) return (
+    <div style={wrapper}>
+      <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+        Strava nie jest połączona. &nbsp;
+        <a href="/athlete" style={{ color: 'var(--tri)', fontWeight: 600 }}>
+          Połącz w Profilu Zawodnika →
+        </a>
+      </span>
+    </div>
+  );
 
   return (
     <div style={wrapper}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 180 }}>
-          {stravaToken ? (
-            <>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={greenDot} />
-                {stravaToken.athlete_name} · Strava
-                {fetched && <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}> · dane załadowane</span>}
-                {fetching && <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}> · pobieranie…</span>}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-                {fetched ? 'Formularz wypełniony danymi z ostatnich 7 dni' : 'Automatyczne pobieranie…'}
-              </div>
-            </>
-          ) : (
-            <>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Połącz ze Stravą</div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-                Dane z ostatnich 7 dni załadują się automatycznie po połączeniu
-              </div>
-            </>
-          )}
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={greenDot} />
+            {stravaToken.athlete_name} · Strava
+            {fetched && <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}> · dane załadowane</span>}
+            {fetching && <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}> · pobieranie…</span>}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+            {fetched ? 'Formularz wypełniony danymi z ostatnich 7 dni' : 'Automatyczne pobieranie…'}
+          </div>
         </div>
-
-        {stravaToken ? (
-          <button onClick={onFetch} disabled={fetching} style={{ ...stravaBtn, opacity: fetching ? 0.7 : 1 }}>
-            {fetching ? 'Pobieranie…' : '↻ Odśwież dane'}
-          </button>
-        ) : (
-          <button onClick={handleConnect} style={stravaBtn}>
-            Połącz Stravę →
-          </button>
-        )}
+        <button onClick={onFetch} disabled={fetching} style={{ ...stravaBtn, opacity: fetching ? 0.7 : 1 }}>
+          {fetching ? 'Pobieranie…' : '↻ Odśwież dane'}
+        </button>
       </div>
     </div>
   );

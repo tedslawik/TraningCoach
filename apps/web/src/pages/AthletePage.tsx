@@ -92,6 +92,17 @@ function Stat({ label, value, unit }: { label: string; value: string | number | 
 }
 
 /* ── Page ───────────────────────────────────────────────── */
+const stravaOrangeBtn: React.CSSProperties = {
+  background: '#FC4C02', color: '#fff', border: 'none',
+  borderRadius: 'var(--radius-md)', padding: '10px 20px',
+  fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font)',
+};
+const stravaSecondaryBtn: React.CSSProperties = {
+  background: 'var(--bg-secondary)', color: 'var(--text-secondary)',
+  border: '0.5px solid var(--border-md)', borderRadius: 'var(--radius-md)',
+  padding: '10px 16px', fontSize: 13, cursor: 'pointer', fontFamily: 'var(--font)',
+};
+
 export default function AthletePage() {
   const { session, stravaToken } = useAuth();
   const handleReconnect = () => {
@@ -159,53 +170,99 @@ export default function AthletePage() {
     </div>
   );
 
-  if (!stravaToken && !loading) return (
-    <div style={{ padding: '5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-      Połącz Stravę, aby zobaczyć dane zawodnika.
-    </div>
-  );
+  const profile     = data?.profile;
+  const zones       = data?.zones;
+  const activities  = data?.activities ?? [];
+  const weekTotals  = data?.weekTotals;
 
-  if (loading) return (
-    <div style={{ padding: '5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 14 }}>
-      Pobieranie danych…
-    </div>
-  );
-
-  if (error) return (
-    <div style={{ padding: '5rem', textAlign: 'center' }}>
-      <div className="alert alert-warn">{error}</div>
-    </div>
-  );
-
-  if (!data) return null;
-
-  const { profile, zones, activities, weekTotals } = data;
-
-  const sufferMax = Math.max(700, weekTotals.sufferScore);
-  const sufferPct = Math.min(100, (weekTotals.sufferScore / sufferMax) * 100);
-  const loadMeta  = weekTotals.sufferScore < 80   ? { color: '#60a5fa', label: 'Niskie' }
-                  : weekTotals.sufferScore < 250  ? { color: '#34d399', label: 'Umiarkowane' }
-                  : weekTotals.sufferScore < 500  ? { color: '#fb923c', label: 'Wysokie' }
-                  :                                 { color: '#f87171', label: 'Bardzo wysokie' };
+  const ss = weekTotals?.sufferScore ?? 0;
+  const sufferMax = Math.max(700, ss);
+  const sufferPct = Math.min(100, (ss / sufferMax) * 100);
+  const loadMeta  = ss < 80  ? { color: '#60a5fa', label: 'Niskie' }
+                  : ss < 250 ? { color: '#34d399', label: 'Umiarkowane' }
+                  : ss < 500 ? { color: '#fb923c', label: 'Wysokie' }
+                  :            { color: '#f87171', label: 'Bardzo wysokie' };
 
   return (
     <>
       {/* ── HERO ── */}
       <div className="hero-sm" style={{ textAlign: 'left', paddingLeft: '5vw', paddingRight: '5vw' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
-          {profile.avatar && (
-            <img src={profile.avatar} alt={profile.name}
+          {profile?.avatar && (
+            <img src={profile?.avatar} alt={profile.name}
               style={{ width: 72, height: 72, borderRadius: '50%', border: '3px solid var(--bg)', boxShadow: '0 2px 12px rgba(0,0,0,0.15)' }} />
           )}
           <div>
             <span className="section-label tri">Zawodnik</span>
-            <h1 style={{ marginBottom: 4 }}>{profile.name}</h1>
+            <h1 style={{ marginBottom: 4 }}>{profile?.name ?? 'Zawodnik'}</h1>
             <p style={{ margin: 0 }}>
-              {[profile.city, profile.country].filter(Boolean).join(', ') || 'Profil triathlonisty'}
+              {profile ? ([profile?.city, profile?.country].filter(Boolean).join(', ') || 'Profil triathlonisty') : 'Połącz Stravę, aby załadować profil'}
             </p>
           </div>
         </div>
       </div>
+
+      {/* ── STRAVA MANAGEMENT ── */}
+      <section>
+        <div className="section-inner">
+          <div className="card" style={{ borderLeft: `3px solid ${stravaToken ? '#22c55e' : 'var(--border-md)'}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-secondary)', marginBottom: 6 }}>
+                  Połączenie Strava
+                </div>
+                {stravaToken ? (
+                  <>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', display: 'inline-block', flexShrink: 0 }} />
+                      {stravaToken.athlete_name}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                      Konto połączone · dane pobierane automatycznie
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-secondary)' }}>Nie połączono</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                      Połącz swoje konto Strava, aby automatycznie pobierać treningi, strefy i historię.
+                    </div>
+                  </>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {stravaToken ? (
+                  <button onClick={handleReconnect} style={stravaSecondaryBtn}>
+                    🔄 Zmień konto Strava
+                  </button>
+                ) : (
+                  <button onClick={handleReconnect} style={stravaOrangeBtn}>
+                    Połącz ze Stravą →
+                  </button>
+                )}
+              </div>
+            </div>
+            {error && <div className="alert alert-warn" style={{ marginTop: 12, marginBottom: 0 }}>{error}</div>}
+          </div>
+        </div>
+      </section>
+
+      {/* ── DATA SECTIONS — only when Strava is connected ── */}
+      {!stravaToken && !loading && (
+        <section>
+          <div className="section-inner" style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-secondary)' }}>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>🔗</div>
+            <p style={{ fontSize: 15, lineHeight: 1.6 }}>
+              Połącz swoje konto Strava powyżej, aby zobaczyć<br />dane zawodnika, strefy tętna i historię treningów.
+            </p>
+          </div>
+        </section>
+      )}
+
+      {stravaToken && data && (() => {
+        const wt = weekTotals!;
+        const z  = zones!;
+        return (<>
 
       {/* ── PROFIL + OBCIĄŻENIE ── */}
       <section>
@@ -216,16 +273,16 @@ export default function AthletePage() {
             <div className="card">
               <div className="card-title">Dane zawodnika</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, padding: '8px 0' }}>
-                <Stat label="Waga" value={profile.weight ? profile.weight.toFixed(1) : null} unit="kg" />
-                <Stat label="FTP" value={profile.ftp} unit="W" />
-                <Stat label="Sesje / 7 dni" value={weekTotals.sessions} />
+                <Stat label="Waga" value={profile?.weight != null ? profile.weight.toFixed(1) : null} unit="kg" />
+                <Stat label="FTP" value={profile?.ftp ?? null} unit="W" />
+                <Stat label="Sesje / 7 dni" value={wt.sessions} />
               </div>
-              {profile.weight == null && (
+              {profile?.weight == null && (
                 <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>
                   Waga: ustaw w Strava → Ustawienia → Profil
                 </p>
               )}
-              {profile.ftp == null && (
+              {profile?.ftp == null && (
                 <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
                   FTP: ustaw w Strava → Ustawienia → Moje osiągi
                 </p>
@@ -239,9 +296,9 @@ export default function AthletePage() {
             <div className="card">
               <div className="card-title">Obciążenie tygodniowe</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, padding: '8px 0 16px' }}>
-                <Stat label="Suffer Score" value={weekTotals.sufferScore} />
-                <Stat label="Energia" value={weekTotals.kilojoules ? `${(weekTotals.kilojoules/1000).toFixed(1)}` : null} unit="MJ" />
-                <Stat label="Czas" value={weekTotals.timeFormatted} />
+                <Stat label="Suffer Score" value={weekTotals?.sufferScore ?? 0} />
+                <Stat label="Energia" value={wt.kilojoules ? `${(wt.kilojoules/1000).toFixed(1)}` : null} unit="MJ" />
+                <Stat label="Czas" value={wt.timeFormatted} />
               </div>
               <div style={{ marginBottom: 6, display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
                 <span style={{ color: 'var(--text-secondary)' }}>Poziom obciążenia</span>
@@ -311,12 +368,12 @@ export default function AthletePage() {
             <div className="card">
               <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>Strefy tętna</span>
-                {zones.hrSource === 'calculated' && <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 400 }}>szacowane z max HR</span>}
-                {zones.hrSource === 'strava' && <span style={{ fontSize: 10, color: '#22c55e', fontWeight: 600 }}>● Strava</span>}
+                {z.hrSource === 'calculated' && <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 400 }}>szacowane z max HR</span>}
+                {z.hrSource === 'strava' && <span style={{ fontSize: 10, color: '#22c55e', fontWeight: 600 }}>● Strava</span>}
               </div>
-              {zones.heartRate ? (
+              {z.heartRate ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {zones.heartRate.slice(0, 5).map((z, i) => (
+                  {z.heartRate.slice(0, 5).map((z, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div style={{ width: 12, height: 12, borderRadius: '50%', background: ZONE_COLORS[i], flexShrink: 0 }} />
                       <div style={{ flex: 1, fontSize: 13, color: 'var(--text)' }}>{HR_ZONE_NAMES[i]}</div>
@@ -336,13 +393,13 @@ export default function AthletePage() {
             {/* Power Zones */}
             <div className="card">
               <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>Strefy mocy {profile.ftp != null && <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>· FTP {profile.ftp} W</span>}</span>
-                {zones.pwrSource === 'calculated' && <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 400 }}>wyliczone z FTP</span>}
-                {zones.pwrSource === 'strava' && <span style={{ fontSize: 10, color: '#22c55e', fontWeight: 600 }}>● Strava</span>}
+                <span>Strefy mocy {profile?.ftp != null && <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>· FTP {profile?.ftp} W</span>}</span>
+                {z.pwrSource === 'calculated' && <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 400 }}>wyliczone z FTP</span>}
+                {z.pwrSource === 'strava' && <span style={{ fontSize: 10, color: '#22c55e', fontWeight: 600 }}>● Strava</span>}
               </div>
-              {zones.power ? (
+              {z.power ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {zones.power.slice(0, 7).map((z, i) => (
+                  {z.power.slice(0, 7).map((z, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div style={{ width: 12, height: 12, borderRadius: '50%', background: ZONE_COLORS[i], flexShrink: 0 }} />
                       <div style={{ flex: 1, fontSize: 13, color: 'var(--text)' }}>{PWR_ZONE_NAMES[i] ?? `Z${i+1}`}</div>
@@ -354,7 +411,7 @@ export default function AthletePage() {
                 </div>
               ) : (
                 <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                  {profile.ftp != null
+                  {profile?.ftp != null
                     ? 'Strefy mocy niedostępne — sprawdź ustawienia Stravy'
                     : 'Ustaw FTP w Strava → Ustawienia → Moje osiągi → Próg mocy'}
                 </p>
@@ -388,6 +445,8 @@ export default function AthletePage() {
           <WeekCalendar activities={activities} weekStart={weekStart} loading={weekLoading} />
         </div>
       </section>
+
+      </>); })() /* end stravaToken+data block */}
     </>
   );
 }
