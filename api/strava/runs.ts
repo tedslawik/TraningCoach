@@ -82,11 +82,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!activitiesRes.ok) return res.status(502).json({ error: 'Strava API error' });
 
-  const [rawAll, zonesData] = await Promise.all([
+  type ZonesShape = { heart_rate?: { zones?: Array<{min:number;max:number}> }; power?: { zones?: Array<{min:number;max:number}> } };
+  const [rawAll, zonesRaw] = await Promise.all([
     activitiesRes.json(),
-    zonesRes.ok ? zonesRes.json() as Record<string, unknown> : {} as Record<string, unknown>,
+    zonesRes.ok ? zonesRes.json() : {},
   ]);
-  const zd = zonesData as { heart_rate?: { zones?: Array<{min:number;max:number}> }; power?: { zones?: Array<{min:number;max:number}> } };
+  const zd = zonesRaw as ZonesShape;
 
   // Filter runs only
   const rawRuns = (rawAll as Record<string, unknown>[]).filter(a => RUN_TYPES.has(a.sport_type as string));

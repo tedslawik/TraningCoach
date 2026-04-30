@@ -116,7 +116,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         date:          a.start_date_local,
         distanceKm:    Math.round(distKm * 10) / 10,
         timeFormatted: formatTime(timeMin),
-        paceOrSpeed:   type !== 'other' ? formatPace(distKm, timeMin, type) : formatTime(timeMin),
+        paceOrSpeed:   type !== 'other' ? formatPace(distKm, timeMin, type as 'swim'|'bike'|'run') : formatTime(timeMin),
       };
     });
 

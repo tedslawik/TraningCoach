@@ -131,11 +131,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!athleteRes.ok || !activitiesRes.ok)
     return res.status(502).json({ error: 'Strava API error' });
 
-  const [athlete, zonesData, raw] = await Promise.all([
+  type ZonesShape = { heart_rate?: { zones?: Array<{min:number;max:number}> }; heartrate?: { zones?: Array<{min:number;max:number}> }; power?: { zones?: Array<{min:number;max:number}> } };
+  type AthleteShape = { id: number; firstname?: string; lastname?: string; profile_medium?: string; weight?: number; ftp?: number; city?: string; country?: string; sex?: string; [k: string]: unknown };
+
+  const [athleteRaw, zonesData, raw] = await Promise.all([
     athleteRes.json(),
     zonesRes.ok ? zonesRes.json() : {},
     activitiesRes.json(),
   ]);
+  const athlete   = athleteRaw as AthleteShape;
+  const zonesTyped = zonesData as ZonesShape;
 
   const profile = {
     id:       athlete.id,
@@ -152,8 +157,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   console.log('[athlete] weight:', athlete.weight, '| ftp:', athlete.ftp);
   console.log('[athlete] zones keys:', Object.keys(zonesData ?? {}));
 
-  const hrZonesFromAPI    = zonesData?.heart_rate?.zones ?? zonesData?.heartrate?.zones ?? null;
-  const powerZonesFromAPI = zonesData?.power?.zones ?? null;
+  const hrZonesFromAPI    = zonesTyped?.heart_rate?.zones ?? zonesTyped?.heartrate?.zones ?? null;
+  const powerZonesFromAPI = zonesTyped?.power?.zones ?? null;
 
   // Fallback: calculate zones when Strava API returns null
   // Power: from FTP; HR: from highest max_heartrate observed in week's activities
