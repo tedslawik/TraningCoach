@@ -84,14 +84,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const [rawAll, zonesData] = await Promise.all([
     activitiesRes.json(),
-    zonesRes.ok ? zonesRes.json() : {},
+    zonesRes.ok ? zonesRes.json() as Record<string, unknown> : {} as Record<string, unknown>,
   ]);
+  const zd = zonesData as { heart_rate?: { zones?: Array<{min:number;max:number}> }; power?: { zones?: Array<{min:number;max:number}> } };
 
   // Filter runs only
   const rawRuns = (rawAll as Record<string, unknown>[]).filter(a => RUN_TYPES.has(a.sport_type as string));
 
   // HR zones (Strava or calculated from max HR)
-  const hrZonesFromAPI = zonesData?.heart_rate?.zones ?? null;
+  const hrZonesFromAPI = zd?.heart_rate?.zones ?? null;
   const maxHRSeen = rawRuns.map(a => (a.max_heartrate as number) ?? 0).reduce((m, v) => Math.max(m, v), 0);
   function calcHRZones(mx: number) {
     const h = (p: number) => Math.round(mx * p);

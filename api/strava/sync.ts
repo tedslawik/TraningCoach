@@ -40,7 +40,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const headers = { Authorization: `Bearer ${token}` };
 
   // Fetch athlete for FTP
-  const athleteData = await fetch('https://www.strava.com/api/v3/athlete', { headers }).then(r => r.ok ? r.json() : {});
+  const athleteRaw = await fetch('https://www.strava.com/api/v3/athlete', { headers }).then(r => r.ok ? r.json() : {});
+  const athleteData = athleteRaw as { ftp?: number; weight?: number };
   const ftp: number | null = athleteData?.ftp && athleteData.ftp > 0 ? athleteData.ftp : null;
 
   // Fetch last 16 weeks of activities
