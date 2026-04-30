@@ -143,40 +143,50 @@ export default function NutritionCalculator() {
     <div>
       {/* ── ROW 1: Format / Czas / Waga ── */}
       <div style={{ background:'var(--bg-secondary)', borderRadius:'var(--radius-lg)', padding:'1.25rem', marginBottom:'1rem' }}>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:16, alignItems:'end' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:16, alignItems:'start' }}>
+
           <div>
             <div className="workout-label">Format wyścigu</div>
             <select value={raceType} onChange={e=>{setRaceType(e.target.value as RaceType);setTimeInput('');}} style={{width:'100%'}}>
               {(Object.entries(RACE_LABELS) as [RaceType,string][]).map(([v,l])=><option key={v} value={v}>{l}</option>)}
             </select>
           </div>
+
           <div>
-            <div className="workout-label" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-              <span>Planowany czas</span>
-              {prediction?.totalMin && (
-                <button onClick={()=>setTimeInput(fmtHHMM(prediction.totalMin!))} style={{fontSize:10,color:'var(--tri)',background:'none',border:'none',cursor:'pointer',fontWeight:600,padding:0}}>
-                  Użyj przewidzianego ↑
-                </button>
-              )}
-            </div>
-            <input type="text" placeholder={prediction?.totalMin ? fmtHHMM(prediction.totalMin) : 'HH:MM'} value={timeInput} onChange={e=>setTimeInput(e.target.value)} style={{width:'100%'}} />
+            <div className="workout-label">Planowany czas</div>
+            <input
+              type="text"
+              placeholder={prediction?.totalMin ? fmtHHMM(prediction.totalMin) : 'HH:MM'}
+              value={timeInput}
+              onChange={e=>setTimeInput(e.target.value)}
+              style={{width:'100%'}}
+            />
             {prediction?.totalMin && (
-              <div style={{fontSize:11,color:'var(--tri)',marginTop:4}}>
-                Przewidziany: <strong>{formatMinutes(prediction.totalMin)}</strong>
-                {prediction.swimMin && ` · ${formatMinutes(prediction.swimMin)} / ${formatMinutes(prediction.bikeMin!)} / ${formatMinutes(prediction.runMin!)}`}
+              <div style={{marginTop:6, display:'flex', flexDirection:'column', gap:4}}>
+                <div style={{fontSize:11, color:'var(--tri)'}}>
+                  Przewidziany: <strong>{formatMinutes(prediction.totalMin)}</strong>
+                </div>
+                <button
+                  onClick={()=>setTimeInput(fmtHHMM(prediction.totalMin!))}
+                  style={{fontSize:11, color:'var(--tri)', background:'none', border:'0.5px solid var(--tri)', borderRadius:'var(--radius-sm)', cursor:'pointer', fontWeight:600, padding:'4px 10px', fontFamily:'var(--font)', width:'fit-content'}}
+                >
+                  Użyj przewidzianego →
+                </button>
               </div>
             )}
           </div>
+
           <div>
-            <div className="workout-label" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <div className="workout-label" style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
               <span>Waga</span>
-              {weightSource==='strava' && <span style={{fontSize:10,color:'#22c55e',fontWeight:600}}>● ze Stravy</span>}
+              {weightSource==='strava' && <span style={{fontSize:10, color:'#22c55e', fontWeight:600}}>● ze Stravy</span>}
             </div>
             <div className="input-row">
               <input type="number" value={weight} onChange={e=>{setWeight(+e.target.value);setWeightSource('manual');}} min={40} max={120} style={{width:80}} />
               <span className="input-unit">kg</span>
             </div>
           </div>
+
         </div>
       </div>
 
