@@ -29,7 +29,7 @@ export default function AnalyzerInput({ inputs, onChange, onAnalyze }: Props) {
             <span className="input-unit">min</span>
           </div>
           <div className="workout-label">Liczba sesji</div>
-          <input type="number" value={inputs.swimSessions} onChange={set('swimSessions')} min={0} max={14} style={{ width: 80 }} />
+          <input type="number" value={inputs.swimSessions} onChange={set('swimSessions')} min={0} max={14} className="input-compact" />
         </div>
 
         <div className="workout-item">
@@ -45,7 +45,7 @@ export default function AnalyzerInput({ inputs, onChange, onAnalyze }: Props) {
             <span className="input-unit">min</span>
           </div>
           <div className="workout-label">Liczba sesji</div>
-          <input type="number" value={inputs.bikeSessions} onChange={set('bikeSessions')} min={0} max={14} style={{ width: 80 }} />
+          <input type="number" value={inputs.bikeSessions} onChange={set('bikeSessions')} min={0} max={14} className="input-compact" />
         </div>
 
         <div className="workout-item">
@@ -61,15 +61,15 @@ export default function AnalyzerInput({ inputs, onChange, onAnalyze }: Props) {
             <span className="input-unit">min</span>
           </div>
           <div className="workout-label">Liczba sesji</div>
-          <input type="number" value={inputs.runSessions} onChange={set('runSessions')} min={0} max={14} style={{ width: 80 }} />
+          <input type="number" value={inputs.runSessions} onChange={set('runSessions')} min={0} max={14} className="input-compact" />
         </div>
 
         <div className="workout-item">
           <div className="disc-badge race-badge">Wyścig docelowy</div>
           <div className="workout-label">Data wyścigu</div>
-          <input type="date" value={inputs.raceDate} onChange={set('raceDate')} style={{ width: '100%' }} />
+          <input type="date" value={inputs.raceDate} onChange={set('raceDate')}  />
           <div className="workout-label">Dystans</div>
-          <select value={inputs.raceType} onChange={set('raceType')} style={{ width: '100%' }}>
+          <select value={inputs.raceType} onChange={set('raceType')} >
             {(Object.entries(RACE_LABELS) as [RaceType, string][]).map(([val, label]) => (
               <option key={val} value={val}>{label}</option>
             ))}

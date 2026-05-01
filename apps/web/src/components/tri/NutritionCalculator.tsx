@@ -182,7 +182,7 @@ export default function NutritionCalculator() {
               {weightSource==='strava' && <span style={{fontSize:10, color:'#22c55e', fontWeight:600}}>● ze Stravy</span>}
             </div>
             <div className="input-row">
-              <input type="number" value={weight} onChange={e=>{setWeight(+e.target.value);setWeightSource('manual');}} min={40} max={120} style={{width:80}} />
+              <input type="number" value={weight} onChange={e=>{setWeight(+e.target.value);setWeightSource('manual');}} min={40} max={120} className="input-compact" />
               <span className="input-unit">kg</span>
             </div>
           </div>
@@ -203,7 +203,7 @@ export default function NutritionCalculator() {
               {GEL_PRODUCTS.map(g=><option key={g.id} value={g.id}>{g.brand} {g.name} — {g.carbs}g węgli</option>)}
             </select>
             {selectedGel==='custom'
-              ? <div className="input-row"><input type="number" value={customGelCarbs} onChange={e=>setCustomGelCarbs(+e.target.value)} min={10} max={60} style={{width:70}} /><span className="input-unit">g węgli / żel</span></div>
+              ? <div className="input-row"><input type="number" value={customGelCarbs} onChange={e=>setCustomGelCarbs(+e.target.value)} min={10} max={60} className="input-compact" /><span className="input-unit">g węgli / żel</span></div>
               : <div style={{fontSize:11,color:'var(--text-secondary)'}}>{gelProduct.carbs}g węglowodanów · {Math.round(gelProduct.carbs*4)} kcal / sztuka</div>
             }
           </div>
@@ -214,7 +214,7 @@ export default function NutritionCalculator() {
               {DRINK_PRODUCTS.map(d=><option key={d.id} value={d.id}>{d.brand} {d.name} — {d.carbs}g/500ml</option>)}
             </select>
             {selectedDrink==='custom-d'
-              ? <div className="input-row"><input type="number" value={customDrinkCarbs} onChange={e=>setCustomDrinkCarbs(+e.target.value)} min={0} max={120} style={{width:70}} /><span className="input-unit">g węgli / 500ml</span></div>
+              ? <div className="input-row"><input type="number" value={customDrinkCarbs} onChange={e=>setCustomDrinkCarbs(+e.target.value)} min={0} max={120} className="input-compact" /><span className="input-unit">g węgli / 500ml</span></div>
               : <div style={{fontSize:11,color:'var(--text-secondary)'}}>{drinkProduct.carbs}g / 500ml · {Math.round(drinkProduct.carbs*(750/500))}g / bidon 750ml</div>
             }
           </div>
