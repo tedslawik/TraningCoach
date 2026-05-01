@@ -65,7 +65,7 @@ function RunLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAct
 
   const { totals, activities } = data;
   const assessment = assessRuns(totals);
-  const calActs: CalendarActivity[] = activities.map(a=>({ id:a.id, name:a.name, type:'run' as const, date:a.date, distanceKm:a.distanceKm, timeFormatted:a.timeFormatted, paceOrSpeed:a.pace, sufferScore:a.sufferScore, avgHeartRate:a.avgHeartRate, elevationGain:a.elevationGain, zoneTimes:a.zoneTimes, ...(a as Record<string,unknown>) }));
+  const calActs: CalendarActivity[] = activities.map(a=>({ id:a.id, name:a.name, type:'run' as const, date:a.date, distanceKm:a.distanceKm, timeFormatted:a.timeFormatted, paceOrSpeed:a.pace, sufferScore:a.sufferScore, avgHeartRate:a.avgHeartRate, elevationGain:a.elevationGain, zoneTimes:a.zoneTimes, ...(a as unknown as Record<string,unknown>) }));
 
   return (
     <section className="alt">

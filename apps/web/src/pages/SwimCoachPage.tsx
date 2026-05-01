@@ -57,7 +57,7 @@ function SwimLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAc
 
   const { totals, activities } = data;
   const assessment = assessSwims(totals);
-  const calActs: CalendarActivity[] = activities.map(a=>({ id:a.id, name:a.name, type:'swim' as const, date:a.date, distanceKm:a.distanceKm, timeFormatted:a.timeFormatted, paceOrSpeed:a.pace, sufferScore:a.sufferScore, avgHeartRate:a.avgHeartRate, zoneTimes:a.zoneTimes, ...(a as Record<string,unknown>) }));
+  const calActs: CalendarActivity[] = activities.map(a=>({ id:a.id, name:a.name, type:'swim' as const, date:a.date, distanceKm:a.distanceKm, timeFormatted:a.timeFormatted, paceOrSpeed:a.pace, sufferScore:a.sufferScore, avgHeartRate:a.avgHeartRate, zoneTimes:a.zoneTimes, ...(a as unknown as Record<string,unknown>) }));
 
   return (
     <section className="alt">

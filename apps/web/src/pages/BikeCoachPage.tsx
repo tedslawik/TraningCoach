@@ -67,7 +67,7 @@ function BikeLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAc
 
   const { totals, activities, ftp, powerZones } = data;
   const assessment = assessBikes(totals, ftp);
-  const calActs: CalendarActivity[] = activities.map(a=>({ id:a.id, name:a.name, type:'bike' as const, date:a.date, distanceKm:a.distanceKm, timeFormatted:a.timeFormatted, paceOrSpeed:a.speed, sufferScore:a.sufferScore, avgHeartRate:a.avgHeartRate, avgWatts:a.avgWatts, normalizedWatts:a.normalizedWatts, elevationGain:a.elevationGain, tss:a.tss, zoneTimes:a.zoneTimes, powerZoneTimes:a.powerZoneTimes, ...(a as Record<string,unknown>) }));
+  const calActs: CalendarActivity[] = activities.map(a=>({ id:a.id, name:a.name, type:'bike' as const, date:a.date, distanceKm:a.distanceKm, timeFormatted:a.timeFormatted, paceOrSpeed:a.speed, sufferScore:a.sufferScore, avgHeartRate:a.avgHeartRate, avgWatts:a.avgWatts, normalizedWatts:a.normalizedWatts, elevationGain:a.elevationGain, tss:a.tss, zoneTimes:a.zoneTimes, powerZoneTimes:a.powerZoneTimes, ...(a as unknown as Record<string,unknown>) }));
 
   return (
     <section className="alt">
