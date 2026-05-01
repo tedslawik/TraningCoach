@@ -102,9 +102,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const tokenRow = await supabase.from('strava_tokens').select('*').eq('user_id', user.id).single();
     if (tokenRow.data?.access_token) {
       try {
-        const a = await fetch('https://www.strava.com/api/v3/athlete', {
+        const aRaw = await fetch('https://www.strava.com/api/v3/athlete', {
           headers: { Authorization: `Bearer ${tokenRow.data.access_token}` },
         }).then(r => r.ok ? r.json() : {});
+        const a = aRaw as { weight?: number; ftp?: number };
         if (a.weight) profile.weight = Math.round(a.weight);
         if (a.ftp)    profile.ftp    = a.ftp;
       } catch { /* ignore */ }
