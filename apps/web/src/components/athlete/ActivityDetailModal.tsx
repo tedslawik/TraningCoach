@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import ActivityCharts, { type StreamData } from '../charts/ActivityCharts';
+import RunSummaryNote from './RunSummaryNote';
 
 interface Props {
   activityId: number;
@@ -91,7 +92,10 @@ export default function ActivityDetailModal({ activityId, activityName, sportTyp
             <div className="alert alert-warn">{error}</div>
           )}
           {data && !loading && (
-            <ActivityCharts data={data} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <RunSummaryNote data={data} />
+              <ActivityCharts data={data} />
+            </div>
           )}
         </div>
       </div>

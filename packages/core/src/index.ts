@@ -5,3 +5,4 @@ export * from './planner';
 export * from './assessment';
 export * from './pmc';
 export * from './nutrition';
+export * from './runAnalysis';
