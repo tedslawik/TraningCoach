@@ -118,17 +118,19 @@ function buildPrompt(body: Record<string, unknown>): string {
 
   lines.push('');
   lines.push(`═══ ZADANIE ═══`);
-  lines.push(`Odpowiedz w DOKŁADNIE trzech sekcjach używając tych nagłówków (bez modyfikacji):`);
+  lines.push(`Odpowiedz w DOKŁADNIE trzech sekcjach. Każda sekcja jest OBOWIĄZKOWA.`);
+  lines.push(`Użyj DOKŁADNIE tych nagłówków (kopiuj bez zmian, bez dodatkowych znaków):`);
+  lines.push(``);
   lines.push(`OCENA TRENINGU`);
-  lines.push(`[3-4 zdania: co się wydarzyło chronologicznie, w jakich strefach tętna]`);
+  lines.push(`(3-4 zdania: co się wydarzyło chronologicznie, czas, dystanse, strefy tętna)`);
   lines.push(``);
   lines.push(`OCENA ZAŁOŻEŃ`);
-  lines.push(`[3-4 zdania: czy dystanse, tempo i przerwy były dobrze dobrane i dlaczego]`);
+  lines.push(`(3-4 zdania: czy dystanse, tempo i długości przerw były właściwe i dlaczego)`);
   lines.push(``);
   lines.push(`WSKAZÓWKI NA PRZYSZŁOŚĆ`);
-  lines.push(`[2-3 zdania: konkretne zmiany na kolejny trening z liczbami]`);
+  lines.push(`(3 zdania: konkretne liczby i zmiany na kolejny podobny trening)`);
   lines.push(``);
-  lines.push(`Używaj liczb z danych. Pisz bezpośrednio do zawodnika. Łącznie max 10-11 zdań.`);
+  lines.push(`WAŻNE: Nie pomijaj żadnej sekcji. Nie zmieniaj nagłówków. Pisz po polsku, bezpośrednio do zawodnika.`);
 
   return lines.filter(l => l !== undefined).join('\n');
 }
@@ -150,7 +152,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const stream = anthropic.messages.stream({
     model:      'claude-sonnet-4-6',
-    max_tokens: 500,
+    max_tokens: 900,
     messages:   [{ role: 'user', content: prompt }],
   });
 

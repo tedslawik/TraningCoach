@@ -258,9 +258,9 @@ export default function ActivityDetailModal({ activityId, activityName, sportTyp
 
 /* ── AI sections renderer ── */
 const SECTIONS = [
-  { key: 'OCENA TRENINGU',         label: 'Ocena treningu',          color: '#60a5fa', icon: '📊' },
-  { key: 'OCENA ZAŁOŻEŃ',          label: 'Ocena założeń',           color: '#34d399', icon: '✅' },
-  { key: 'WSKAZÓWKI NA PRZYSZŁOŚĆ', label: 'Wskazówki na przyszłość', color: '#fb923c', icon: '💡' },
+  { keys: ['OCENA TRENINGU'],                            label: 'Ocena treningu',          color: '#60a5fa', icon: '📊' },
+  { keys: ['OCENA ZAŁOŻEŃ', 'OCENA ZALOZEN'],           label: 'Ocena założeń',           color: '#34d399', icon: '✅' },
+  { keys: ['WSKAZÓWKI NA PRZYSZŁOŚĆ', 'WSKAZÓWKI', 'WSKAZOWKI NA PRZYSZLOSC', 'WSKAZOWKI'], label: 'Wskazówki na przyszłość', color: '#fb923c', icon: '💡' },
 ];
 
 function AiSections({ text, loading }: { text: string; loading: boolean }) {
@@ -271,24 +271,33 @@ function AiSections({ text, loading }: { text: string; loading: boolean }) {
   );
   if (!text) return null;
 
-  // Parse sections by known headers
-  const parsed: Array<{ def: typeof SECTIONS[0]; content: string }> = [];
+  // Parse sections — find first matching key for each section
+  const upperText = text.toUpperCase();
+  const parsed: Array<{ def: typeof SECTIONS[0]; start: number; headerLen: number }> = [];
 
-  let remaining = text;
-  for (let i = 0; i < SECTIONS.length; i++) {
-    const header = SECTIONS[i].key;
-    const nextHeader = SECTIONS[i + 1]?.key;
-    const start = remaining.indexOf(header);
-    if (start === -1) continue;
-
-    const contentStart = start + header.length;
-    const end = nextHeader ? remaining.indexOf(nextHeader) : remaining.length;
-    const content = remaining.slice(contentStart, end > contentStart ? end : remaining.length).trim();
-    parsed.push({ def: SECTIONS[i], content });
+  for (const sec of SECTIONS) {
+    for (const key of sec.keys) {
+      const idx = upperText.indexOf(key);
+      if (idx !== -1) {
+        parsed.push({ def: sec, start: idx, headerLen: key.length });
+        break;
+      }
+    }
   }
 
+  // Sort by position in text
+  parsed.sort((a, b) => a.start - b.start);
+
+  // Extract content for each section
+  const result = parsed.map((p, i) => {
+    const contentStart = p.start + p.headerLen;
+    const nextStart    = parsed[i + 1]?.start ?? text.length;
+    const content      = text.slice(contentStart, nextStart).replace(/^\s*[:\-–]\s*/, '').trim();
+    return { def: p.def, content };
+  });
+
   // If no sections detected yet (still generating), show raw text
-  if (!parsed.length) {
+  if (!result.length) {
     return (
       <div style={{ fontSize:14, lineHeight:1.75, color:'var(--text)', whiteSpace:'pre-wrap' }}>
         {text}{loading && <span style={{ opacity:0.5 }}>▍</span>}
@@ -298,7 +307,7 @@ function AiSections({ text, loading }: { text: string; loading: boolean }) {
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-      {parsed.map(({ def, content }) => (
+      {result.map(({ def, content }) => (
         <div
           key={def.key}
           style={{
@@ -314,7 +323,7 @@ function AiSections({ text, loading }: { text: string; loading: boolean }) {
           </div>
           <div style={{ fontSize:14, lineHeight:1.7, color:'var(--text)' }}>
             {content}
-            {loading && def.key === parsed[parsed.length - 1].def.key && (
+            {loading && def.label === result[result.length - 1].def.label && (
               <span style={{ opacity:0.5 }}>▍</span>
             )}
           </div>
