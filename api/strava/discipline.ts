@@ -203,6 +203,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 : sport === 'bike' ? fmtSpeed(totalDist, totalTime)
                 : fmtRunPace(totalDist, totalTime);
 
+  const longestRounded = Math.round(longestKm * 10) / 10;
+
   res.json({
     weekStart: weekStart.toISOString().split('T')[0],
     sport, ftp, powerZones, hrZones,
@@ -218,7 +220,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sufferScore:   Math.round(totalSuffer),
       tss:           Math.round(totalTSS),
       sessions:      activities.length,
-      longestKm:     Math.round(longestKm * 10) / 10,
+      longestKm:     longestRounded,
+      longestRunKm:  longestRounded, // alias for RunCoachPage
+      longestKm2:    longestRounded, // alias for SwimCoachPage (longestKm)
+      zoneTimes:     weeklyHRZones,  // alias — coach pages expect zoneTimes
       weeklyHRZones, weeklyPwrZones,
     },
   });
