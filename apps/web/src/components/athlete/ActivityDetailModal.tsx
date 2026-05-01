@@ -38,6 +38,7 @@ export default function ActivityDetailModal({ activityId, activityName, sportTyp
   const [aiText, setAiText]       = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError]     = useState<string | null>(null);
+  const [aiUsage, setAiUsage]     = useState<{inputTokens:number;outputTokens:number;costUsd:number}|null>(null);
   const aiBoxRef = useRef<HTMLDivElement>(null);
 
   const fetchStream = useCallback(async () => {
@@ -73,6 +74,7 @@ export default function ActivityDetailModal({ activityId, activityName, sportTyp
     setAiLoading(true);
     setAiText('');
     setAiError(null);
+    setAiUsage(null);
 
     // Build lapAnalysis from available data
     let lapAnalysis: RunAnalysis | null = null;
@@ -110,10 +112,19 @@ export default function ActivityDetailModal({ activityId, activityName, sportTyp
 
       const reader  = res.body.getReader();
       const decoder = new TextDecoder();
+      let buffer = '';
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        setAiText(prev => prev + decoder.decode(value, { stream: true }));
+        buffer += decoder.decode(value, { stream: true });
+      }
+      // Split on null-byte separator: text \x00 usage-json
+      const nullIdx = buffer.indexOf('\x00');
+      if (nullIdx >= 0) {
+        setAiText(buffer.slice(0, nullIdx).trim());
+        try { setAiUsage(JSON.parse(buffer.slice(nullIdx + 1))); } catch { /* ignore */ }
+      } else {
+        setAiText(buffer.trim());
       }
     } catch {
       setAiError('Nie udało się wygenerować analizy. Sprawdź klucz ANTHROPIC_API_KEY w Vercel.');
@@ -211,12 +222,30 @@ export default function ActivityDetailModal({ activityId, activityName, sportTyp
                       {aiLoading && <span style={{ opacity:0.5 }}>▍</span>}
                     </div>
                     {!aiLoading && aiText && (
-                      <button
-                        onClick={handleAiAnalysis}
-                        style={{ marginTop:12, fontSize:12, color:'var(--text-secondary)', background:'none', border:'0.5px solid var(--border-md)', borderRadius:'var(--radius-md)', padding:'5px 12px', cursor:'pointer', fontFamily:'var(--font)' }}
-                      >
-                        ↻ Wygeneruj ponownie
-                      </button>
+                      <div style={{ marginTop:12, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
+                        <button
+                          onClick={handleAiAnalysis}
+                          style={{ fontSize:12, color:'var(--text-secondary)', background:'none', border:'0.5px solid var(--border-md)', borderRadius:'var(--radius-md)', padding:'5px 12px', cursor:'pointer', fontFamily:'var(--font)' }}
+                        >
+                          ↻ Wygeneruj ponownie
+                        </button>
+                        {aiUsage && (
+                          <div style={{ display:'flex', alignItems:'center', gap:10, fontSize:11, color:'var(--text-secondary)' }}>
+                            <span>Koszt analizy: <strong style={{ color:'var(--text)' }}>${aiUsage.costUsd.toFixed(4)}</strong></span>
+                            <span style={{ opacity:0.4 }}>·</span>
+                            <span>{aiUsage.inputTokens + aiUsage.outputTokens} tokenów</span>
+                            <span style={{ opacity:0.4 }}>·</span>
+                            <a
+                              href="https://console.anthropic.com/settings/billing"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ color:'#7c3aed', fontWeight:600, textDecoration:'none' }}
+                            >
+                              Sprawdź saldo →
+                            </a>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}

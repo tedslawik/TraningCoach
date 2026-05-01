@@ -118,12 +118,10 @@ function buildPrompt(body: Record<string, unknown>): string {
 
   lines.push('');
   lines.push(`═══ ZADANIE ═══`);
-  lines.push(`Napisz dokładne podsumowanie zawierające:`);
-  lines.push(`1. Co się wydarzyło — chronologicznie (rozgrzewka → blok pracy → schłodzenie)`);
-  lines.push(`2. Ocena intensywności: w jakich strefach tętna pracował zawodnik i co to oznacza`);
-  lines.push(`3. Ocena doboru założeń treningowych (czy dystanse, tempo i przerwy były właściwe)`);
-  lines.push(`4. 2–3 konkretne wskazówki na kolejny podobny trening`);
-  lines.push(`Używaj liczb z danych. Pisz naturalnie, nie jako listę punktów.`);
+  lines.push(`Napisz DOKŁADNIE 10–12 zdań (nie więcej). Bądź konkretny i zwięzły.`);
+  lines.push(`Uwzględnij: co się wydarzyło chronologicznie, ocenę stref tętna,`);
+  lines.push(`czy założenia były właściwe, i 1–2 wskazówki na następny trening.`);
+  lines.push(`Używaj liczb z danych. Pisz do zawodnika bezpośrednio.`);
 
   return lines.filter(l => l !== undefined).join('\n');
 }
@@ -143,17 +141,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Transfer-Encoding', 'chunked');
 
-  const stream = await anthropic.messages.stream({
+  const stream = anthropic.messages.stream({
     model:      'claude-sonnet-4-6',
-    max_tokens: 1200,
+    max_tokens: 500,
     messages:   [{ role: 'user', content: prompt }],
   });
 
-  for await (const chunk of stream) {
-    if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
-      res.write(chunk.delta.text);
-    }
-  }
+  stream.on('text', (text: string) => res.write(text));
 
+  const finalMsg = await stream.finalMessage();
+  const { input_tokens, output_tokens } = finalMsg.usage;
+  // Sonnet 4.6 pricing: $3/MTok input, $15/MTok output
+  const costUsd = (input_tokens * 3 + output_tokens * 15) / 1_000_000;
+
+  // Send usage as null-byte-separated JSON epilogue
+  res.write(`\x00${JSON.stringify({ inputTokens: input_tokens, outputTokens: output_tokens, costUsd })}`);
   res.end();
 }
