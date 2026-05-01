@@ -78,6 +78,18 @@ ZASADY:
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // GET: fetch existing plan
+  if (req.method === 'GET') {
+    const jwt2 = (req.headers.authorization ?? '').replace('Bearer ', '');
+    const { data: { user: u2 }, error: e2 } = await supabase.auth.getUser(jwt2);
+    if (e2 || !u2) return res.status(401).json({ error: 'Unauthorized' });
+    const { data, error: dbErr } = await supabase.from('training_plans').select('*').eq('user_id', u2.id).order('created_at', { ascending: false }).limit(1).single();
+    if (dbErr || !data) return res.status(404).json({ error: 'No plan found' });
+    const { data: summaries } = await supabase.from('weekly_summaries').select('swim_sessions,bike_sessions,run_sessions').eq('user_id', u2.id).order('week_start', { ascending: false }).limit(4);
+    const avg = summaries?.length ? summaries.reduce((s,r) => s+(r.swim_sessions??0)+(r.bike_sessions??0)+(r.run_sessions??0), 0) / summaries.length : 5;
+    return res.json({ plan: data, suggestedDays: Math.max(3, Math.min(6, Math.round(avg))) });
+  }
+
   if (req.method !== 'POST') return res.status(405).end();
 
   const jwt = (req.headers.authorization ?? '').replace('Bearer ', '');

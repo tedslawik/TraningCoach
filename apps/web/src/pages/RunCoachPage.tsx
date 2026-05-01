@@ -45,7 +45,7 @@ function RunLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAct
   const doFetch=useCallback((week:Date,initial=false)=>{
     if(!session)return;
     if(initial)setLoading(true); else setWeekLoading(true);
-    fetch(`/api/strava/runs?weekStart=${toKey(week)}`,{headers:{Authorization:`Bearer ${session.access_token}`}})
+    fetch(`/api/strava/discipline?sport=run&weekStart=${toKey(week)}`,{headers:{Authorization:`Bearer ${session.access_token}`}})
       .then(r=>r.ok?r.json():null).then(d=>{if(d)setData(d);}).catch(()=>{})
       .finally(()=>{setLoading(false);setWeekLoading(false);});
   },[session]);

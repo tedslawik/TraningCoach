@@ -37,7 +37,7 @@ function SwimLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAc
   const doFetch=useCallback((week:Date,initial=false)=>{
     if(!session)return;
     if(initial)setLoading(true); else setWeekLoading(true);
-    fetch(`/api/strava/swims?weekStart=${toKey(week)}`,{headers:{Authorization:`Bearer ${session.access_token}`}})
+    fetch(`/api/strava/discipline?sport=swim&weekStart=${toKey(week)}`,{headers:{Authorization:`Bearer ${session.access_token}`}})
       .then(r=>r.ok?r.json():null).then(d=>{if(d)setData(d);}).catch(()=>{})
       .finally(()=>{setLoading(false);setWeekLoading(false);});
   },[session]);

@@ -184,7 +184,7 @@ export default function PlannerPage() {
 
   useEffect(() => {
     if (!session) { setLoading(false); return; }
-    fetch('/api/training/plan', { headers: { Authorization: `Bearer ${session.access_token}` } })
+    fetch('/api/ai/generate-plan', { headers: { Authorization: `Bearer ${session.access_token}` } })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (d) { setPlan(d.plan); if (d.suggestedDays) setSuggested(d.suggestedDays); }
