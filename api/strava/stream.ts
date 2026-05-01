@@ -32,10 +32,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const headers = { Authorization: `Bearer ${token}` };
 
-  const [streamsRes, zonesRes, activityRes] = await Promise.all([
+  const [streamsRes, zonesRes, activityRes, lapsRes] = await Promise.all([
     fetch(`https://www.strava.com/api/v3/activities/${activityId}/streams?keys=heartrate,velocity_smooth,altitude,time,distance,cadence,watts&resolution=medium&series_type=time`, { headers }),
     fetch('https://www.strava.com/api/v3/athlete/zones', { headers }),
     fetch(`https://www.strava.com/api/v3/activities/${activityId}`, { headers }),
+    fetch(`https://www.strava.com/api/v3/activities/${activityId}/laps`, { headers }),
   ]);
 
   if (!streamsRes.ok) return res.status(502).json({ error: 'Could not fetch streams' });
@@ -43,10 +44,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   type StreamItem = { type: string; data: number[] };
   type ZonesShape = { heart_rate?: { zones?: Array<{min:number;max:number}> } };
 
-  const [streamsRaw, zonesRaw, activityRaw] = await Promise.all([
+  const [streamsRaw, zonesRaw, activityRaw, lapsRaw] = await Promise.all([
     streamsRes.json() as Promise<StreamItem[]>,
     zonesRes.ok ? zonesRes.json() : {},
     activityRes.ok ? activityRes.json() : {},
+    lapsRes.ok    ? lapsRes.json()    : [],
   ]);
 
   const get = (type: string) => (streamsRaw as StreamItem[]).find(s => s.type === type)?.data ?? [];
@@ -86,6 +88,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const activity = activityRaw as { name?: string; sport_type?: string; start_date_local?: string };
 
+  // Process laps: filter auto-laps (uniform distance = not useful) vs manual laps
+  type RawLap = { lap_index: number; name?: string; distance: number; moving_time: number; elapsed_time: number; average_speed: number; average_heartrate?: number };
+  const laps = (lapsRaw as RawLap[]).map(l => ({
+    lapIndex:  l.lap_index,
+    name:      l.name ?? `Lap ${l.lap_index}`,
+    distM:     Math.round(l.distance),
+    timeSec:   Math.round(l.moving_time),
+    elapsedSec: Math.round(l.elapsed_time),
+    velMs:     l.average_speed,
+    avgHR:     l.average_heartrate ?? null,
+  }));
+
+  // Detect if these are auto-laps (all same distance → useless for interval analysis)
+  const isAutoLap = laps.length > 2 && (() => {
+    const dists = laps.map(l => l.distM);
+    const medD  = dists.slice().sort((a,b)=>a-b)[Math.floor(dists.length/2)];
+    const maxDev = Math.max(...dists.map(d => Math.abs(d - medD)));
+    return maxDev < 60; // all laps within 60m of median → auto-lap
+  })();
+
   res.json({
     activityId: +activityId,
     name:       activity.name ?? '',
@@ -93,6 +115,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     startDate:  activity.start_date_local ?? '',
     time, distance, altitude, heartrate, velocity, cadence, watts,
     hrZones,
+    laps:       isAutoLap ? [] : laps, // empty array if auto-lap (stream analysis will be used)
     stats: {
       totalDistKm:   Math.round(totalDistKm * 10) / 10,
       totalTimeSec,

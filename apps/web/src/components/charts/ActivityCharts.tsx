@@ -1,3 +1,5 @@
+import type { LapSummary } from '@tricoach/core';
+
 export interface StreamData {
   activityId: number;
   name:       string;
@@ -11,6 +13,7 @@ export interface StreamData {
   cadence:    number[];
   watts:      number[];
   hrZones:    Array<{min:number; max:number}> | null;
+  laps:       LapSummary[];
   stats: {
     totalDistKm:   number;
     totalTimeSec:  number;

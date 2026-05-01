@@ -1,3 +1,13 @@
+export interface LapSummary {
+  lapIndex:   number;
+  name:       string;
+  distM:      number;
+  timeSec:    number;
+  elapsedSec: number;
+  velMs:      number;
+  avgHR:      number | null;
+}
+
 export interface RunInterval {
   distM:     number;
   paceMinKm: number;
@@ -263,5 +273,169 @@ export function analyzeRunStream(
     warmupKm:   Math.round(warmupKm * 100) / 100,
     cooldownKm: Math.round(cooldownKm * 100) / 100,
     sets, intervals, avgHR: overallHR, totalKm, avgPaceMinKm,
+  };
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   LAP-BASED ANALYSIS
+   Uses Strava laps (manually pressed by athlete) instead of
+   stream segmentation — much more accurate for interval training.
+   ───────────────────────────────────────────────────────────────── */
+export function analyzeRunLaps(laps: LapSummary[]): RunAnalysis | null {
+  if (laps.length < 4) return null;
+
+  const totalM  = laps.reduce((s, l) => s + l.distM, 0);
+  const totalKm = Math.round(totalM / 100) / 10;
+  if (totalM < 500) return null;
+
+  // Overall avg HR
+  const hrVals    = laps.map(l => l.avgHR ?? 0).filter(h => h > 40);
+  const overallHR = hrVals.length
+    ? Math.round(hrVals.reduce((s, v) => s + v, 0) / hrVals.length) : null;
+
+  // Classify each lap
+  // Rest: elapsed > moving (stopped/walking) OR very slow OR very short
+  type LapCls = 'work' | 'rest' | 'phase';
+  const classify = (l: LapSummary): LapCls => {
+    // Clearly a rest: very short or very slow
+    if (l.timeSec < 90 && l.distM < 350)  return 'rest';
+    if (l.velMs < 1.8)                     return 'rest';
+    // High stop ratio → rest (stopped during lap)
+    if (l.elapsedSec > 0 && l.timeSec / l.elapsedSec < 0.60) return 'rest';
+    // Work or easy phase — decide below after thresholds
+    return 'phase';
+  };
+
+  const tagged = laps.map(l => ({ ...l, cls: classify(l) }));
+
+  // Velocity percentiles from non-rest laps
+  const phaseLaps = tagged.filter(l => l.cls === 'phase');
+  if (!phaseLaps.length) return null;
+
+  const phaseVels = phaseLaps.map(l => l.velMs).sort((a, b) => a - b);
+  const v50 = phaseVels[Math.floor(phaseVels.length * 0.50)];
+  const v30 = phaseVels[Math.floor(phaseVels.length * 0.30)];
+
+  // Re-classify phase laps: above 30th pct = work, below = warmup/cooldown
+  const retagged = tagged.map(l => {
+    if (l.cls !== 'phase') return l;
+    return { ...l, cls: (l.velMs >= v30 ? 'work' : 'phase') as LapCls };
+  });
+
+  // Warmup = leading non-work laps
+  let wuEnd = 0;
+  while (wuEnd < retagged.length - 1 && retagged[wuEnd].cls !== 'work') wuEnd++;
+  // Cooldown = trailing non-work laps
+  let cdStart = retagged.length - 1;
+  while (cdStart > 0 && retagged[cdStart].cls !== 'work') cdStart--;
+  cdStart++;
+
+  const warmupKm   = Math.round(retagged.slice(0, wuEnd).reduce((s, l) => s + l.distM, 0) / 100) / 10;
+  const cooldownKm = Math.round(retagged.slice(cdStart).reduce((s, l) => s + l.distM, 0) / 100) / 10;
+  const core       = retagged.slice(wuEnd, cdStart);
+  const workLaps   = core.filter(l => l.cls === 'work');
+
+  // Steady run
+  if (workLaps.length < 2) {
+    const totalSec    = laps.reduce((s, l) => s + l.timeSec, 0);
+    const avgVelMs    = totalSec > 0 ? totalM / totalSec : 0;
+    const avgPaceMin  = avgVelMs > 0 ? (1000 / avgVelMs) / 60 : null;
+    let type: string, color: string;
+    if (totalKm >= 15)                          { type = 'Długi bieg';            color = '#16a34a'; }
+    else if (avgPaceMin && avgPaceMin < 4.8)    { type = 'Bieg ciągły szybki';   color = '#dc2626'; }
+    else if (avgPaceMin && avgPaceMin > 6.2)    { type = 'Bieg regeneracyjny';   color = '#60a5fa'; }
+    else                                         { type = 'Bieg ciągły';          color = '#34d399'; }
+    return { trainingType: type, typeColor: color, confidence: 'high',
+      warmupKm, cooldownKm, sets: 1,
+      intervals: avgPaceMin ? [{ distM: Math.round(totalM), paceMinKm: avgPaceMin, avgHR: overallHR, restSec: 0 }] : [],
+      avgHR: overallHR, totalKm, avgPaceMinKm: avgPaceMin };
+  }
+
+  // ── Cluster work laps by distance (rounded to 100m) ──
+  // Important: use roundDist so 387m and 415m both → 400m same cluster
+  const roundDist = (m: number) => m < 100 ? Math.round(m / 10) * 10 : Math.round(m / 100) * 100;
+
+  type TaggedLap = typeof retagged[0];
+  const sortedWork = [...workLaps].sort((a, b) => a.distM - b.distM);
+  const clusters: TaggedLap[][] = [[sortedWork[0]]];
+  for (let i = 1; i < sortedWork.length; i++) {
+    // New cluster if distance ratio > 1.25 OR rounded distance differs
+    const prev = sortedWork[i - 1];
+    const curr = sortedWork[i];
+    if (roundDist(curr.distM) !== roundDist(prev.distM) && curr.distM / prev.distM > 1.20) {
+      clusters.push([]);
+    }
+    clusters[clusters.length - 1].push(curr);
+  }
+
+  // Merge clusters with pace within 10 sec/km
+  const TEN_S = 10 / 60;
+  const merged: TaggedLap[][] = [];
+  for (const cl of clusters) {
+    const clPace = medianOf(cl.map(l => l.velMs > 0 ? (1000 / l.velMs) / 60 : 99));
+    const match  = merged.find(mc => {
+      const mp = medianOf(mc.map(l => l.velMs > 0 ? (1000 / l.velMs) / 60 : 99));
+      return Math.abs(clPace - mp) < TEN_S;
+    });
+    if (match) match.push(...cl);
+    else merged.push([...cl]);
+  }
+
+  const clusterOf = new Map<TaggedLap, number>();
+  merged.forEach((cl, idx) => cl.forEach(l => clusterOf.set(l, idx)));
+
+  // Pattern from ordered work laps
+  const orderedWork = [...workLaps].sort((a, b) => a.lapIndex - b.lapIndex);
+  const pattern     = orderedWork.map(l => clusterOf.get(l) ?? 0);
+
+  // Rest after each work lap = next rest lap duration
+  const restAfter = (wl: TaggedLap): number => {
+    const idx = core.findIndex(l => l === wl);
+    if (idx < 0 || idx + 1 >= core.length) return 0;
+    const nxt = core[idx + 1];
+    return nxt.cls === 'rest' ? nxt.elapsedSec : 0; // use elapsed for rest (includes stopped time)
+  };
+
+  // Fuzzy period detection (≤ 20% mismatches)
+  let bestPeriod = pattern.length, bestMisses = pattern.length;
+  for (let p = 1; p <= Math.floor(pattern.length / 2); p++) {
+    let m = 0;
+    for (let i = p; i < pattern.length; i++) { if (pattern[i] !== pattern[i % p]) m++; }
+    if (m < bestMisses) { bestMisses = m; bestPeriod = p; }
+  }
+  const sets      = bestMisses / pattern.length < 0.20 ? Math.round(pattern.length / bestPeriod) : 1;
+  const usePeriod = sets > 1 ? bestPeriod : pattern.length;
+
+  // Build intervals (one per distinct type in set order)
+  const seenClusters = new Set<number>();
+  const intervals: RunInterval[] = [];
+
+  for (let p = 0; p < usePeriod; p++) {
+    const cIdx = pattern[p];
+    if (seenClusters.has(cIdx)) continue;
+    seenClusters.add(cIdx);
+
+    const cl     = merged[cIdx];
+    const inOrder = orderedWork.filter(l => clusterOf.get(l) === cIdx);
+    const rests   = inOrder.map(l => restAfter(l)).filter(r => r > 3);
+    const hrVals2 = inOrder.map(l => l.avgHR).filter((h): h is number => h !== null && h > 0);
+
+    intervals.push({
+      distM:     roundDist(medianOf(cl.map(l => l.distM))),
+      paceMinKm: medianOf(cl.map(l => l.velMs > 0 ? (1000 / l.velMs) / 60 : 99)),
+      avgHR:     hrVals2.length ? Math.round(hrVals2.reduce((s, v) => s + v, 0) / hrVals2.length) : null,
+      restSec:   rests.length   ? Math.round(medianOf(rests)) : 0,
+    });
+  }
+
+  const trainingType = merged.length > 1 ? 'Trening interwałowy mieszany'
+    : sets >= 3 ? 'Trening interwałowy'
+    : 'Bieg tempo';
+
+  return {
+    trainingType, typeColor: '#7c3aed',
+    confidence: sets >= 4 && bestMisses === 0 ? 'high' : sets >= 2 ? 'medium' : 'low',
+    warmupKm, cooldownKm, sets, intervals,
+    avgHR: overallHR, totalKm, avgPaceMinKm: v50 > 0 ? (1000 / v50) / 60 : null,
   };
 }

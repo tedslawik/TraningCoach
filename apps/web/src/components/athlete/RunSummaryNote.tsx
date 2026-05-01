@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { analyzeRunStream, type RunAnalysis, type RunInterval } from '@tricoach/core';
+import { analyzeRunStream, analyzeRunLaps, type RunAnalysis, type RunInterval } from '@tricoach/core';
 import type { StreamData } from '../charts/ActivityCharts';
 
 const RUN_TYPES = new Set(['Run', 'TrailRun', 'VirtualRun']);
@@ -109,10 +109,15 @@ function hrForPhase(
 export default function RunSummaryNote({ data }: { data: StreamData }) {
   if (!RUN_TYPES.has(data.sportType)) return null;
 
-  const analysis: RunAnalysis | null = useMemo(
-    () => analyzeRunStream(data.time, data.distance, data.velocity, data.heartrate),
-    [data],
-  );
+  const analysis: RunAnalysis | null = useMemo(() => {
+    // Prefer lap-based analysis (athlete pressed lap button = clean data)
+    if (data.laps?.length >= 4) {
+      const lapResult = analyzeRunLaps(data.laps);
+      if (lapResult && lapResult.confidence !== 'low') return lapResult;
+    }
+    // Fall back to stream-based analysis
+    return analyzeRunStream(data.time, data.distance, data.velocity, data.heartrate);
+  }, [data]);
 
   if (!analysis) return null;
 
