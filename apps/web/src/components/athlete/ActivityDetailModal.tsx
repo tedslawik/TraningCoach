@@ -205,22 +205,16 @@ export default function ActivityDetailModal({ activityId, activityName, sportTyp
 
                 {(aiText || aiLoading) && (
                   <div style={{ background:'var(--bg-secondary)', borderRadius:'var(--radius-lg)', padding:'1.25rem', border:'0.5px solid var(--border)' }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
                       <span style={{ fontSize:16 }}>🤖</span>
                       <span style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--text-secondary)' }}>
-                        Analiza Claude · claude-sonnet-4-6
+                        Analiza AI · claude-sonnet-4-6
                       </span>
                       {aiLoading && (
-                        <span style={{ fontSize:10, color:'#7c3aed', animation:'pulse 1.5s infinite' }}>● generowanie…</span>
+                        <span style={{ fontSize:10, color:'#7c3aed' }}>● generowanie…</span>
                       )}
                     </div>
-                    <div
-                      ref={aiBoxRef}
-                      style={{ fontSize:14, lineHeight:1.75, color:'var(--text)', whiteSpace:'pre-wrap', maxHeight:400, overflowY:'auto' }}
-                    >
-                      {aiText}
-                      {aiLoading && <span style={{ opacity:0.5 }}>▍</span>}
-                    </div>
+                    <AiSections text={aiText} loading={aiLoading} />
                     {!aiLoading && aiText && (
                       <div style={{ marginTop:12, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
                         <button
@@ -258,6 +252,74 @@ export default function ActivityDetailModal({ activityId, activityName, sportTyp
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ── AI sections renderer ── */
+const SECTIONS = [
+  { key: 'OCENA TRENINGU',         label: 'Ocena treningu',          color: '#60a5fa', icon: '📊' },
+  { key: 'OCENA ZAŁOŻEŃ',          label: 'Ocena założeń',           color: '#34d399', icon: '✅' },
+  { key: 'WSKAZÓWKI NA PRZYSZŁOŚĆ', label: 'Wskazówki na przyszłość', color: '#fb923c', icon: '💡' },
+];
+
+function AiSections({ text, loading }: { text: string; loading: boolean }) {
+  if (!text && loading) return (
+    <div style={{ fontSize:14, color:'var(--text-secondary)', padding:'0.5rem 0' }}>
+      ▍
+    </div>
+  );
+  if (!text) return null;
+
+  // Parse sections by known headers
+  const parsed: Array<{ def: typeof SECTIONS[0]; content: string }> = [];
+
+  let remaining = text;
+  for (let i = 0; i < SECTIONS.length; i++) {
+    const header = SECTIONS[i].key;
+    const nextHeader = SECTIONS[i + 1]?.key;
+    const start = remaining.indexOf(header);
+    if (start === -1) continue;
+
+    const contentStart = start + header.length;
+    const end = nextHeader ? remaining.indexOf(nextHeader) : remaining.length;
+    const content = remaining.slice(contentStart, end > contentStart ? end : remaining.length).trim();
+    parsed.push({ def: SECTIONS[i], content });
+  }
+
+  // If no sections detected yet (still generating), show raw text
+  if (!parsed.length) {
+    return (
+      <div style={{ fontSize:14, lineHeight:1.75, color:'var(--text)', whiteSpace:'pre-wrap' }}>
+        {text}{loading && <span style={{ opacity:0.5 }}>▍</span>}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+      {parsed.map(({ def, content }) => (
+        <div
+          key={def.key}
+          style={{
+            borderLeft: `3px solid ${def.color}`,
+            borderRadius: 'var(--radius-md)',
+            background: `${def.color}0d`,
+            padding: '12px 16px',
+          }}
+        >
+          <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', color:def.color, marginBottom:8, display:'flex', alignItems:'center', gap:6 }}>
+            <span>{def.icon}</span>
+            {def.label}
+          </div>
+          <div style={{ fontSize:14, lineHeight:1.7, color:'var(--text)' }}>
+            {content}
+            {loading && def.key === parsed[parsed.length - 1].def.key && (
+              <span style={{ opacity:0.5 }}>▍</span>
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

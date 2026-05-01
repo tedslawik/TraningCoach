@@ -118,10 +118,17 @@ function buildPrompt(body: Record<string, unknown>): string {
 
   lines.push('');
   lines.push(`═══ ZADANIE ═══`);
-  lines.push(`Napisz DOKŁADNIE 10–12 zdań (nie więcej). Bądź konkretny i zwięzły.`);
-  lines.push(`Uwzględnij: co się wydarzyło chronologicznie, ocenę stref tętna,`);
-  lines.push(`czy założenia były właściwe, i 1–2 wskazówki na następny trening.`);
-  lines.push(`Używaj liczb z danych. Pisz do zawodnika bezpośrednio.`);
+  lines.push(`Odpowiedz w DOKŁADNIE trzech sekcjach używając tych nagłówków (bez modyfikacji):`);
+  lines.push(`OCENA TRENINGU`);
+  lines.push(`[3-4 zdania: co się wydarzyło chronologicznie, w jakich strefach tętna]`);
+  lines.push(``);
+  lines.push(`OCENA ZAŁOŻEŃ`);
+  lines.push(`[3-4 zdania: czy dystanse, tempo i przerwy były dobrze dobrane i dlaczego]`);
+  lines.push(``);
+  lines.push(`WSKAZÓWKI NA PRZYSZŁOŚĆ`);
+  lines.push(`[2-3 zdania: konkretne zmiany na kolejny trening z liczbami]`);
+  lines.push(``);
+  lines.push(`Używaj liczb z danych. Pisz bezpośrednio do zawodnika. Łącznie max 10-11 zdań.`);
 
   return lines.filter(l => l !== undefined).join('\n');
 }
