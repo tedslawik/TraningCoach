@@ -122,15 +122,15 @@ function buildPrompt(body: Record<string, unknown>): string {
   lines.push(`Użyj DOKŁADNIE tych nagłówków (kopiuj bez zmian, bez dodatkowych znaków):`);
   lines.push(``);
   lines.push(`OCENA TRENINGU`);
-  lines.push(`(3-4 zdania: co się wydarzyło chronologicznie, czas, dystanse, strefy tętna)`);
+  lines.push(`(1-2 zdania: co się wydarzyło, kluczowe liczby)`);
   lines.push(``);
   lines.push(`OCENA ZAŁOŻEŃ`);
-  lines.push(`(3-4 zdania: czy dystanse, tempo i długości przerw były właściwe i dlaczego)`);
+  lines.push(`(1-2 zdania: czy tempo i przerwy były właściwe)`);
   lines.push(``);
   lines.push(`WSKAZÓWKI NA PRZYSZŁOŚĆ`);
-  lines.push(`(3 zdania: konkretne liczby i zmiany na kolejny podobny trening)`);
+  lines.push(`(1-2 zdania: konkretna zmiana z liczbą na następny trening)`);
   lines.push(``);
-  lines.push(`WAŻNE: Nie pomijaj żadnej sekcji. Nie zmieniaj nagłówków. Pisz po polsku, bezpośrednio do zawodnika.`);
+  lines.push(`WAŻNE: Nie pomijaj żadnej sekcji. Nie zmieniaj nagłówków. Max 6 zdań łącznie. Pisz po polsku, bezpośrednio do zawodnika.`);
 
   return lines.filter(l => l !== undefined).join('\n');
 }
