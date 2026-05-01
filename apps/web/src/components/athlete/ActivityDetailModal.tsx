@@ -309,7 +309,7 @@ function AiSections({ text, loading }: { text: string; loading: boolean }) {
     <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
       {result.map(({ def, content }) => (
         <div
-          key={def.key}
+          key={def.label}
           style={{
             borderLeft: `3px solid ${def.color}`,
             borderRadius: 'var(--radius-md)',
