@@ -102,6 +102,31 @@ function buildPrompt(body: Record<string, unknown>): string {
     lines.push('');
   }
 
+  // Running-specific metrics
+  const isRun = ['Run','TrailRun','VirtualRun'].includes(sportType);
+  const avgVelMs = (body as Record<string,unknown>).avgVelocityMs as number | null ?? null;
+  const avgCadence = (body as Record<string,unknown>).avgCadence as number | null ?? null;
+
+  if (isRun && (avgCadence || avgVelMs)) {
+    lines.push(`═══ TECHNIKA BIEGU ═══`);
+    if (avgCadence) {
+      const cadStatus = avgCadence < 165 ? 'za niska (cel: 170-180 spm)'
+        : avgCadence >= 170 && avgCadence <= 185 ? 'optymalna'
+        : avgCadence > 185 ? 'wysoka'
+        : 'bliska optymalnej';
+      lines.push(`Kadencja: ${avgCadence} spm — ${cadStatus}`);
+    }
+    if (avgVelMs && avgHR && avgHR > 0) {
+      const ef = Math.round((avgVelMs * 60 / avgHR) * 100) / 10;
+      lines.push(`Efficiency Factor (EF): ${ef} (prędkość m/min / HR)`);
+    }
+    if (avgCadence && avgVelMs) {
+      const strideM = Math.round((avgVelMs / (avgCadence / 60)) * 100) / 100;
+      lines.push(`Długość kroku: ${strideM} m`);
+    }
+    lines.push('');
+  }
+
   // Physiological data
   lines.push(`═══ DANE FIZJOLOGICZNE ═══`);
   if (avgHR)   lines.push(`Śr. tętno: ${avgHR} bpm`);

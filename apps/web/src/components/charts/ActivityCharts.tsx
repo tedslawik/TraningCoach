@@ -251,10 +251,87 @@ function PaceChart({ time, velocity, sportType }: { time: number[]; velocity: nu
   );
 }
 
+/* ── Cadence chart ── */
+function CadenceChart({ time, cadence }: { time: number[]; cadence: number[] }) {
+  if (!cadence.length) return null;
+  const W = 800, H = 130, pL = 44, pR = 12, pT = 10, pB = 22;
+
+  const sm = smoothed(cadence, 12);
+  const validCad = sm.filter(v => v > 60 && v < 250);
+  if (!validCad.length) return null;
+
+  const minC = Math.max(120, Math.min(...validCad) - 5);
+  const maxC = Math.min(220, Math.max(...validCad) + 5);
+  const avgC = Math.round(validCad.reduce((s,v)=>s+v,0)/validCad.length);
+
+  const xNorm = normalize(time);
+  const yNorm = sm.map(v => Math.max(0, Math.min(1, (v - minC) / (maxC - minC || 1))));
+  const pts   = toPolyline(xNorm, yNorm, W, H, pL, pR, pT, pB);
+  const cw = W - pL - pR, ch = H - pT - pB;
+
+  // Optimal zone 170-180 spm
+  const y170 = pT + (1 - (170 - minC) / (maxC - minC || 1)) * ch;
+  const y180 = pT + (1 - (180 - minC) / (maxC - minC || 1)) * ch;
+  const optTop = Math.max(pT, Math.min(y170, y180));
+  const optH   = Math.abs(y180 - y170);
+
+  const timeTicks = [0, 0.25, 0.5, 0.75, 1].map(p => {
+    const sec = time[Math.floor(p * (time.length - 1))] ?? 0;
+    return { p, label: `${Math.floor(sec/60)}min` };
+  });
+
+  const cadColor = avgC < 165 ? '#f87171' : avgC < 175 ? '#fbbf24' : '#34d399';
+
+  return (
+    <div>
+      <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--text-secondary)', marginBottom:6, display:'flex', justifyContent:'space-between' }}>
+        <span>Kadencja</span>
+        <span style={{ color: cadColor }}>śr. {avgC} spm {avgC < 165 ? '↓ za niska' : avgC >= 170 && avgC <= 185 ? '✓ optymalna' : avgC > 185 ? '↑ wysoka' : '→ zbliżona do optymalnej'}</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', display:'block' }}>
+        {/* Optimal zone band 170-180 */}
+        {y170 >= pT && y180 <= pT + ch && (
+          <rect x={pL} y={optTop} width={cw} height={Math.max(1, optH)} fill="#34d399" opacity={0.15} />
+        )}
+        <text x={W - pR + 2} y={Math.min(pT + ch, optTop + optH/2 + 3)} fontSize={8} fill="#34d399" fontWeight={700}>OPT</text>
+
+        {/* Y ticks */}
+        {[minC, Math.round((minC+maxC)/2), maxC].map(v => {
+          const y = pT + (1 - (v - minC)/(maxC - minC || 1)) * ch;
+          return <g key={v}>
+            <line x1={pL} y1={y} x2={W-pR} y2={y} stroke="var(--border)" strokeWidth={0.5} strokeDasharray="3,4" />
+            <text x={pL-4} y={y+4} textAnchor="end" fontSize={9} fill="var(--text-secondary)">{v}</text>
+          </g>;
+        })}
+
+        <polyline points={pts} fill="none" stroke={cadColor} strokeWidth={1.5} strokeLinejoin="round" />
+
+        {timeTicks.map(({ p, label }) => (
+          <text key={p} x={pL + p*cw} y={H-4} textAnchor="middle" fontSize={9} fill="var(--text-secondary)">{label}</text>
+        ))}
+      </svg>
+      <div style={{ fontSize:11, color:'var(--text-secondary)', marginTop:4 }}>
+        Optymalny zakres: <span style={{ color:'#34d399', fontWeight:600 }}>170–180 spm</span>
+        {avgC < 165 && ' — zwiększ kadencję skracając krok, nie zwalniając tempa'}
+        {avgC >= 165 && avgC < 170 && ' — bliżej optymalnego, pracuj nad częstotliwością kroków'}
+      </div>
+    </div>
+  );
+}
+
 /* ── Main export ── */
 export default function ActivityCharts({ data }: { data: StreamData }) {
   const { stats, sportType } = data;
   const isRide = ['Ride','VirtualRide','EBikeRide'].includes(sportType);
+
+  const avgCadence = data.cadence.length > 0
+    ? Math.round(data.cadence.reduce((s, v) => s + v, 0) / data.cadence.length)
+    : null;
+
+  // Efficiency Factor = pace_m_per_min / avg_HR × 100 (higher = more efficient)
+  const ef = stats.avgVelocityMs && stats.avgHeartRate && stats.avgHeartRate > 0
+    ? Math.round((stats.avgVelocityMs * 60 / stats.avgHeartRate) * 1000) / 10
+    : null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -269,6 +346,8 @@ export default function ActivityCharts({ data }: { data: StreamData }) {
           isRide
             ? ['Śr. moc', stats.avgWatts ? `${stats.avgWatts} W` : null]
             : ['Śr. tempo', stats.avgVelocityMs ? fmtPace(stats.avgVelocityMs, sportType) : null],
+          ['Kadencja', avgCadence ? `${avgCadence} spm` : null],
+          ['EF',       ef ? `${ef}` : null],
         ].filter(([, v]) => v).map(([l, v]) => (
           <div key={l as string} style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', padding: '10px 12px', textAlign: 'center' }}>
             <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)' }}>{v}</div>
@@ -291,6 +370,12 @@ export default function ActivityCharts({ data }: { data: StreamData }) {
       {data.velocity.length > 0 && (
         <div className="card" style={{ marginBottom: 0 }}>
           <PaceChart time={data.time} velocity={data.velocity} sportType={sportType} />
+        </div>
+      )}
+
+      {data.cadence.length > 0 && (
+        <div className="card" style={{ marginBottom: 0 }}>
+          <CadenceChart time={data.time} cadence={data.cadence} />
         </div>
       )}
 

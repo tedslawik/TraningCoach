@@ -108,6 +108,147 @@ function RunLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAct
 }
 
 /* ── page ── */
+/* ── AI Technique Insights ── */
+function RunTechniqueInsights() {
+  const { session } = useAuth();
+  const [text, setText]       = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState<string|null>(null);
+  const [usage, setUsage]     = useState<{tokens:number;cost:string}|null>(null);
+
+  const analyze = async () => {
+    if (!session) return;
+    setLoading(true); setText(''); setError(null); setUsage(null);
+    try {
+      // Fetch last 15 runs for cadence/efficiency analysis
+      const actsRes = await fetch('/api/strava/discipline?sport=run', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!actsRes.ok) throw new Error('Brak danych biegowych');
+      const actsData = await actsRes.json();
+      const acts = (actsData.activities ?? []).filter((a: Record<string,unknown>) => a.avgCadence || a.avgHeartRate);
+
+      if (!acts.length) throw new Error('Brak aktywności biegowych z danymi');
+
+      // Build cadence/EF summary
+      const cadences  = acts.map((a: Record<string,unknown>) => a.avgCadence as number).filter(Boolean);
+      const avgCad    = cadences.length ? Math.round(cadences.reduce((s:number,v:number)=>s+v,0)/cadences.length) : null;
+      const minCad    = cadences.length ? Math.min(...cadences) : null;
+      const maxCad    = cadences.length ? Math.max(...cadences) : null;
+      const lowCadPct = cadences.length ? Math.round(cadences.filter((c:number)=>c<165).length/cadences.length*100) : null;
+
+      const aiRes = await fetch('/api/ai/analyze-workout', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', Authorization:`Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          activityName: 'Analiza techniki biegowej — ostatnie biegi',
+          sportType: 'Run',
+          startDate: new Date().toISOString(),
+          totalDistKm: acts.reduce((s:number,a:Record<string,unknown>)=>s+(a.distanceKm as number||0),0),
+          totalTimeSec: acts.length * 3000,
+          elevGain: 0,
+          avgHR: acts.reduce((s:number,a:Record<string,unknown>)=>s+(a.avgHeartRate as number||0),0)/Math.max(1,acts.filter((a:Record<string,unknown>)=>a.avgHeartRate).length),
+          maxHR: null, avgWatts: null, avgVelocityMs: null,
+          avgCadence: avgCad,
+          hrZones: actsData.hrZones,
+          lapAnalysis: null, laps: [],
+          cadenceExtra: {
+            avgCadence: avgCad, minCadence: minCad, maxCadence: maxCad,
+            pctBelow165: lowCadPct, runsAnalyzed: acts.length,
+          },
+          techniqueFocus: true,
+        }),
+      });
+
+      if (!aiRes.ok || !aiRes.body) throw new Error('Błąd AI');
+      const reader  = aiRes.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+      }
+      const nullIdx = buf.indexOf('\x00');
+      if (nullIdx >= 0) {
+        setText(buf.slice(0, nullIdx).trim());
+        try {
+          const u = JSON.parse(buf.slice(nullIdx+1));
+          setUsage({ tokens: u.inputTokens+u.outputTokens, cost: `$${u.costUsd.toFixed(4)}` });
+        } catch { /* ignore */ }
+      } else {
+        setText(buf.trim());
+      }
+    } catch (e) { setError(e instanceof Error ? e.message : 'Błąd'); }
+    finally { setLoading(false); }
+  };
+
+  if (!session) return null;
+
+  const SECTIONS = [
+    { keys:['OCENA TRENINGU'],          label:'Ocena techniki',     color:'#60a5fa', icon:'📊' },
+    { keys:['OCENA ZAŁOŻEŃ'],           label:'Ocena założeń',      color:'#34d399', icon:'✅' },
+    { keys:['WSKAZÓWKI NA PRZYSZŁOŚĆ','WSKAZÓWKI'], label:'Wskazówki', color:'#fb923c', icon:'💡' },
+  ];
+
+  const upperText = text.toUpperCase();
+  const parsed = SECTIONS.map(s => {
+    for (const key of s.keys) {
+      const idx = upperText.indexOf(key);
+      if (idx !== -1) return { def:s, start:idx, headerLen:key.length };
+    }
+    return null;
+  }).filter(Boolean).sort((a,b)=>a!.start-b!.start) as Array<{def:typeof SECTIONS[0];start:number;headerLen:number}>;
+
+  const sections = parsed.map((p,i) => ({
+    def: p.def,
+    content: text.slice(p.start+p.headerLen, parsed[i+1]?.start ?? text.length).replace(/^\s*[:\-–]\s*/,'').trim(),
+  }));
+
+  return (
+    <section>
+      <div className="section-inner">
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'1.25rem', flexWrap:'wrap', gap:12 }}>
+          <div>
+            <p style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--run)', marginBottom:4 }}>AI Coach</p>
+            <h2 style={{ fontSize:'clamp(18px,2.5vw,24px)', fontWeight:700, letterSpacing:-0.5 }}>Analiza techniki biegu</h2>
+          </div>
+          {!loading && <button onClick={analyze} style={{ padding:'9px 20px', borderRadius:'var(--radius-md)', background:'linear-gradient(135deg,var(--run),#b91c1c)', color:'#fff', border:'none', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'var(--font)', display:'flex', alignItems:'center', gap:8 }}>
+            <span>🤖</span> {text ? 'Odśwież analizę' : 'Analizuj technikę biegu'}
+          </button>}
+        </div>
+
+        {loading && <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text-secondary)', fontSize:14 }}>✨ Analizuję Twoje biegi…</div>}
+        {error  && <div className="alert alert-warn">{error}</div>}
+
+        {sections.length > 0 && (
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {sections.map(({ def, content }) => (
+              <div key={def.label} style={{ borderLeft:`4px solid ${def.color}`, borderRadius:'var(--radius-md)', background:`${def.color}0d`, padding:'12px 16px' }}>
+                <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', color:def.color, marginBottom:7, display:'flex', alignItems:'center', gap:6 }}>
+                  {def.icon} {def.label}
+                </div>
+                <div style={{ fontSize:14, lineHeight:1.7, color:'var(--text)' }}>{content}</div>
+              </div>
+            ))}
+            {usage && (
+              <div style={{ fontSize:11, color:'var(--text-secondary)', textAlign:'right', marginTop:4 }}>
+                {usage.cost} · {usage.tokens} tokenów
+              </div>
+            )}
+          </div>
+        )}
+
+        {!text && !loading && !error && (
+          <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text-secondary)', fontSize:14 }}>
+            Kliknij przycisk powyżej — AI przeanalizuje kadencję, efektywność aerobową i technikę biegu na podstawie Twoich ostatnich treningów.
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export default function RunCoachPage() {
   const [selected, setSelected] = useState<CalendarActivity | null>(null);
 
@@ -120,6 +261,7 @@ export default function RunCoachPage() {
         subtitle="Biegasz po 90 lub 180 km w siodle. Twój bieg triathlonowy wymaga specjalnego przygotowania — nie tylko kondycji, ale i adaptacji nerwowo-mięśniowej."
       />
       <RunLiveSection onActivityClick={setSelected} />
+      <RunTechniqueInsights />
       <CtaBanner
         title="Sprawdź swoje proporcje treningowe"
         description="Analizator wyliczy czy Twoje treningi mają odpowiedni podział między dyscypliny."
