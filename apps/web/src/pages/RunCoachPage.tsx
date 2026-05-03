@@ -157,7 +157,6 @@ function RunTechniqueInsights() {
       const avgTimeSec = avgDistKm && avgPaceMS ? Math.round(avgDistKm * avgPaceMS * 60) : null;
 
       // Cadence by pace zone (key insight: optimal cadence depends on pace)
-      type PaceGroup = { acts: typeof acts; avgCad: number | null; avgPace: string | null; optRange: string };
       const groupActs = (minPace: number, maxPace: number) => {
         const g = acts.filter((a: Record<string,unknown>) => {
           const d = a.distanceKm as number, t = (a.movingTimeSec as number)/60;
