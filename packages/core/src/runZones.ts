@@ -17,7 +17,7 @@ export interface PaceZone {
   color:       string;
 }
 
-export interface RacePrediction {
+export interface ZoneRacePrediction {
   label:    string;
   distM:    number;
   timeSec:  number;
@@ -26,7 +26,7 @@ export interface RacePrediction {
 export interface RunZones {
   vdot:        number;
   zones:       PaceZone[];
-  predictions: RacePrediction[];
+  predictions: ZoneRacePrediction[];
   thresholdPaceMin: number; // T-pace min/km
 }
 
@@ -102,7 +102,7 @@ export function calcRunZones(vdot: number, maxHR?: number): RunZones {
     };
   });
 
-  const predictions: RacePrediction[] = RACE_DISTANCES.map(({ label, distM }) => {
+  const predictions: ZoneRacePrediction[] = RACE_DISTANCES.map(({ label, distM }) => {
     // Use velocity at ~marathon %VO2max for longer, interval for short
     const pct = distM <= 5000 ? 0.975 : distM <= 10000 ? 0.90 : distM <= 21097 ? 0.82 : 0.77;
     const mpm = velAt(pct, vdot);
