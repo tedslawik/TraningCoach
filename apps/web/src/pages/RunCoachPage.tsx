@@ -156,7 +156,28 @@ function RunTechniqueInsights() {
       const avgDistKm = distValues.length ? +(avgOf(distValues)!.toFixed(1)) : null;
       const avgTimeSec = avgDistKm && avgPaceMS ? Math.round(avgDistKm * avgPaceMS * 60) : null;
 
-      const lowCadPct = cadences.length ? Math.round(cadences.filter(c=>c<165).length/cadences.length*100) : null;
+      // Cadence by pace zone (key insight: optimal cadence depends on pace)
+      type PaceGroup = { acts: typeof acts; avgCad: number | null; avgPace: string | null; optRange: string };
+      const groupActs = (minPace: number, maxPace: number) => {
+        const g = acts.filter((a: Record<string,unknown>) => {
+          const d = a.distanceKm as number, t = (a.movingTimeSec as number)/60;
+          if (!d || !t) return false;
+          const pace = t/d;
+          return pace >= minPace && pace < maxPace;
+        });
+        const gCads = g.map((a: Record<string,unknown>) => a.avgCadence as number).filter(Boolean) as number[];
+        const gPaces = g.map((a: Record<string,unknown>) => { const d=a.distanceKm as number,t=(a.movingTimeSec as number)/60; return d>0?t/d:null; }).filter(Boolean) as number[];
+        const ac = gCads.length ? Math.round(avgOf(gCads)!) : null;
+        const ap = gPaces.length ? avgOf(gPaces)! : null;
+        const apStr = ap ? `${Math.floor(ap)}:${String(Math.round((ap%1)*60)).padStart(2,'0')}` : null;
+        return { count: g.length, avgCad: ac, avgPace: apStr };
+      };
+
+      const zoneEasy     = groupActs(5.5, 99);   // > 5:30/km
+      const zoneMod      = groupActs(4.5, 5.5);  // 4:30–5:30/km
+      const zoneFast     = groupActs(0,   4.5);  // < 4:30/km
+
+      const lowCadPct  = cadences.length ? Math.round(cadences.filter(c=>c<165).length/cadences.length*100) : null;
       const highCadPct = cadences.length ? Math.round(cadences.filter(c=>c>=170&&c<=185).length/cadences.length*100) : null;
 
       const aiRes = await fetch('/api/ai/analyze-workout', {
@@ -185,6 +206,12 @@ function RunTechniqueInsights() {
             pctOptimal170_185spm: highCadPct,
             minCadence:    cadences.length ? Math.min(...cadences) : null,
             maxCadence:    cadences.length ? Math.max(...cadences) : null,
+            // Cadence per pace zone — KLUCZOWE: kadencja zależy od tempa
+            cadenceByPaceZone: {
+              easy:     { label:'>5:30/km (Z1-Z2 spokojny)',    ...zoneEasy,  optimalRange:'160–172' },
+              moderate: { label:'4:30–5:30/km (Z3 umiarkowany)',...zoneMod,   optimalRange:'166–178' },
+              fast:     { label:'<4:30/km (Z4-Z5 szybki)',       ...zoneFast, optimalRange:'172–184' },
+            },
           },
           techniqueFocus: true,
         }),

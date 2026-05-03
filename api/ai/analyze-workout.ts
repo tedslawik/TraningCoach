@@ -164,11 +164,26 @@ function buildPrompt(body: Record<string, unknown>): string {
     if (multiRunContext.avgDistKm) lines.push(`Śr. dystans/bieg: ${multiRunContext.avgDistKm} km`);
     if (multiRunContext.avgPaceMinKm) lines.push(`Śr. tempo: ${multiRunContext.avgPaceMinKm} /km`);
     if (multiRunContext.avgCadence) lines.push(`Śr. kadencja: ${multiRunContext.avgCadence} spm`);
-    if (multiRunContext.pctBelow165spm != null) lines.push(`Biegi z kadencją < 165 spm: ${multiRunContext.pctBelow165spm}%`);
-    if (multiRunContext.pctOptimal170_185spm != null) lines.push(`Biegi z kadencją 170–185 spm (optymalny zakres): ${multiRunContext.pctOptimal170_185spm}%`);
-    if (multiRunContext.minCadence) lines.push(`Zakres kadencji: ${multiRunContext.minCadence}–${multiRunContext.maxCadence} spm`);
+    if (multiRunContext.pctBelow165spm != null) lines.push(`Biegi z kadencją < 165 spm (globalne): ${multiRunContext.pctBelow165spm}%`);
+    if (multiRunContext.minCadence) lines.push(`Zakres kadencji ogółem: ${multiRunContext.minCadence}–${multiRunContext.maxCadence} spm`);
+
+    // Pace-zone cadence breakdown
+    const zones = (multiRunContext as Record<string,unknown>).cadenceByPaceZone as Record<string,{label:string;count:number;avgCad:number|null;avgPace:string|null;optimalRange:string}> | undefined;
+    if (zones) {
+      lines.push('');
+      lines.push('KADENCJA PER STREFA TEMPA (kluczowe — zakres optymalny jest RÓŻNY dla każdej strefy):');
+      for (const [, z] of Object.entries(zones)) {
+        if (!z.count) continue;
+        const status = z.avgCad && z.optimalRange
+          ? (() => { const [lo,hi] = z.optimalRange.split('–').map(Number); return z.avgCad < lo ? '⚠️ PONIŻEJ' : z.avgCad > hi ? '↑ powyżej' : '✓ OK'; })()
+          : '';
+        lines.push(`  ${z.label}: ${z.count} biegów, śr. kadencja ${z.avgCad ?? '—'} spm ${status} (optymalny: ${z.optimalRange} spm dla tego tempa)`);
+      }
+      lines.push('UWAGA: niższa kadencja na łatwym biegu jest NATURALNA i AKCEPTOWALNA.');
+      lines.push('Oceń osobno każdą strefę — nie sumuj wszystkiego razem.');
+    }
     lines.push('');
-    lines.push('Skoncentruj się na wzorcach technicznych w tych biegach, NIE analizuj ich jako jeden trening.');
+    lines.push('Skoncentruj się na wzorcach per-strefa. NIE analizuj jako jeden trening.');
   }
 
   lines.push('');
