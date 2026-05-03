@@ -50,6 +50,17 @@ function buildPrompt(body: Record<string, unknown>): string {
       intervals:   Array<{distM:number; paceMinKm:number; avgHR:number|null; restSec:number}>;
     };
     laps: Array<{lapIndex:number; distM:number; timeSec:number; velMs:number; avgHR:number|null}>;
+    multiRunContext?: {
+      runsAnalyzed: number;
+      avgDistKm: number | null;
+      avgPaceMinKm: string | null;
+      avgCadence: number | null;
+      pctBelow165spm: number | null;
+      pctOptimal170_185spm: number | null;
+      minCadence: number | null;
+      maxCadence: number | null;
+    };
+    techniqueFocus?: boolean;
   };
 
   const sportMap: Record<string, string> = {
@@ -61,11 +72,16 @@ function buildPrompt(body: Record<string, unknown>): string {
 
   const zoneNames = ['Z1 Regeneracja','Z2 Aerobowa','Z3 Tempo','Z4 Próg mleczanowy','Z5 VO2max'];
 
+  const { multiRunContext, techniqueFocus } = body as { multiRunContext?: NonNullable<typeof body>['multiRunContext']; techniqueFocus?: boolean };
+  const isMultiRun = !!multiRunContext && (multiRunContext.runsAnalyzed ?? 0) > 1;
+
   const lines: string[] = [
-    `Przeanalizuj poniższy trening i napisz szczegółowe podsumowanie po polsku (300–450 słów).`,
+    isMultiRun
+      ? `Jesteś trenerem biegowym. Przeanalizuj technikę i nawyki biegowe zawodnika na podstawie danych z ${multiRunContext!.runsAnalyzed} ostatnich biegów.`
+      : `Przeanalizuj poniższy trening i napisz szczegółowe podsumowanie po polsku (300–450 słów).`,
     `Bądź konkretny — używaj liczb z danych. Pisz bezpośrednio do zawodnika.`,
     ``,
-    `═══ TRENING ═══`,
+    `═══ ${isMultiRun ? `ANALIZA TECHNIKI — ${multiRunContext!.runsAnalyzed} BIEGÓW` : 'TRENING'} ═══`,
     `Typ: ${sport}`,
     `Nazwa: "${activityName}"`,
     `Data: ${new Date(startDate).toLocaleDateString('pl-PL', {day:'numeric',month:'long',year:'numeric'})}`,
@@ -139,6 +155,20 @@ function buildPrompt(body: Record<string, unknown>): string {
       const hi = z.max <= 0 ? 'max' : `${z.max}`;
       lines.push(`  ${zoneNames[i]}: ${lo}–${hi} bpm`);
     });
+  }
+
+  // Multi-run context section
+  if (isMultiRun && multiRunContext) {
+    lines.push('');
+    lines.push(`═══ STATYSTYKI ZBIORCZE (${multiRunContext.runsAnalyzed} biegów) ═══`);
+    if (multiRunContext.avgDistKm) lines.push(`Śr. dystans/bieg: ${multiRunContext.avgDistKm} km`);
+    if (multiRunContext.avgPaceMinKm) lines.push(`Śr. tempo: ${multiRunContext.avgPaceMinKm} /km`);
+    if (multiRunContext.avgCadence) lines.push(`Śr. kadencja: ${multiRunContext.avgCadence} spm`);
+    if (multiRunContext.pctBelow165spm != null) lines.push(`Biegi z kadencją < 165 spm: ${multiRunContext.pctBelow165spm}%`);
+    if (multiRunContext.pctOptimal170_185spm != null) lines.push(`Biegi z kadencją 170–185 spm (optymalny zakres): ${multiRunContext.pctOptimal170_185spm}%`);
+    if (multiRunContext.minCadence) lines.push(`Zakres kadencji: ${multiRunContext.minCadence}–${multiRunContext.maxCadence} spm`);
+    lines.push('');
+    lines.push('Skoncentruj się na wzorcach technicznych w tych biegach, NIE analizuj ich jako jeden trening.');
   }
 
   lines.push('');

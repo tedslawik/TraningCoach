@@ -139,31 +139,52 @@ function RunTechniqueInsights() {
 
       if (!acts.length) throw new Error('Brak aktywności biegowych z danymi');
 
-      // Build cadence/EF summary
-      const cadences  = acts.map((a: Record<string,unknown>) => a.avgCadence as number).filter(Boolean);
-      const avgCad    = cadences.length ? Math.round(cadences.reduce((s:number,v:number)=>s+v,0)/cadences.length) : null;
-      const minCad    = cadences.length ? Math.min(...cadences) : null;
-      const maxCad    = cadences.length ? Math.max(...cadences) : null;
-      const lowCadPct = cadences.length ? Math.round(cadences.filter((c:number)=>c<165).length/cadences.length*100) : null;
+      // Per-run stats (not totals — multiple separate runs)
+      const n          = acts.length;
+      const cadences   = acts.map((a: Record<string,unknown>) => a.avgCadence as number).filter(Boolean) as number[];
+      const hrValues   = acts.map((a: Record<string,unknown>) => a.avgHeartRate as number).filter(Boolean) as number[];
+      const paceValues = acts.map((a: Record<string,unknown>) => {
+        const d = a.distanceKm as number, t = (a.movingTimeSec as number) / 60;
+        return d > 0 && t > 0 ? t / d : null;
+      }).filter(Boolean) as number[];
+      const distValues = acts.map((a: Record<string,unknown>) => a.distanceKm as number).filter(Boolean) as number[];
+
+      const avgOf = (arr: number[]) => arr.length ? arr.reduce((s,v)=>s+v,0)/arr.length : null;
+      const avgCad    = cadences.length  ? Math.round(avgOf(cadences)!)  : null;
+      const avgHRNum  = hrValues.length  ? Math.round(avgOf(hrValues)!)  : null;
+      const avgPaceMS = paceValues.length ? avgOf(paceValues)! : null; // min/km
+      const avgDistKm = distValues.length ? +(avgOf(distValues)!.toFixed(1)) : null;
+      const avgTimeSec = avgDistKm && avgPaceMS ? Math.round(avgDistKm * avgPaceMS * 60) : null;
+
+      const lowCadPct = cadences.length ? Math.round(cadences.filter(c=>c<165).length/cadences.length*100) : null;
+      const highCadPct = cadences.length ? Math.round(cadences.filter(c=>c>=170&&c<=185).length/cadences.length*100) : null;
 
       const aiRes = await fetch('/api/ai/analyze-workout', {
         method: 'POST',
         headers: { 'Content-Type':'application/json', Authorization:`Bearer ${session.access_token}` },
         body: JSON.stringify({
-          activityName: 'Analiza techniki biegowej — ostatnie biegi',
-          sportType: 'Run',
-          startDate: new Date().toISOString(),
-          totalDistKm: acts.reduce((s:number,a:Record<string,unknown>)=>s+(a.distanceKm as number||0),0),
-          totalTimeSec: acts.length * 3000,
-          elevGain: 0,
-          avgHR: acts.reduce((s:number,a:Record<string,unknown>)=>s+(a.avgHeartRate as number||0),0)/Math.max(1,acts.filter((a:Record<string,unknown>)=>a.avgHeartRate).length),
-          maxHR: null, avgWatts: null, avgVelocityMs: null,
-          avgCadence: avgCad,
-          hrZones: actsData.hrZones,
-          lapAnalysis: null, laps: [],
-          cadenceExtra: {
-            avgCadence: avgCad, minCadence: minCad, maxCadence: maxCad,
-            pctBelow165: lowCadPct, runsAnalyzed: acts.length,
+          activityName: `Analiza techniki biegowej — ${n} ostatnich biegów`,
+          sportType:    'Run',
+          startDate:    new Date().toISOString(),
+          totalDistKm:  avgDistKm,      // avg per run, not sum
+          totalTimeSec: avgTimeSec,     // avg per run
+          elevGain:     0,
+          avgHR:        avgHRNum,
+          maxHR:        null, avgWatts: null,
+          avgVelocityMs: avgPaceMS ? 1000 / (avgPaceMS * 60) : null,
+          avgCadence:   avgCad,
+          hrZones:      actsData.hrZones,
+          lapAnalysis:  null, laps: [],
+          // Extra context about multi-run analysis
+          multiRunContext: {
+            runsAnalyzed:  n,
+            avgDistKm,
+            avgPaceMinKm:  avgPaceMS ? `${Math.floor(avgPaceMS)}:${String(Math.round((avgPaceMS%1)*60)).padStart(2,'0')}` : null,
+            avgCadence:    avgCad,
+            pctBelow165spm:  lowCadPct,
+            pctOptimal170_185spm: highCadPct,
+            minCadence:    cadences.length ? Math.min(...cadences) : null,
+            maxCadence:    cadences.length ? Math.max(...cadences) : null,
           },
           techniqueFocus: true,
         }),
