@@ -11,7 +11,9 @@ const SPORTS: Array<{ value: SportType; icon: string; label: string; color: stri
   { value: 'swim',      icon: '🏊', label: 'Pływanie',   color: 'var(--swim)' },
 ];
 
-interface DayPlan { day:string; date:string; type:'rest'|'swim'|'bike'|'run'|'brick'; sport:string; label:string; distance:string; duration:string; description:string; }
+interface Session { type:'rest'|'swim'|'bike'|'run'|'brick'; label:string; distance:string; duration:string; description:string; }
+// Supports both new format (sessions[]) and legacy flat format
+interface DayPlan { day:string; date:string; sessions?:Session[]; type?:string; label?:string; distance?:string; duration?:string; description?:string; }
 interface PlanJson { assessment:string; week1:DayPlan[]; week2:DayPlan[]; }
 interface TrainingPlan { id:string; training_days_per_week:number; suggested_days:number; plan_json:PlanJson; week_start:string; created_at:string; sport_type:SportType; }
 
@@ -24,27 +26,51 @@ const SPORT_META: Record<string, { icon:string; color:string; bg:string }> = {
 };
 const DAY_NAMES = ['Pon','Wt','Śr','Czw','Pt','Sob','Nd'];
 
-function DayCard({ day }: { day: DayPlan }) {
-  const meta   = SPORT_META[day.type] ?? SPORT_META.rest;
-  const isRest = day.type === 'rest';
+function SessionBlock({ s }: { s: Session }) {
+  const meta   = SPORT_META[s.type] ?? SPORT_META.rest;
+  const isRest = s.type === 'rest';
+  if (isRest) return null;
   return (
-    <div style={{ borderRadius:'var(--radius-lg)', border:`0.5px solid ${isRest?'var(--border)':meta.color+'44'}`, borderTop:`3px solid ${meta.color}`, background:'var(--bg)', padding:12, minHeight:130, display:'flex', flexDirection:'column', gap:5 }}>
-      <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--text-secondary)' }}>{day.day}</div>
-      <div style={{ fontSize:10, color:'var(--text-secondary)', marginTop:-3 }}>{day.date}</div>
-      {isRest ? (
-        <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', color:'var(--text-secondary)', fontSize:22 }}>💤</div>
+    <div style={{ borderLeft:`2px solid ${meta.color}`, paddingLeft:8, paddingBottom:4 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:3 }}>
+        <span style={{ fontSize:13 }}>{meta.icon}</span>
+        <span style={{ fontSize:11, fontWeight:700, color:meta.color }}>{s.label}</span>
+      </div>
+      <div style={{ display:'flex', gap:5, flexWrap:'wrap', marginBottom:3 }}>
+        {s.distance && s.distance !== '—' && <span style={{ fontSize:10, background:meta.bg, color:meta.color, padding:'1px 5px', borderRadius:3, fontWeight:600 }}>{s.distance}</span>}
+        {s.duration && <span style={{ fontSize:10, color:'var(--text-secondary)' }}>{s.duration}</span>}
+      </div>
+      <div style={{ fontSize:10, color:'var(--text-secondary)', lineHeight:1.5 }}>{s.description}</div>
+    </div>
+  );
+}
+
+function DayCard({ day }: { day: DayPlan }) {
+  // Normalize: support both sessions[] (new) and flat format (legacy)
+  const sessions: Session[] = day.sessions?.length
+    ? day.sessions
+    : [{ type: (day.type ?? 'rest') as Session['type'], label: day.label ?? '', distance: day.distance ?? '—', duration: day.duration ?? '—', description: day.description ?? '' }];
+
+  const isFullRest = sessions.every(s => s.type === 'rest');
+  const topColor   = isFullRest ? '#9ca3af' : (SPORT_META[sessions[0].type]?.color ?? '#9ca3af');
+  const isDouble   = sessions.filter(s => s.type !== 'rest').length > 1;
+
+  return (
+    <div style={{ borderRadius:'var(--radius-lg)', border:`0.5px solid ${isFullRest?'var(--border)':topColor+'44'}`, borderTop:`3px solid ${topColor}`, background:'var(--bg)', padding:10, minHeight:120, display:'flex', flexDirection:'column', gap:4 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--text-secondary)' }}>{day.day}</div>
+        {isDouble && <span style={{ fontSize:9, background:'#ede9fd', color:'#7c3aed', borderRadius:3, padding:'1px 5px', fontWeight:700 }}>×{sessions.filter(s=>s.type!=='rest').length}</span>}
+      </div>
+      <div style={{ fontSize:10, color:'var(--text-secondary)', marginTop:-2 }}>{day.date}</div>
+
+      {isFullRest ? (
+        <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', color:'var(--text-secondary)', fontSize:20 }}>💤</div>
       ) : (
-        <>
-          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-            <span style={{ fontSize:15 }}>{meta.icon}</span>
-            <span style={{ fontSize:12, fontWeight:700, color:meta.color }}>{day.label}</span>
-          </div>
-          <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-            {day.distance && day.distance !== '—' && <span style={{ fontSize:11, background:meta.bg, color:meta.color, padding:'1px 6px', borderRadius:3, fontWeight:600 }}>{day.distance}</span>}
-            {day.duration && <span style={{ fontSize:11, color:'var(--text-secondary)' }}>{day.duration}</span>}
-          </div>
-          <div style={{ fontSize:11, color:'var(--text-secondary)', lineHeight:1.5, flex:1 }}>{day.description}</div>
-        </>
+        <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:2 }}>
+          {sessions.filter(s=>s.type!=='rest').map((s,i) => (
+            <SessionBlock key={i} s={s} />
+          ))}
+        </div>
       )}
     </div>
   );
