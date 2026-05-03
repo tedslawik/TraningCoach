@@ -141,6 +141,7 @@ export default function PlannerPage() {
   const [showModal, setShowModal]     = useState(false);
   const [generating, setGenerating]   = useState(false);
   const [error, setError]             = useState<string | null>(null);
+  const [lastUsage, setLastUsage]     = useState<{inputTokens:number;outputTokens:number;costUsd:number}|null>(null);
 
   const currentPlan = plans[activeSport] ?? null;
 
@@ -178,6 +179,7 @@ export default function PlannerPage() {
       if (!res.ok) throw new Error(data.error ?? 'Błąd');
       setPlans(p => ({ ...p, [activeSport]: data.plan }));
       setSuggested(data.suggestedDays ?? days);
+      if (data.usage) setLastUsage(data.usage);
       setShowModal(false);
     } catch (e) { setError(e instanceof Error ? e.message : 'Błąd'); }
     finally { setGenerating(false); }
@@ -252,13 +254,24 @@ export default function PlannerPage() {
               {planJson.week1 && <WeekGrid days={planJson.week1} label={`Tydzień 1 — od ${week1start ? new Date(week1start).toLocaleDateString('pl-PL',{day:'numeric',month:'long'}) : ''}`} />}
               {planJson.week2 && <WeekGrid days={planJson.week2} label={`Tydzień 2 — od ${week2date}`} />}
 
-              <div style={{ display:'flex', gap:16, flexWrap:'wrap', marginTop:8 }}>
-                {Object.entries(SPORT_META).filter(([k])=>k!=='rest').map(([key,meta])=>(
-                  <div key={key} style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:'var(--text-secondary)' }}>
-                    <span>{meta.icon}</span><span style={{ color:meta.color, fontWeight:600, textTransform:'capitalize' }}>{key}</span>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12, marginTop:8 }}>
+                <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
+                  {Object.entries(SPORT_META).filter(([k])=>k!=='rest').map(([key,meta])=>(
+                    <div key={key} style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:'var(--text-secondary)' }}>
+                      <span>{meta.icon}</span><span style={{ color:meta.color, fontWeight:600, textTransform:'capitalize' }}>{key}</span>
+                    </div>
+                  ))}
+                  <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:'var(--text-secondary)' }}>💤 <span>Odpoczynek</span></div>
+                </div>
+                {lastUsage && (
+                  <div style={{ display:'flex', alignItems:'center', gap:10, fontSize:11, color:'var(--text-secondary)' }}>
+                    <span>Koszt generowania: <strong style={{ color:'var(--text)' }}>${lastUsage.costUsd.toFixed(4)}</strong></span>
+                    <span style={{ opacity:0.4 }}>·</span>
+                    <span>{lastUsage.inputTokens + lastUsage.outputTokens} tokenów</span>
+                    <span style={{ opacity:0.4 }}>·</span>
+                    <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener noreferrer" style={{ color:'#7c3aed', fontWeight:600, textDecoration:'none' }}>Sprawdź saldo →</a>
                   </div>
-                ))}
-                <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:'var(--text-secondary)' }}>💤 <span>Odpoczynek</span></div>
+                )}
               </div>
             </>
           )}

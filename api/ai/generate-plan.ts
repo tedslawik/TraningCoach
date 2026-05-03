@@ -295,5 +295,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .select().single();
 
   if (saveErr) return res.status(500).json({ error: saveErr.message });
-  res.json({ plan: saved, suggestedDays });
+
+  const { input_tokens, output_tokens } = message.usage;
+  const costUsd = (input_tokens * 3 + output_tokens * 15) / 1_000_000;
+
+  res.json({ plan: saved, suggestedDays, usage: { inputTokens: input_tokens, outputTokens: output_tokens, costUsd } });
 }
