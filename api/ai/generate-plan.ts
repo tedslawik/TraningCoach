@@ -261,17 +261,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const suggestedDays = Math.max(3, Math.min(6, Math.round(avgSessions)));
 
   const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6', max_tokens: 3000,
-    messages: [{ role: 'user', content: prompt }],
+    model:      'claude-sonnet-4-6',
+    max_tokens: 4500,
+    system:     'You are a JSON generator. Respond with ONLY valid JSON, no markdown, no explanation, no code blocks. Start your response with { and end with }.',
+    messages:   [{ role: 'user', content: prompt }],
   });
 
   const raw = message.content[0].type === 'text' ? message.content[0].text.trim() : '{}';
+
+  // Aggressively extract JSON: find first { and last }
   let planJson: Record<string,unknown>;
   try {
-    const cleaned = raw.replace(/^```json?\s*/i,'').replace(/```\s*$/i,'').trim();
+    let cleaned = raw
+      .replace(/^```json?\s*/im, '')
+      .replace(/```\s*$/im, '')
+      .trim();
+
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace  = cleaned.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+    }
+
     planJson = JSON.parse(cleaned);
   } catch {
-    return res.status(502).json({ error: 'AI returned invalid JSON', raw });
+    // Log first 500 chars for debugging
+    console.error('[generate-plan] Invalid JSON, first 500 chars:', raw.slice(0, 500));
+    return res.status(502).json({ error: 'AI returned invalid JSON' });
   }
 
   const { data: saved, error: saveErr } = await supabase.from('training_plans')
