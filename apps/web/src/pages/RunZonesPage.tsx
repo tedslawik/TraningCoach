@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import SectionLabel from '../components/SectionLabel';
 import {
-  calcVDOT, calcRunZones, predictTime, parseTimeInput,
+  calcVDOT, calcRunZones, parseTimeInput,
   fmtPaceMmSs, fmtTimeHMMS,
   type RunZones,
 } from '@tricoach/core';
@@ -18,7 +18,7 @@ const RACE_OPTIONS = [
   { label: 'Własny (m)',   distM: 0     },
 ];
 
-function ZoneRow({ zone, saved }: { zone: RunZones['zones'][0]; saved?: boolean }) {
+function ZoneRow({ zone }: { zone: RunZones['zones'][0] }) {
   return (
     <div style={{ display:'grid', gridTemplateColumns:'140px 1fr auto', alignItems:'center', gap:12, padding:'10px 0', borderBottom:'0.5px solid var(--border)' }}>
       <div style={{ display:'flex', alignItems:'center', gap:8 }}>
