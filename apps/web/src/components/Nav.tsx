@@ -14,6 +14,7 @@ export default function Nav() {
         <li><NavLink to="/bike-coach">Bike Coach</NavLink></li>
         {user && <li><NavLink to="/dashboard">Dashboard</NavLink></li>}
       {user && <li><NavLink to="/plan">Plan</NavLink></li>}
+      {user && <li><NavLink to="/run-zones">Strefy</NavLink></li>}
       {user && <li><NavLink to="/athlete">Zawodnik</NavLink></li>}
       </ul>
       {user ? (

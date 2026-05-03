@@ -12,6 +12,7 @@ import BikeCoachPage from './pages/BikeCoachPage';
 import AthletePage from './pages/AthletePage';
 import DashboardPage from './pages/DashboardPage';
 import PlannerPage from './pages/PlannerPage';
+import RunZonesPage from './pages/RunZonesPage';
 import AnalyzerPage from './pages/AnalyzerPage';
 
 function ScrollHandler() {
@@ -51,6 +52,7 @@ function AppShell() {
         <Route path="/athlete"     element={<AthletePage />} />
         <Route path="/dashboard"   element={<DashboardPage />} />
         <Route path="/plan"        element={<PlannerPage />} />
+        <Route path="/run-zones"   element={<RunZonesPage />} />
         <Route path="/analyzer"    element={<AnalyzerPage />} />
       </Routes>
       <Footer />

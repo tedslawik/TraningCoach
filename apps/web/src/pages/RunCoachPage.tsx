@@ -116,6 +116,15 @@ function RunTechniqueInsights() {
   const [error, setError]     = useState<string|null>(null);
   const [usage, setUsage]     = useState<{tokens:number;cost:string}|null>(null);
 
+  // Load saved insights from DB
+  useEffect(() => {
+    if (!session) return;
+    fetch('/api/training/run-zones', { headers: { Authorization: `Bearer ${session.access_token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.insights?.content) setText(d.insights.content); })
+      .catch(() => {});
+  }, [session]);
+
   const analyze = async () => {
     if (!session) return;
     setLoading(true); setText(''); setError(null); setUsage(null);
@@ -171,13 +180,30 @@ function RunTechniqueInsights() {
       }
       const nullIdx = buf.indexOf('\x00');
       if (nullIdx >= 0) {
-        setText(buf.slice(0, nullIdx).trim());
+        const insightsText = buf.slice(0, nullIdx).trim();
+        setText(insightsText);
         try {
           const u = JSON.parse(buf.slice(nullIdx+1));
           setUsage({ tokens: u.inputTokens+u.outputTokens, cost: `$${u.costUsd.toFixed(4)}` });
         } catch { /* ignore */ }
+        // Auto-save insights to DB
+        if (insightsText && session) {
+          fetch('/api/training/run-zones', {
+            method: 'POST',
+            headers: { 'Content-Type':'application/json', Authorization:`Bearer ${session.access_token}` },
+            body: JSON.stringify({ insights: insightsText }),
+          }).catch(() => {});
+        }
       } else {
-        setText(buf.trim());
+        const insightsText = buf.trim();
+        setText(insightsText);
+        if (insightsText && session) {
+          fetch('/api/training/run-zones', {
+            method: 'POST',
+            headers: { 'Content-Type':'application/json', Authorization:`Bearer ${session.access_token}` },
+            body: JSON.stringify({ insights: insightsText }),
+          }).catch(() => {});
+        }
       }
     } catch (e) { setError(e instanceof Error ? e.message : 'Błąd'); }
     finally { setLoading(false); }
