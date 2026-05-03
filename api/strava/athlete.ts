@@ -206,7 +206,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       avgWatts:          (a.average_watts as number | null) ?? null,
       normalizedWatts:   (a.weighted_average_watts as number | null) ?? null,
       kilojoules:        kj ? Math.round(kj) : null,
-      avgCadence:        (a.average_cadence as number | null) ?? null,
+      avgCadence:        (() => { const raw=(a.average_cadence as number|null)??null; if(!raw)return null; const isRun=['Run','TrailRun','VirtualRun'].includes(a.sport_type as string); return Math.round(isRun?raw*2:raw); })(),
       perceivedExertion: (a.perceived_exertion as number | null) ?? null,
       movingTimeSec:     (a.moving_time as number) ?? 0,
       hasHeartRate:      (a.has_heartrate as boolean) ?? false,

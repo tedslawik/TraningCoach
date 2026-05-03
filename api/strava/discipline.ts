@@ -163,7 +163,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       maxHeartRate:    (a.max_heartrate as number | null) ?? null,
       avgWatts:        avgW, normalizedWatts: np,
       kilojoules:      kj ? Math.round(kj) : null,
-      avgCadence:      (a.average_cadence as number | null) ?? null,
+      // Strava run cadence = one-leg SPM → × 2 for real cadence; bike = full RPM, no change
+      avgCadence:      (() => { const raw = (a.average_cadence as number|null)??null; if(!raw)return null; return SPORT_TYPES.run.has(a.sport_type as string) ? Math.round(raw*2) : Math.round(raw); })(),
       tss:             tss ? Math.round(tss) : null,
       if_:             ftp && np ? Math.round((np/ftp)*100)/100 : null,
       hasHeartRate:    (a.has_heartrate as boolean) ?? false,

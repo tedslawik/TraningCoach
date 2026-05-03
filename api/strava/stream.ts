@@ -58,7 +58,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const altitude  = get('altitude');
   const heartrate = get('heartrate');
   const velocity  = get('velocity_smooth');
-  const cadence   = get('cadence');
+  // Strava cadence = steps/min per ONE leg → multiply × 2 for total SPM (runs only)
+  const RUN_SPORTS_S = new Set(['Run','TrailRun','VirtualRun']);
+  const cadenceRaw = get('cadence');
+  const cadence    = RUN_SPORTS_S.has(activity.sport_type ?? '')
+    ? cadenceRaw.map((v: number) => Math.round(v * 2))
+    : cadenceRaw;
   const watts     = get('watts');
 
   const zonesTyped = zonesRaw as ZonesShape;
