@@ -92,17 +92,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const weekStartParam = req.query.weekStart as string | undefined;
   const daysBackParam  = req.query.daysBack  as string | undefined;
 
-  let after: number, before: number;
+  let after: number, before: number, responseWeekStart: string;
   if (daysBackParam) {
-    // Rolling window: last N days, no week boundary
-    const days = Math.min(90, Math.max(7, parseInt(daysBackParam)));
-    before = Math.floor(Date.now() / 1000);
-    after  = before - days * 24 * 60 * 60;
+    const days   = Math.min(90, Math.max(7, parseInt(daysBackParam)));
+    before       = Math.floor(Date.now() / 1000);
+    after        = before - days * 24 * 60 * 60;
+    responseWeekStart = new Date(after * 1000).toISOString().split('T')[0];
   } else {
-    const weekStart = weekStartParam ? new Date(weekStartParam) : getMondayOf(new Date());
-    weekStart.setHours(0, 0, 0, 0);
-    after  = Math.floor(weekStart.getTime() / 1000);
-    before = after + 7 * 24 * 60 * 60;
+    const ws = weekStartParam ? new Date(weekStartParam) : getMondayOf(new Date());
+    ws.setHours(0, 0, 0, 0);
+    after        = Math.floor(ws.getTime() / 1000);
+    before       = after + 7 * 24 * 60 * 60;
+    responseWeekStart = ws.toISOString().split('T')[0];
   }
 
   // Parallel fetches (bike also needs athlete for FTP)
@@ -217,7 +218,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const longestRounded = Math.round(longestKm * 10) / 10;
 
   res.json({
-    weekStart: weekStart.toISOString().split('T')[0],
+    weekStart: responseWeekStart,
     sport, ftp, powerZones, hrZones,
     activities,
     totals: {
