@@ -81,6 +81,100 @@ function fmtZone(z: { min: number; max: number }) {
 
 
 /* ── Stat pill ──────────────────────────────────────────── */
+/* ── Weekly comparison component ── */
+function fmtMin(min: number): string {
+  if (min <= 0) return '0 min';
+  const h = Math.floor(min / 60), m = Math.round(min % 60);
+  return h > 0 ? (m > 0 ? `${h}h ${m}min` : `${h}h`) : `${m} min`;
+}
+
+interface PrevTotals { swimMin:number; bikeMin:number; runMin:number; swimKm:number; bikeKm:number; runKm:number; }
+
+function WeekComparisonSection({ prev, activities }: { prev: PrevTotals; activities: Activity[] }) {
+  const currSwimMin = activities.filter(a=>a.type==='swim').reduce((s,a)=>s+a.movingTimeSec/60,0);
+  const currBikeMin = activities.filter(a=>a.type==='bike').reduce((s,a)=>s+a.movingTimeSec/60,0);
+  const currRunMin  = activities.filter(a=>a.type==='run').reduce((s,a)=>s+a.movingTimeSec/60,0);
+
+  const rows = [
+    { icon:'🏊', label:'Pływanie', curr:currSwimMin, prev:prev.swimMin, color:'var(--swim)', prevKm:prev.swimKm },
+    { icon:'🚴', label:'Rower',    curr:currBikeMin, prev:prev.bikeMin, color:'var(--bike)', prevKm:prev.bikeKm },
+    { icon:'🏃', label:'Bieg',     curr:currRunMin,  prev:prev.runMin,  color:'var(--run)',  prevKm:prev.runKm  },
+  ];
+
+  const totalDeficitMin = rows.reduce((s, r) => s + Math.max(0, r.prev - r.curr), 0);
+  const totalSurplusMin = rows.reduce((s, r) => s + Math.max(0, r.curr - r.prev), 0);
+
+  // Only show if previous week had actual training
+  const prevHadData = prev.swimMin + prev.bikeMin + prev.runMin > 0;
+  if (!prevHadData) return null;
+
+  return (
+    <section>
+      <div className="section-inner">
+        <div className="card">
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14, flexWrap:'wrap', gap:8 }}>
+            <div className="card-title" style={{ marginBottom:0 }}>Porównanie z poprzednim tygodniem</div>
+            {totalDeficitMin > 5 ? (
+              <span style={{ fontSize:12, color:'#b45309', background:'#fef9e0', border:'0.5px solid #fbbf24', borderRadius:4, padding:'3px 10px', fontWeight:600 }}>
+                ↓ brakuje łącznie {fmtMin(totalDeficitMin)}
+              </span>
+            ) : totalSurplusMin > 5 ? (
+              <span style={{ fontSize:12, color:'#15803d', background:'#f0fdf4', border:'0.5px solid #86efac', borderRadius:4, padding:'3px 10px', fontWeight:600 }}>
+                ↑ więcej o {fmtMin(totalSurplusMin)}
+              </span>
+            ) : (
+              <span style={{ fontSize:12, color:'var(--text-secondary)' }}>≈ podobny poziom</span>
+            )}
+          </div>
+
+          {rows.map(r => {
+            const diff     = r.curr - r.prev;
+            const pct      = r.prev > 0 ? Math.round((r.curr / r.prev) * 100) : 100;
+            const barPct   = Math.min(100, pct);
+            const isBehind = diff < -5;
+            const isAhead  = diff > 5;
+
+            return (
+              <div key={r.label} style={{ marginBottom:14 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:5 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <span style={{ fontSize:16 }}>{r.icon}</span>
+                    <span style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{r.label}</span>
+                  </div>
+                  <div style={{ fontSize:12, textAlign:'right' }}>
+                    <span style={{ fontWeight:700, color: isBehind ? '#b45309' : isAhead ? '#15803d' : 'var(--text)' }}>
+                      {fmtMin(r.curr)}
+                    </span>
+                    <span style={{ color:'var(--text-secondary)', marginLeft:6 }}>
+                      / {fmtMin(r.prev)} tydzień temu
+                    </span>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div style={{ height:8, background:'var(--bg-secondary)', borderRadius:4, overflow:'hidden', marginBottom:4 }}>
+                  <div style={{ height:'100%', width:`${barPct}%`, background: isBehind ? '#fb923c' : isAhead ? r.color : r.color, borderRadius:4, transition:'width 0.4s ease', opacity: pct === 0 ? 0.3 : 1 }} />
+                </div>
+
+                <div style={{ fontSize:11, color: isBehind ? '#b45309' : isAhead ? '#15803d' : 'var(--text-secondary)' }}>
+                  {r.curr === 0 && r.prev > 0
+                    ? `⚠️ Brak ${r.label.toLowerCase()} w tym tygodniu — poprzednio ${fmtMin(r.prev)}${r.prevKm > 0 ? ` (${r.prevKm.toFixed(1)} km)` : ''}`
+                    : isBehind
+                    ? `↓ Brakuje ${fmtMin(Math.abs(diff))} do poziomu poprzedniego tygodnia`
+                    : isAhead
+                    ? `↑ O ${fmtMin(diff)} więcej niż w poprzednim tygodniu`
+                    : '≈ Podobny poziom jak w poprzednim tygodniu'
+                  }
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Stat({ label, value, unit }: { label: string; value: string | number | null; unit?: string }) {
   if (value === null || value === undefined) return null;
   return (
@@ -119,15 +213,40 @@ export default function AthletePage() {
   const [error, setError]             = useState<string | null>(null);
   const [assessment, setAssessment]   = useState<Assessment | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<CalendarActivity | null>(null);
+  const [prevTotals, setPrevTotals]   = useState<{ swimMin:number; bikeMin:number; runMin:number; swimKm:number; bikeKm:number; runKm:number } | null>(null);
 
   const doFetch = (week: Date, initial = false) => {
     if (!session) { setLoading(false); return; }
     if (initial) setLoading(true); else setWeekLoading(true);
-    fetch(`/api/strava/athlete?weekStart=${toDateKey(week)}`, {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    })
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then((d: AthleteData) => { setData(d); buildAssessment(d); })
+
+    const prevWeek = addDays(week, -7);
+
+    Promise.all([
+      fetch(`/api/strava/athlete?weekStart=${toDateKey(week)}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      }).then(r => r.ok ? r.json() : Promise.reject(r.status)),
+      // Previous week: 3 lightweight discipline calls (no streams)
+      Promise.all(
+        (['swim','bike','run'] as const).map(sport =>
+          fetch(`/api/strava/discipline?sport=${sport}&weekStart=${toDateKey(prevWeek)}`, {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          }).then(r => r.ok ? r.json() : null)
+        )
+      ),
+    ])
+      .then(([cur, [sw, bk, ru]]) => {
+        setData(cur as AthleteData);
+        buildAssessment(cur as AthleteData);
+        const tot = (d: unknown) => (d as Record<string,Record<string,number>>)?.totals;
+        setPrevTotals({
+          swimMin: tot(sw)?.totalTimeMin ?? 0,
+          bikeMin: tot(bk)?.totalTimeMin ?? 0,
+          runMin:  tot(ru)?.totalTimeMin ?? 0,
+          swimKm:  tot(sw)?.distanceKm  ?? 0,
+          bikeKm:  tot(bk)?.distanceKm  ?? 0,
+          runKm:   tot(ru)?.distanceKm  ?? 0,
+        });
+      })
       .catch(() => setError('Nie udało się pobrać danych zawodnika.'))
       .finally(() => { setLoading(false); setWeekLoading(false); });
   };
@@ -314,6 +433,9 @@ export default function AthletePage() {
           </div>
         </div>
       </section>
+
+      {/* ── PORÓWNANIE Z POPRZEDNIM TYGODNIEM ── */}
+      {prevTotals && <WeekComparisonSection prev={prevTotals} activities={activities} />}
 
       {/* ── OCENA ZAWODNIKA ── */}
       {assessment && (

@@ -223,6 +223,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     activities,
     totals: {
       distanceKm:    Math.round(totalDist * 10) / 10,
+      totalTimeMin:  Math.round(totalTime),
       timeFormatted: fmtTime(totalTime),
       avgPace,
       avgSpeed:      sport === 'bike' ? fmtSpeed(totalDist, totalTime) : null,
