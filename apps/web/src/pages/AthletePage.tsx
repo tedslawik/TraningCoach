@@ -219,36 +219,36 @@ export default function AthletePage() {
     if (!session) { setLoading(false); return; }
     if (initial) setLoading(true); else setWeekLoading(true);
 
-    const prevWeek = addDays(week, -7);
-
-    Promise.all([
-      fetch(`/api/strava/athlete?weekStart=${toDateKey(week)}`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      }).then(r => r.ok ? r.json() : Promise.reject(r.status)),
-      // Previous week: 3 lightweight discipline calls (no streams)
-      Promise.all(
-        (['swim','bike','run'] as const).map(sport =>
-          fetch(`/api/strava/discipline?sport=${sport}&weekStart=${toDateKey(prevWeek)}`, {
-            headers: { Authorization: `Bearer ${session.access_token}` },
-          }).then(r => r.ok ? r.json() : null)
-        )
-      ),
-    ])
-      .then(([cur, [sw, bk, ru]]) => {
-        setData(cur as AthleteData);
-        buildAssessment(cur as AthleteData);
-        const tot = (d: unknown) => (d as Record<string,Record<string,number>>)?.totals;
-        setPrevTotals({
-          swimMin: tot(sw)?.totalTimeMin ?? 0,
-          bikeMin: tot(bk)?.totalTimeMin ?? 0,
-          runMin:  tot(ru)?.totalTimeMin ?? 0,
-          swimKm:  tot(sw)?.distanceKm  ?? 0,
-          bikeKm:  tot(bk)?.distanceKm  ?? 0,
-          runKm:   tot(ru)?.distanceKm  ?? 0,
-        });
-      })
+    // Current week from Strava athlete endpoint
+    fetch(`/api/strava/athlete?weekStart=${toDateKey(week)}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then((d: AthleteData) => { setData(d); buildAssessment(d); })
       .catch(() => setError('Nie udało się pobrać danych zawodnika.'))
       .finally(() => { setLoading(false); setWeekLoading(false); });
+
+    // Previous week from Supabase weekly_summaries (no extra Strava call)
+    if (session.user) {
+      const prevKey = toDateKey(addDays(week, -7));
+      supabase
+        .from('weekly_summaries')
+        .select('swim_time_min,bike_time_min,run_time_min,swim_dist_km,bike_dist_km,run_dist_km')
+        .eq('user_id', session.user.id)
+        .eq('week_start', prevKey)
+        .single()
+        .then(({ data: s }) => {
+          if (s) setPrevTotals({
+            swimMin: (s.swim_time_min as number) ?? 0,
+            bikeMin: (s.bike_time_min as number) ?? 0,
+            runMin:  (s.run_time_min  as number) ?? 0,
+            swimKm:  (s.swim_dist_km  as number) ?? 0,
+            bikeKm:  (s.bike_dist_km  as number) ?? 0,
+            runKm:   (s.run_dist_km   as number) ?? 0,
+          });
+        })
+        .catch(() => {});
+    }
   };
 
   useEffect(() => { doFetch(weekStart, true); }, [session]);        // initial
