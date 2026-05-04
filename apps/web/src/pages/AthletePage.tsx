@@ -238,17 +238,17 @@ export default function AthletePage() {
         .eq('user_id', session.user.id)
         .eq('week_start', prevKey)
         .single()
-        .then(({ data: s }: { data: Record<string,number>|null }) => {
+        .then(r => {
+          const s = r.data as Record<string,number>|null;
           if (s) setPrevTotals({
-            swimMin: (s.swim_time_min as number) ?? 0,
-            bikeMin: (s.bike_time_min as number) ?? 0,
-            runMin:  (s.run_time_min  as number) ?? 0,
-            swimKm:  (s.swim_dist_km  as number) ?? 0,
-            bikeKm:  (s.bike_dist_km  as number) ?? 0,
-            runKm:   (s.run_dist_km   as number) ?? 0,
+            swimMin: s.swim_time_min ?? 0,
+            bikeMin: s.bike_time_min ?? 0,
+            runMin:  s.run_time_min  ?? 0,
+            swimKm:  s.swim_dist_km  ?? 0,
+            bikeKm:  s.bike_dist_km  ?? 0,
+            runKm:   s.run_dist_km   ?? 0,
           });
-        })
-        .catch(() => {});
+        });
     }
   };
 
