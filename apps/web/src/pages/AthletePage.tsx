@@ -387,6 +387,31 @@ export default function AthletePage() {
         const z  = zones!;
         return (<>
 
+      {/* ── KALENDARZ TRENINGÓW ── */}
+      <section className="alt">
+        <div className="section-inner">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', gap: 12 }}>
+            <div>
+              <SectionLabel discipline="tri">Kalendarz treningów</SectionLabel>
+              <h2 style={{ fontSize: 'clamp(20px,3vw,28px)', fontWeight: 700, letterSpacing: -0.8 }}>
+                {weekLoading ? 'Ładowanie…' : fmtWeekRange(weekStart)}
+              </h2>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={goPrev} style={navBtn}>← Poprzedni</button>
+              <button onClick={goNext} disabled={isCurrentWeek} style={{ ...navBtn, opacity: isCurrentWeek ? 0.35 : 1 }}>Następny →</button>
+            </div>
+          </div>
+          <WeekZoneSummary activities={activities} />
+          <WeekCalendar
+            activities={activities}
+            weekStart={weekStart}
+            loading={weekLoading}
+            onActivityClick={a => setSelectedActivity(a as unknown as CalendarActivity)}
+          />
+        </div>
+      </section>
+
       {/* ── PROFIL + OBCIĄŻENIE ── */}
       <section>
         <div className="section-inner">
@@ -547,35 +572,6 @@ export default function AthletePage() {
         </div>
       </section>
 
-      {/* ── AKTYWNOŚCI Z DETALAMI ── */}
-      <section className="alt">
-        <div className="section-inner">
-          {/* ── WEEK NAVIGATION ── */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', gap: 12 }}>
-            <div>
-              <SectionLabel discipline="tri">Kalendarz treningów</SectionLabel>
-              <h2 style={{ fontSize: 'clamp(20px,3vw,28px)', fontWeight: 700, letterSpacing: -0.8 }}>
-                {weekLoading ? 'Ładowanie…' : fmtWeekRange(weekStart)}
-              </h2>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={goPrev} style={navBtn}>← Poprzedni</button>
-              <button onClick={goNext} disabled={isCurrentWeek} style={{ ...navBtn, opacity: isCurrentWeek ? 0.35 : 1 }}>Następny →</button>
-            </div>
-          </div>
-
-          {/* ── WEEKLY ZONE SUMMARY ── */}
-          <WeekZoneSummary activities={activities} />
-
-          {/* ── CALENDAR GRID ── */}
-          <WeekCalendar
-            activities={activities}
-            weekStart={weekStart}
-            loading={weekLoading}
-            onActivityClick={a => setSelectedActivity(a as unknown as CalendarActivity)}
-          />
-        </div>
-      </section>
 
       </>); })() /* end stravaToken+data block */}
 
