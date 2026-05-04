@@ -37,6 +37,7 @@ function RunLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAct
   const { session, stravaToken } = useAuth();
   const [weekStart,setWeekStart]=useState(()=>getMonday(new Date()));
   const [data,setData]=useState<RunData|null>(null);
+  const [prevData,setPrevData]=useState<RunData|null>(null);
   const [loading,setLoading]=useState(false);
   const [weekLoading,setWeekLoading]=useState(false);
   const autoFetched=useRef(false);
@@ -45,9 +46,15 @@ function RunLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAct
   const doFetch=useCallback((week:Date,initial=false)=>{
     if(!session)return;
     if(initial)setLoading(true); else setWeekLoading(true);
-    fetch(`/api/strava/discipline?sport=run&weekStart=${toKey(week)}`,{headers:{Authorization:`Bearer ${session.access_token}`}})
-      .then(r=>r.ok?r.json():null).then(d=>{if(d)setData(d);}).catch(()=>{})
-      .finally(()=>{setLoading(false);setWeekLoading(false);});
+    const prevWeek = addDays(week, -7);
+    Promise.all([
+      fetch(`/api/strava/discipline?sport=run&weekStart=${toKey(week)}`,{headers:{Authorization:`Bearer ${session.access_token}`}}).then(r=>r.ok?r.json():null),
+      fetch(`/api/strava/discipline?sport=run&weekStart=${toKey(prevWeek)}`,{headers:{Authorization:`Bearer ${session.access_token}`}}).then(r=>r.ok?r.json():null),
+    ]).then(([cur,prev])=>{
+      if(cur) setData(cur);
+      if(prev) setPrevData(prev);
+    }).catch(()=>{})
+    .finally(()=>{setLoading(false);setWeekLoading(false);});
   },[session]);
 
   useEffect(()=>{ if(session&&stravaToken&&!autoFetched.current){autoFetched.current=true;doFetch(weekStart,true);} },[session,stravaToken,doFetch,weekStart]);
@@ -65,6 +72,17 @@ function RunLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAct
 
   const { totals, activities } = data;
   const assessment = assessRuns(totals);
+
+  // Deficit vs previous week (only shown when current week is active)
+  const deficit = isCurrentWeek && prevData ? (() => {
+    const pt = prevData.totals;
+    const items: string[] = [];
+    const dKm = pt.distanceKm - totals.distanceKm;
+    if (dKm > 0.5) items.push(`🏃 ${dKm.toFixed(1)} km`);
+    const dSess = pt.sessions - totals.sessions;
+    if (dSess > 0) items.push(`${dSess} ${dSess === 1 ? 'sesja' : 'sesje'}`);
+    return items.length ? items.join(' · ') : null;
+  })() : null;
   const calActs: CalendarActivity[] = activities.map(a=>({ id:a.id, name:a.name, type:'run' as const, date:a.date, distanceKm:a.distanceKm, timeFormatted:a.timeFormatted, paceOrSpeed:a.pace, sufferScore:a.sufferScore, avgHeartRate:a.avgHeartRate, elevationGain:a.elevationGain, zoneTimes:a.zoneTimes, ...(a as unknown as Record<string,unknown>) }));
 
   return (
@@ -91,6 +109,19 @@ function RunLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAct
                 </div>
               ))}
             </div>
+            {/* Deficit vs previous week */}
+            {deficit && (
+              <div style={{background:'#fef9e0',border:'0.5px solid #fbbf24',borderLeft:'3px solid #f59e0b',borderRadius:'var(--radius-md)',padding:'9px 14px',marginBottom:'1rem',fontSize:13,color:'#92400e',display:'flex',alignItems:'center',gap:8}}>
+                <span style={{fontWeight:700}}>💡 Do poziomu poprzedniego tygodnia brakuje:</span>
+                <span>{deficit}</span>
+              </div>
+            )}
+            {/* Previous week reference */}
+            {isCurrentWeek && prevData && (
+              <div style={{fontSize:11,color:'var(--text-secondary)',marginBottom:8,textAlign:'right'}}>
+                Poprzedni tydzień: {prevData.totals.distanceKm} km · {prevData.totals.sessions} sesji · śr. {prevData.totals.avgPace ?? '—'}
+              </div>
+            )}
             <WeekZoneSummaryBar zoneTimes={totals.zoneTimes} totalLabel="Strefy tętna — biegi tygodnia" />
             <WeekCalendar activities={calActs} weekStart={weekStart} loading={weekLoading} emptyLabel="REST" onActivityClick={onActivityClick} />
             {assessment.length>0&&(
@@ -129,13 +160,15 @@ function RunTechniqueInsights() {
     if (!session) return;
     setLoading(true); setText(''); setError(null); setUsage(null);
     try {
-      // Fetch last 15 runs for cadence/efficiency analysis
-      const actsRes = await fetch('/api/strava/discipline?sport=run', {
+      // Fetch last 30 days then take last 7 runs — week boundary irrelevant
+      const actsRes = await fetch('/api/strava/discipline?sport=run&daysBack=30', {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (!actsRes.ok) throw new Error('Brak danych biegowych');
       const actsData = await actsRes.json();
-      const acts = (actsData.activities ?? []).filter((a: Record<string,unknown>) => a.avgCadence || a.avgHeartRate);
+      const acts = (actsData.activities ?? [])
+        .filter((a: Record<string,unknown>) => a.avgCadence || a.avgHeartRate)
+        .slice(0, 7); // last 7 runs (Strava returns most recent first)
 
       if (!acts.length) throw new Error('Brak aktywności biegowych z danymi');
 

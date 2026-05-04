@@ -90,10 +90,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const headers = { Authorization: `Bearer ${token}` };
   const weekStartParam = req.query.weekStart as string | undefined;
-  const weekStart = weekStartParam ? new Date(weekStartParam) : getMondayOf(new Date());
-  weekStart.setHours(0,0,0,0);
-  const after  = Math.floor(weekStart.getTime() / 1000);
-  const before = after + 7 * 24 * 60 * 60;
+  const daysBackParam  = req.query.daysBack  as string | undefined;
+
+  let after: number, before: number;
+  if (daysBackParam) {
+    // Rolling window: last N days, no week boundary
+    const days = Math.min(90, Math.max(7, parseInt(daysBackParam)));
+    before = Math.floor(Date.now() / 1000);
+    after  = before - days * 24 * 60 * 60;
+  } else {
+    const weekStart = weekStartParam ? new Date(weekStartParam) : getMondayOf(new Date());
+    weekStart.setHours(0, 0, 0, 0);
+    after  = Math.floor(weekStart.getTime() / 1000);
+    before = after + 7 * 24 * 60 * 60;
+  }
 
   // Parallel fetches (bike also needs athlete for FTP)
   const fetches: Promise<unknown>[] = [

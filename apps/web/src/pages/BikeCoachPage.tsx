@@ -39,6 +39,7 @@ function BikeLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAc
   const { session, stravaToken } = useAuth();
   const [weekStart,setWeekStart]=useState(()=>getMonday(new Date()));
   const [data,setData]=useState<BikeData|null>(null);
+  const [prevData,setPrevData]=useState<BikeData|null>(null);
   const [loading,setLoading]=useState(false);
   const [weekLoading,setWeekLoading]=useState(false);
   const autoFetched=useRef(false);
@@ -47,9 +48,12 @@ function BikeLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAc
   const doFetch=useCallback((week:Date,initial=false)=>{
     if(!session)return;
     if(initial)setLoading(true); else setWeekLoading(true);
-    fetch(`/api/strava/discipline?sport=bike&weekStart=${toKey(week)}`,{headers:{Authorization:`Bearer ${session.access_token}`}})
-      .then(r=>r.ok?r.json():null).then(d=>{if(d)setData(d);}).catch(()=>{})
-      .finally(()=>{setLoading(false);setWeekLoading(false);});
+    const prev = addDays(week, -7);
+    Promise.all([
+      fetch(`/api/strava/discipline?sport=bike&weekStart=${toKey(week)}`,{headers:{Authorization:`Bearer ${session.access_token}`}}).then(r=>r.ok?r.json():null),
+      fetch(`/api/strava/discipline?sport=bike&weekStart=${toKey(prev)}`,{headers:{Authorization:`Bearer ${session.access_token}`}}).then(r=>r.ok?r.json():null),
+    ]).then(([cur,p])=>{ if(cur)setData(cur); if(p)setPrevData(p); }).catch(()=>{})
+    .finally(()=>{setLoading(false);setWeekLoading(false);});
   },[session]);
 
   useEffect(()=>{ if(session&&stravaToken&&!autoFetched.current){autoFetched.current=true;doFetch(weekStart,true);} },[session,stravaToken,doFetch,weekStart]);
@@ -66,6 +70,14 @@ function BikeLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAc
   if(!data) return null;
 
   const { totals, activities, ftp, powerZones } = data;
+  const deficit = isCurrentWeek && prevData ? (() => {
+    const items: string[] = [];
+    const dKm = prevData.totals.distanceKm - totals.distanceKm;
+    if (dKm > 1) items.push(`🚴 ${dKm.toFixed(0)} km`);
+    const dT = prevData.totals.tss - totals.tss;
+    if (dT > 10) items.push(`TSS ${dT}`);
+    return items.length ? items.join(' · ') : null;
+  })() : null;
   const assessment = assessBikes(totals, ftp);
   const calActs: CalendarActivity[] = activities.map(a=>({ id:a.id, name:a.name, type:'bike' as const, date:a.date, distanceKm:a.distanceKm, timeFormatted:a.timeFormatted, paceOrSpeed:a.speed, sufferScore:a.sufferScore, avgHeartRate:a.avgHeartRate, avgWatts:a.avgWatts, normalizedWatts:a.normalizedWatts, elevationGain:a.elevationGain, tss:a.tss, zoneTimes:a.zoneTimes, powerZoneTimes:a.powerZoneTimes, ...(a as unknown as Record<string,unknown>) }));
 
@@ -95,6 +107,17 @@ function BikeLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAc
                 </div>
               ))}
             </div>
+            {deficit && (
+              <div style={{background:'#fef9e0',border:'0.5px solid #fbbf24',borderLeft:'3px solid #f59e0b',borderRadius:'var(--radius-md)',padding:'9px 14px',marginBottom:'1rem',fontSize:13,color:'#92400e',display:'flex',alignItems:'center',gap:8}}>
+                <span style={{fontWeight:700}}>💡 Do poziomu poprzedniego tygodnia brakuje:</span>
+                <span>{deficit}</span>
+              </div>
+            )}
+            {isCurrentWeek && prevData && (
+              <div style={{fontSize:11,color:'var(--text-secondary)',marginBottom:8,textAlign:'right'}}>
+                Poprzedni tydzień: {prevData.totals.distanceKm} km · TSS {prevData.totals.tss} · {prevData.totals.sessions} sesji
+              </div>
+            )}
             {totals.weeklyPwrZones.some(v=>v>0)&&<WeekZoneSummaryBar zoneTimes={totals.weeklyPwrZones} colors={PWR_ZONE_COLORS} labels={PWR_ZONE_LABELS} totalLabel="Strefy mocy — jazdy tygodnia" />}
             {totals.weeklyHRZones.some(v=>v>0)&&<WeekZoneSummaryBar zoneTimes={totals.weeklyHRZones} totalLabel="Strefy tętna — jazdy tygodnia" />}
             {ftp&&powerZones&&(
