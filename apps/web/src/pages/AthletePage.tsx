@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { assessAthlete, analyzeWorkouts, RACE_TARGETS } from '@tricoach/core';
 import type { Assessment } from '@tricoach/core';
@@ -237,7 +238,7 @@ export default function AthletePage() {
         .eq('user_id', session.user.id)
         .eq('week_start', prevKey)
         .single()
-        .then(({ data: s }) => {
+        .then(({ data: s }: { data: Record<string,number>|null }) => {
           if (s) setPrevTotals({
             swimMin: (s.swim_time_min as number) ?? 0,
             bikeMin: (s.bike_time_min as number) ?? 0,
