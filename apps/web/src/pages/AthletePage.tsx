@@ -102,70 +102,85 @@ function WeekComparisonSection({ prev, activities }: { prev: PrevTotals; activit
     { icon:'🏃', label:'Bieg',     curr:currRunMin,  prev:prev.runMin,  color:'var(--run)',  prevKm:prev.runKm  },
   ];
 
-  const totalDeficitMin = rows.reduce((s, r) => s + Math.max(0, r.prev - r.curr), 0);
-  const totalSurplusMin = rows.reduce((s, r) => s + Math.max(0, r.curr - r.prev), 0);
+  const prevTotal  = prev.swimMin + prev.bikeMin + prev.runMin;
+  const currTotal  = currSwimMin + currBikeMin + currRunMin;
+  const totalDiff  = currTotal - prevTotal;
+  if (prevTotal === 0) return null;
 
-  // Only show if previous week had actual training
-  const prevHadData = prev.swimMin + prev.bikeMin + prev.runMin > 0;
-  if (!prevHadData) return null;
+  // Scale: 0–130% of previous week, marker at 100%
+  const MAX_SCALE = 1.3;
+  const TARGET_POS = 100 / MAX_SCALE; // % position of the 100% marker on bar
 
   return (
     <section>
       <div className="section-inner">
         <div className="card">
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14, flexWrap:'wrap', gap:8 }}>
-            <div className="card-title" style={{ marginBottom:0 }}>Porównanie z poprzednim tygodniem</div>
-            {totalDeficitMin > 5 ? (
-              <span style={{ fontSize:12, color:'#b45309', background:'#fef9e0', border:'0.5px solid #fbbf24', borderRadius:4, padding:'3px 10px', fontWeight:600 }}>
-                ↓ brakuje łącznie {fmtMin(totalDeficitMin)}
-              </span>
-            ) : totalSurplusMin > 5 ? (
-              <span style={{ fontSize:12, color:'#15803d', background:'#f0fdf4', border:'0.5px solid #86efac', borderRadius:4, padding:'3px 10px', fontWeight:600 }}>
-                ↑ więcej o {fmtMin(totalSurplusMin)}
-              </span>
-            ) : (
-              <span style={{ fontSize:12, color:'var(--text-secondary)' }}>≈ podobny poziom</span>
-            )}
+          {/* Header */}
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:8 }}>
+            <div>
+              <div className="card-title" style={{ marginBottom:2 }}>Podsumowanie tygodnia</div>
+              <div style={{ fontSize:11, color:'var(--text-secondary)' }}>
+                Cały tydzień (Pon–Nd) vs poprzedni tydzień
+              </div>
+            </div>
+            <span style={{
+              fontSize:12, fontWeight:600, padding:'4px 12px', borderRadius:4,
+              background: totalDiff > 5 ? '#f0fdf4' : totalDiff < -5 ? '#fef9e0' : 'var(--bg-secondary)',
+              color:      totalDiff > 5 ? '#15803d' : totalDiff < -5 ? '#b45309' : 'var(--text-secondary)',
+              border:     `0.5px solid ${totalDiff > 5 ? '#86efac' : totalDiff < -5 ? '#fbbf24' : 'var(--border)'}`,
+            }}>
+              {totalDiff > 5
+                ? `↑ Łącznie o ${fmtMin(totalDiff)} więcej w tym tygodniu`
+                : totalDiff < -5
+                ? `↓ Łącznie ${fmtMin(Math.abs(totalDiff))} mniej w tym tygodniu`
+                : '≈ Podobny łączny czas treningu'}
+            </span>
           </div>
 
           {rows.map(r => {
-            const diff     = r.curr - r.prev;
-            const pct      = r.prev > 0 ? Math.round((r.curr / r.prev) * 100) : 100;
-            const barPct   = Math.min(100, pct);
-            const isBehind = diff < -5;
-            const isAhead  = diff > 5;
+            if (r.prev === 0 && r.curr === 0) return null;
+            const ratio   = r.prev > 0 ? r.curr / r.prev : r.curr > 0 ? MAX_SCALE : 0;
+            const barFill = Math.min(MAX_SCALE, ratio) / MAX_SCALE * 100; // 0-100% of bar width
+            const diff    = r.curr - r.prev;
+            const barColor = ratio >= 1.0 ? r.color
+                           : ratio >= 0.8 ? '#fbbf24'
+                           : '#fb923c';
 
             return (
-              <div key={r.label} style={{ marginBottom:14 }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:5 }}>
+              <div key={r.label} style={{ marginBottom:16 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
                   <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                    <span style={{ fontSize:16 }}>{r.icon}</span>
+                    <span style={{ fontSize:15 }}>{r.icon}</span>
                     <span style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{r.label}</span>
                   </div>
                   <div style={{ fontSize:12, textAlign:'right' }}>
-                    <span style={{ fontWeight:700, color: isBehind ? '#b45309' : isAhead ? '#15803d' : 'var(--text)' }}>
-                      {fmtMin(r.curr)}
+                    <span style={{ fontWeight:700, color: diff > 5 ? '#15803d' : diff < -5 ? '#b45309' : 'var(--text)' }}>
+                      {r.curr > 0 ? fmtMin(r.curr) : '—'}
                     </span>
                     <span style={{ color:'var(--text-secondary)', marginLeft:6 }}>
-                      / {fmtMin(r.prev)} tydzień temu
+                      vs {fmtMin(r.prev)}{r.prevKm > 0 ? ` (${r.prevKm.toFixed(1)} km)` : ''}
                     </span>
                   </div>
                 </div>
 
-                {/* Progress bar */}
-                <div style={{ height:8, background:'var(--bg-secondary)', borderRadius:4, overflow:'hidden', marginBottom:4 }}>
-                  <div style={{ height:'100%', width:`${barPct}%`, background: isBehind ? '#fb923c' : isAhead ? r.color : r.color, borderRadius:4, transition:'width 0.4s ease', opacity: pct === 0 ? 0.3 : 1 }} />
+                {/* Comparison bar with 100% marker */}
+                <div style={{ position:'relative', height:10, background:'var(--bg-secondary)', borderRadius:5, overflow:'visible', marginBottom:5 }}>
+                  {/* Fill */}
+                  <div style={{ position:'absolute', left:0, top:0, height:'100%', width:`${barFill}%`, background:barColor, borderRadius:5, transition:'width 0.5s ease' }} />
+                  {/* 100% marker (previous week level) */}
+                  <div style={{ position:'absolute', left:`${TARGET_POS}%`, top:-3, height:16, width:2, background:'var(--text)', borderRadius:1, opacity:0.4 }} />
+                  {r.curr === 0 && <div style={{ position:'absolute', left:0, top:0, height:'100%', width:'100%', borderRadius:5, background:'repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(0,0,0,0.04) 4px,rgba(0,0,0,0.04) 8px)' }} />}
                 </div>
 
-                <div style={{ fontSize:11, color: isBehind ? '#b45309' : isAhead ? '#15803d' : 'var(--text-secondary)' }}>
-                  {r.curr === 0 && r.prev > 0
-                    ? `⚠️ Brak ${r.label.toLowerCase()} w tym tygodniu — poprzednio ${fmtMin(r.prev)}${r.prevKm > 0 ? ` (${r.prevKm.toFixed(1)} km)` : ''}`
-                    : isBehind
-                    ? `↓ Brakuje ${fmtMin(Math.abs(diff))} do poziomu poprzedniego tygodnia`
-                    : isAhead
-                    ? `↑ O ${fmtMin(diff)} więcej niż w poprzednim tygodniu`
-                    : '≈ Podobny poziom jak w poprzednim tygodniu'
-                  }
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:'var(--text-secondary)' }}>
+                  <span style={{ color: diff > 5 ? '#15803d' : diff < -5 ? '#b45309' : 'var(--text-secondary)' }}>
+                    {r.curr === 0 && r.prev > 0
+                      ? `⚠️ Brak ${r.label.toLowerCase()} w tym tygodniu`
+                      : diff > 5 ? `↑ ${fmtMin(diff)} więcej niż poprzednio`
+                      : diff < -5 ? `↓ ${fmtMin(Math.abs(diff))} mniej niż poprzednio`
+                      : '≈ podobnie'}
+                  </span>
+                  <span style={{ opacity:0.6 }}>│ = poprzedni tydzień</span>
                 </div>
               </div>
             );
@@ -387,31 +402,6 @@ export default function AthletePage() {
         const z  = zones!;
         return (<>
 
-      {/* ── KALENDARZ TRENINGÓW ── */}
-      <section className="alt">
-        <div className="section-inner">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', gap: 12 }}>
-            <div>
-              <SectionLabel discipline="tri">Kalendarz treningów</SectionLabel>
-              <h2 style={{ fontSize: 'clamp(20px,3vw,28px)', fontWeight: 700, letterSpacing: -0.8 }}>
-                {weekLoading ? 'Ładowanie…' : fmtWeekRange(weekStart)}
-              </h2>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={goPrev} style={navBtn}>← Poprzedni</button>
-              <button onClick={goNext} disabled={isCurrentWeek} style={{ ...navBtn, opacity: isCurrentWeek ? 0.35 : 1 }}>Następny →</button>
-            </div>
-          </div>
-          <WeekZoneSummary activities={activities} />
-          <WeekCalendar
-            activities={activities}
-            weekStart={weekStart}
-            loading={weekLoading}
-            onActivityClick={a => setSelectedActivity(a as unknown as CalendarActivity)}
-          />
-        </div>
-      </section>
-
       {/* ── PROFIL + OBCIĄŻENIE ── */}
       <section>
         <div className="section-inner">
@@ -457,6 +447,31 @@ export default function AthletePage() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ── KALENDARZ TRENINGÓW ── */}
+      <section className="alt">
+        <div className="section-inner">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', gap: 12 }}>
+            <div>
+              <SectionLabel discipline="tri">Kalendarz treningów</SectionLabel>
+              <h2 style={{ fontSize: 'clamp(20px,3vw,28px)', fontWeight: 700, letterSpacing: -0.8 }}>
+                {weekLoading ? 'Ładowanie…' : fmtWeekRange(weekStart)}
+              </h2>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={goPrev} style={navBtn}>← Poprzedni</button>
+              <button onClick={goNext} disabled={isCurrentWeek} style={{ ...navBtn, opacity: isCurrentWeek ? 0.35 : 1 }}>Następny →</button>
+            </div>
+          </div>
+          <WeekZoneSummary activities={activities} />
+          <WeekCalendar
+            activities={activities}
+            weekStart={weekStart}
+            loading={weekLoading}
+            onActivityClick={a => setSelectedActivity(a as unknown as CalendarActivity)}
+          />
         </div>
       </section>
 
