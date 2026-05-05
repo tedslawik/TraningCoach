@@ -93,6 +93,7 @@ async function getToken(row: Record<string, unknown>): Promise<string> {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  try {
   const jwt = (req.headers.authorization ?? '').replace('Bearer ', '');
   const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
   if (authErr || !user) return res.status(401).json({ error: 'Unauthorized' });
@@ -103,7 +104,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let token: string;
   try { token = await getToken(tokenRow); }
-  catch { return res.status(401).json({ error: 'Token refresh failed' }); }
+  catch { return res.status(401).json({ error: 'Token refresh failed — reconnect Strava' }); }
 
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -250,4 +251,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sessions:     activities.length,
     },
   });
+  } catch (err) {
+    console.error('[athlete] unhandled error:', err);
+    res.status(500).json({ error: 'Internal server error', detail: String(err) });
+  }
 }
