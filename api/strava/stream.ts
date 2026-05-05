@@ -90,7 +90,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const avgHR   = heartrate.length > 0 ? Math.round(heartrate.reduce((s,v)=>s+v,0) / heartrate.length) : null;
   const maxHR   = heartrate.length > 0 ? Math.max(...heartrate) : null;
   const avgVel  = velocity.length  > 0 ? velocity.reduce((s,v)=>s+v,0) / velocity.length : null;
-  const avgWatt = watts.length     > 0 ? Math.round(watts.reduce((s,v)=>s+v,0) / watts.length) : null;
+  const avgWatt = watts.length > 0 ? Math.round(watts.reduce((s,v)=>s+v,0) / watts.length) : null;
+
+  // Normalized Power (NP): 30-s rolling avg → 4th power avg → 4th root
+  let normalizedPower: number | null = null;
+  if (watts.length > 30 && time.length === watts.length) {
+    const rolling: number[] = [];
+    for (let i = 0; i < watts.length; i++) {
+      // Find all samples within 30 seconds before this point
+      const tNow = time[i];
+      let sum = 0, count = 0;
+      for (let j = i; j >= 0 && time[j] >= tNow - 30; j--) {
+        sum += watts[j]; count++;
+      }
+      rolling.push(count > 0 ? sum / count : 0);
+    }
+    const fourthPowerAvg = rolling.reduce((s, v) => s + Math.pow(v, 4), 0) / rolling.length;
+    normalizedPower = Math.round(Math.pow(fourthPowerAvg, 0.25));
+  }
 
   const activity = activityRaw as { name?: string; sport_type?: string; start_date_local?: string };
 
@@ -129,7 +146,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       avgHeartRate:  avgHR,
       maxHeartRate:  maxHR,
       avgVelocityMs: avgVel,
-      avgWatts:      avgWatt,
+      avgWatts:        avgWatt,
+      normalizedPower: normalizedPower,
     },
   });
 }

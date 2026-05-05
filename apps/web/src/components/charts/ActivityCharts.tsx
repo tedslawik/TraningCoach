@@ -20,8 +20,9 @@ export interface StreamData {
     elevGain:      number;
     avgHeartRate:  number | null;
     maxHeartRate:  number | null;
-    avgVelocityMs: number | null;
-    avgWatts:      number | null;
+    avgVelocityMs:   number | null;
+    avgWatts:        number | null;
+    normalizedPower: number | null;
   };
 }
 
@@ -331,6 +332,84 @@ function CadenceChart({ time, cadence, avgVelocityMs }: { time: number[]; cadenc
   );
 }
 
+/* ── Power chart ── */
+function PowerChart({ time, watts, avgWatts, normalizedWatts }: {
+  time: number[]; watts: number[];
+  avgWatts: number | null; normalizedWatts: number | null;
+}) {
+  if (!watts.length || watts.every(v => v === 0)) return null;
+  const W = 800, H = 150, pL = 48, pR = 12, pT = 10, pB = 22;
+
+  const sm      = smoothed(watts, 10);
+  const valid   = sm.filter(v => v > 0 && v < 2000);
+  if (!valid.length) return null;
+
+  const minW  = Math.max(0, Math.min(...valid) - 20);
+  const maxW  = Math.max(...valid) + 20;
+  const xNorm = normalize(time);
+  const yNorm = sm.map(v => Math.max(0, Math.min(1, (Math.max(0, v) - minW) / (maxW - minW || 1))));
+  const pts   = toPolyline(xNorm, yNorm, W, H, pL, pR, pT, pB);
+  const cw    = W - pL - pR, ch = H - pT - pB;
+
+  const avg = avgWatts ?? (valid.length ? Math.round(valid.reduce((s,v)=>s+v,0)/valid.length) : null);
+  const np  = normalizedWatts;
+
+  const timeTicks = [0, 0.25, 0.5, 0.75, 1].map(p => {
+    const sec = time[Math.floor(p*(time.length-1))] ?? 0;
+    return { p, label: `${Math.floor(sec/60)}min` };
+  });
+
+  const yTicks = [minW, Math.round((minW+maxW)/2), maxW].map(v => ({
+    v, y: pT + (1-(v-minW)/(maxW-minW||1))*ch,
+  }));
+
+  return (
+    <div>
+      <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--text-secondary)', marginBottom:6, display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
+        <span>Moc</span>
+        <div style={{ display:'flex', gap:14 }}>
+          {avg && <span style={{ color:'#34d399' }}>śr. <strong>{avg} W</strong></span>}
+          {np  && <span style={{ color:'#7c3aed' }}>NP <strong>{np} W</strong></span>}
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', display:'block' }}>
+        {/* Y grid */}
+        {yTicks.map(({ v, y }) => (
+          <g key={v}>
+            <line x1={pL} y1={y} x2={W-pR} y2={y} stroke="var(--border)" strokeWidth={0.5} strokeDasharray="3,4" />
+            <text x={pL-4} y={y+4} textAnchor="end" fontSize={9} fill="var(--text-secondary)">{v}W</text>
+          </g>
+        ))}
+
+        {/* Average watts line */}
+        {avg && (() => {
+          const y = pT + (1-(avg-minW)/(maxW-minW||1))*ch;
+          return <line x1={pL} y1={y} x2={W-pR} y2={y} stroke="#34d399" strokeWidth={1} strokeDasharray="5,3" />;
+        })()}
+
+        {/* NP line */}
+        {np && (() => {
+          const y = pT + (1-(np-minW)/(maxW-minW||1))*ch;
+          return <line x1={pL} y1={y} x2={W-pR} y2={y} stroke="#7c3aed" strokeWidth={1} strokeDasharray="2,4" />;
+        })()}
+
+        {/* Power line */}
+        <polyline points={pts} fill="none" stroke="#fbbf24" strokeWidth={1.5} strokeLinejoin="round" />
+
+        {/* X labels */}
+        {timeTicks.map(({ p, label }) => (
+          <text key={p} x={pL+p*cw} y={H-4} textAnchor="middle" fontSize={9} fill="var(--text-secondary)">{label}</text>
+        ))}
+      </svg>
+      <div style={{ display:'flex', gap:16, fontSize:11, color:'var(--text-secondary)', marginTop:4, flexWrap:'wrap' }}>
+        <span><span style={{ color:'#fbbf24' }}>—</span> Moc bieżąca (smooth)</span>
+        {avg && <span><span style={{ color:'#34d399' }}>- -</span> Śr. moc {avg} W</span>}
+        {np  && <span><span style={{ color:'#7c3aed' }}>· ·</span> NP {np} W</span>}
+      </div>
+    </div>
+  );
+}
+
 /* ── Main export ── */
 export default function ActivityCharts({ data }: { data: StreamData }) {
   const { stats, sportType } = data;
@@ -358,6 +437,7 @@ export default function ActivityCharts({ data }: { data: StreamData }) {
           isRide
             ? ['Śr. moc', stats.avgWatts ? `${stats.avgWatts} W` : null]
             : ['Śr. tempo', stats.avgVelocityMs ? fmtPace(stats.avgVelocityMs, sportType) : null],
+          isRide ? ['NP', (stats as unknown as Record<string,unknown>).normalizedPower ? `${(stats as unknown as Record<string,number>).normalizedPower} W` : null] : ['', null],
           ['Kadencja', avgCadence ? `${avgCadence} spm` : null],
           ['EF',       ef ? `${ef}` : null],
         ].filter(([, v]) => v).map(([l, v]) => (
@@ -385,6 +465,16 @@ export default function ActivityCharts({ data }: { data: StreamData }) {
         </div>
       )}
 
+      {data.watts.length > 0 && data.watts.some(v => v > 0) && (
+        <div className="card" style={{ marginBottom: 0 }}>
+          <PowerChart
+            time={data.time}
+            watts={data.watts}
+            avgWatts={data.stats.avgWatts}
+            normalizedWatts={data.stats.normalizedPower}
+          />
+        </div>
+      )}
       {data.cadence.length > 0 && (
         <div className="card" style={{ marginBottom: 0 }}>
           <CadenceChart time={data.time} cadence={data.cadence} avgVelocityMs={data.stats.avgVelocityMs} />
