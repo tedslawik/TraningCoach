@@ -252,8 +252,12 @@ function PaceChart({ time, velocity, sportType }: { time: number[]; velocity: nu
   );
 }
 
-/* ── Cadence: optimal range depends on pace ── */
-function optimalCadenceRange(avgVelMs: number | null): [number, number] {
+/* ── Cadence: optimal range depends on sport and pace ── */
+const BIKE_SPORTS = new Set(['Ride','VirtualRide','EBikeRide','Velomobile','Handcycle']);
+
+function optimalCadenceRange(avgVelMs: number | null, sportType?: string): [number, number] {
+  if (BIKE_SPORTS.has(sportType ?? '')) return [85, 95]; // cycling RPM
+  // Running — pace-dependent
   if (!avgVelMs || avgVelMs <= 0) return [170, 180];
   const paceMinKm = 1000 / (avgVelMs * 60);
   if (paceMinKm > 7.0)  return [155, 168];
@@ -265,7 +269,7 @@ function optimalCadenceRange(avgVelMs: number | null): [number, number] {
 }
 
 /* ── Cadence chart ── */
-function CadenceChart({ time, cadence, avgVelocityMs }: { time: number[]; cadence: number[]; avgVelocityMs?: number | null }) {
+function CadenceChart({ time, cadence, avgVelocityMs, sportType }: { time: number[]; cadence: number[]; avgVelocityMs?: number | null; sportType?: string }) {
   if (!cadence.length) return null;
   const W = 800, H = 130, pL = 44, pR = 12, pT = 10, pB = 22;
 
@@ -273,7 +277,8 @@ function CadenceChart({ time, cadence, avgVelocityMs }: { time: number[]; cadenc
   const validCad = sm.filter(v => v > 60 && v < 250);
   if (!validCad.length) return null;
 
-  const [optLo, optHi] = optimalCadenceRange(avgVelocityMs ?? null);
+  const isBike = BIKE_SPORTS.has(sportType ?? '');
+  const [optLo, optHi] = optimalCadenceRange(avgVelocityMs ?? null, sportType);
   const minC = Math.max(120, Math.min(...validCad, optLo) - 5);
   const maxC = Math.min(220, Math.max(...validCad, optHi) + 5);
   const avgC = Math.round(validCad.reduce((s,v)=>s+v,0)/validCad.length);
@@ -294,13 +299,18 @@ function CadenceChart({ time, cadence, avgVelocityMs }: { time: number[]; cadenc
     return { p, label: `${Math.floor(sec/60)}min` };
   });
 
-  const cadColor = avgC < 165 ? '#f87171' : avgC < 175 ? '#fbbf24' : '#34d399';
+  const cadColor = isBike
+    ? (avgC < 75 ? '#f87171' : avgC < optLo ? '#fbbf24' : avgC <= optHi ? '#34d399' : '#fbbf24')
+    : (avgC < 165 ? '#f87171' : avgC < 175 ? '#fbbf24' : '#34d399');
 
   return (
     <div>
       <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--text-secondary)', marginBottom:6, display:'flex', justifyContent:'space-between' }}>
-        <span>Kadencja</span>
-        <span style={{ color: cadColor }}>śr. {avgC} spm {avgC < 165 ? '↓ za niska' : avgC >= 170 && avgC <= 185 ? '✓ optymalna' : avgC > 185 ? '↑ wysoka' : '→ zbliżona do optymalnej'}</span>
+        <span>Kadencja {isBike ? '(RPM)' : '(spm)'}</span>
+        <span style={{ color: cadColor }}>
+          śr. {avgC} {isBike ? 'RPM' : 'spm'}{' '}
+          {avgC < optLo ? '↓ za niska' : avgC <= optHi ? '✓ optymalna' : '↑ wysoka'}
+        </span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', display:'block' }}>
         {/* Dynamic optimal zone band */}
@@ -323,10 +333,17 @@ function CadenceChart({ time, cadence, avgVelocityMs }: { time: number[]; cadenc
         ))}
       </svg>
       <div style={{ fontSize:11, color:'var(--text-secondary)', marginTop:4 }}>
-        Optymalny zakres dla tego tempa: <span style={{ color:'#34d399', fontWeight:600 }}>{optLo}–{optHi} spm</span>
-        {avgC < optLo - 5 && ' — kadencja poniżej optymalnej dla tego tempa (skróć krok)'}
-        {avgC >= optLo && avgC <= optHi && ' ✓ kadencja w optymalnym zakresie'}
-        {avgC > optHi && ' — kadencja nieco powyżej normy (akceptowalne dla intensywnych treningów)'}
+        {isBike ? (
+          <>Optymalny zakres: <span style={{ color:'#34d399', fontWeight:600 }}>{optLo}–{optHi} RPM</span>
+          {avgC < optLo && ' — zwiększ kadencję, mniejszy opór na pedały'}
+          {avgC >= optLo && avgC <= optHi && ' ✓ kadencja w optymalnym zakresie'}
+          {avgC > optHi && ' — wysoka kadencja, ok na sprint/płaski teren'}</>
+        ) : (
+          <>Optymalny zakres dla tego tempa: <span style={{ color:'#34d399', fontWeight:600 }}>{optLo}–{optHi} spm</span>
+          {avgC < optLo - 5 && ' — kadencja poniżej optymalnej (skróć krok)'}
+          {avgC >= optLo && avgC <= optHi && ' ✓ kadencja w optymalnym zakresie'}
+          {avgC > optHi && ' — nieco powyżej normy (ok dla intensywnych treningów)'}</>
+        )}
       </div>
     </div>
   );
@@ -477,7 +494,7 @@ export default function ActivityCharts({ data }: { data: StreamData }) {
       )}
       {data.cadence.length > 0 && (
         <div className="card" style={{ marginBottom: 0 }}>
-          <CadenceChart time={data.time} cadence={data.cadence} avgVelocityMs={data.stats.avgVelocityMs} />
+          <CadenceChart time={data.time} cadence={data.cadence} avgVelocityMs={data.stats.avgVelocityMs} sportType={sportType} />
         </div>
       )}
 
