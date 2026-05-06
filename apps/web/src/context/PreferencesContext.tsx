@@ -7,7 +7,7 @@ export interface FeatureDef {
   id:          string;
   label:       string;
   description: string;
-  category:    'run' | 'swim' | 'bike' | 'tri' | 'general';
+  category:    'run' | 'swim' | 'bike' | 'tri' | 'general' | 'tabs';
   defaultOn:   boolean;
 }
 
