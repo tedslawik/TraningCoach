@@ -12,16 +12,34 @@ export interface FeatureDef {
 }
 
 export const FEATURES: FeatureDef[] = [
-  /* Running Coach */
-  { id:'run_weekly_comparison',  label:'Porównanie z poprzednim tygodniem',  description:'Pasek porównujący aktualny tydzień z poprzednim — deficit i surplus czasu treningu.',           category:'run', defaultOn:true  },
-  { id:'run_assessment',         label:'Ocena tygodnia biegowego',           description:'Automatyczne alerty (ok/warn) dla wolumenu, intensywności i długiego biegu.',                     category:'run', defaultOn:true  },
-  { id:'run_zones',              label:'Kalkulator stref VDOT',              description:'Oblicza strefy tempa i HR na podstawie wyników lub biegów ze Stravy.',                           category:'run', defaultOn:true  },
-  { id:'run_technique_ai',       label:'Analiza techniki AI',                description:'AI analizuje kadencję, EF i technikę biegu na podstawie ostatnich 7 biegów (koszt ~$0.04).',     category:'run', defaultOn:false },
-  { id:'run_cadence_chart',      label:'Wykres kadencji',                    description:'Pokazuje kadencję spm z dynamicznym zakresem optymalnym dopasowanym do tempa.',                   category:'run', defaultOn:true  },
+  /* ── Zakładki ── */
+  { id:'tab_tri',  label:'Tri Coach',  description:'Triathlon — periodyzacja, plany i kalkulator żywienia.',  category:'tabs', defaultOn:true },
+  { id:'tab_run',  label:'Run Coach',  description:'Bieganie — treningi tygodniowe, strefy, analiza techniki.', category:'tabs', defaultOn:true },
+  { id:'tab_swim', label:'Swim Coach', description:'Pływanie — technika, dystanse i sesje tygodniowe.',         category:'tabs', defaultOn:true },
+  { id:'tab_bike', label:'Bike Coach', description:'Kolarstwo — moc, FTP i jazdy tygodniowe.',                  category:'tabs', defaultOn:true },
+
+  /* ── Tri Coach ── */
+  { id:'tri_nutrition_calc', label:'Kalkulator żywienia',       description:'Interaktywny kalkulator żeli i bidonów na wyścig z doborem produktów.',    category:'tri', defaultOn:true },
+
+  /* ── Run Coach ── */
+  { id:'run_weekly_comparison',  label:'Porównanie tygodniowe',          description:'Deficit/surplus czasu biegu vs poprzedni tydzień.',                     category:'run', defaultOn:true  },
+  { id:'run_assessment',         label:'Ocena tygodnia biegowego',       description:'Automatyczne alerty (ok/warn) dla wolumenu, intensywności i długiego biegu.', category:'run', defaultOn:true  },
+  { id:'run_zones',              label:'Kalkulator stref VDOT',          description:'Oblicza strefy tempa i HR na podstawie wyników lub biegów ze Stravy.',   category:'run', defaultOn:true  },
+  { id:'run_technique_ai',       label:'Analiza techniki AI',            description:'AI analizuje kadencję, EF i technikę biegu (koszt ~$0.04/analizę).',     category:'run', defaultOn:false },
+
+  /* ── Swim Coach ── */
+  { id:'swim_weekly_comparison', label:'Porównanie tygodniowe',          description:'Deficit/surplus czasu pływania vs poprzedni tydzień.',                   category:'swim', defaultOn:true },
+  { id:'swim_assessment',        label:'Ocena tygodnia pływackiego',     description:'Alerty dla wolumenu, regularności i długości najdłuższej sesji.',        category:'swim', defaultOn:true },
+
+  /* ── Bike Coach ── */
+  { id:'bike_weekly_comparison', label:'Porównanie tygodniowe',          description:'Deficit/surplus czasu jazdy i TSS vs poprzedni tydzień.',                category:'bike', defaultOn:true },
+  { id:'bike_assessment',        label:'Ocena tygodnia rowerowego',      description:'Alerty dla wolumenu, TSS i Intensity Factor.',                            category:'bike', defaultOn:true },
+  { id:'bike_power_zones',       label:'Strefy mocy FTP',                description:'Wyświetla Twoje strefy mocy obliczone z FTP pobranego ze Stravy.',       category:'bike', defaultOn:true },
 ];
 
-export type FeatureId = (typeof FEATURES)[number]['id'];
-export type Features  = Partial<Record<FeatureId, boolean>>;
+export type FeatureId  = (typeof FEATURES)[number]['id'];
+export type Features   = Partial<Record<FeatureId, boolean>>;
+export type Category   = FeatureDef['category'];
 
 /* ── Context ── */
 interface PreferencesValue {

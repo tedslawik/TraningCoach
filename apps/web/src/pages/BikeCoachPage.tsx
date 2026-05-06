@@ -5,6 +5,7 @@ import CtaBanner from '../components/CtaBanner';
 import WeekCalendar, { WeekZoneSummaryBar, type CalendarActivity } from '../components/shared/WeekCalendar';
 import ActivityDetailModal from '../components/athlete/ActivityDetailModal';
 import { useAuth } from '../context/AuthContext';
+import { usePreferences } from '../context/PreferencesContext';
 
 const PWR_ZONE_COLORS = ['#60a5fa','#34d399','#fbbf24','#fb923c','#f87171','#e11d48','#7c3aed'];
 const PWR_ZONE_LABELS = ['Z1','Z2','Z3 Tempo','Z4 Próg','Z5 VO2','Z6 Anaer.','Z7 Sprint'];
@@ -69,6 +70,7 @@ function BikeLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAc
   if(loading) return <section className="alt"><div className="section-inner"><p style={{fontSize:13,color:'var(--text-secondary)'}}>Pobieranie jazd…</p></div></section>;
   if(!data) return null;
 
+  const { isEnabled } = usePreferences();
   const { totals, activities, ftp, powerZones } = data;
   const deficit = isCurrentWeek && prevData ? (() => {
     const items: string[] = [];
@@ -107,20 +109,20 @@ function BikeLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAc
                 </div>
               ))}
             </div>
-            {deficit && (
+            {isEnabled('bike_weekly_comparison') && deficit && (
               <div style={{background:'#fef9e0',border:'0.5px solid #fbbf24',borderLeft:'3px solid #f59e0b',borderRadius:'var(--radius-md)',padding:'9px 14px',marginBottom:'1rem',fontSize:13,color:'#92400e',display:'flex',alignItems:'center',gap:8}}>
                 <span style={{fontWeight:700}}>💡 Do poziomu poprzedniego tygodnia brakuje:</span>
                 <span>{deficit}</span>
               </div>
             )}
-            {isCurrentWeek && prevData && (
+            {isEnabled('bike_weekly_comparison') && isCurrentWeek && prevData && (
               <div style={{fontSize:11,color:'var(--text-secondary)',marginBottom:8,textAlign:'right'}}>
                 Poprzedni tydzień: {prevData.totals.distanceKm} km · TSS {prevData.totals.tss} · {prevData.totals.sessions} sesji
               </div>
             )}
             {totals.weeklyPwrZones.some(v=>v>0)&&<WeekZoneSummaryBar zoneTimes={totals.weeklyPwrZones} colors={PWR_ZONE_COLORS} labels={PWR_ZONE_LABELS} totalLabel="Strefy mocy — jazdy tygodnia" />}
             {totals.weeklyHRZones.some(v=>v>0)&&<WeekZoneSummaryBar zoneTimes={totals.weeklyHRZones} totalLabel="Strefy tętna — jazdy tygodnia" />}
-            {ftp&&powerZones&&(
+            {isEnabled('bike_power_zones') && ftp&&powerZones&&(
               <div style={{marginBottom:'1.25rem',background:'var(--bg)',border:'0.5px solid var(--border)',borderRadius:'var(--radius-lg)',padding:'14px 16px'}}>
                 <div style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'var(--text-secondary)',marginBottom:10}}>Twoje strefy mocy (FTP {ftp} W)</div>
                 <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:6}}>
@@ -137,7 +139,7 @@ function BikeLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAc
               </div>
             )}
             <WeekCalendar activities={calActs} weekStart={weekStart} loading={weekLoading} emptyLabel="REST" onActivityClick={onActivityClick} />
-            {assessment.length>0&&(
+            {isEnabled('bike_assessment') && assessment.length>0&&(
               <div style={{marginTop:'1.25rem',display:'flex',flexDirection:'column',gap:8}}>
                 {assessment.map((item,i)=><div key={i} className={`alert alert-${item.type}`} style={{margin:0}}>{item.type==='ok'?'✅':'⚠️'} {item.text}</div>)}
               </div>

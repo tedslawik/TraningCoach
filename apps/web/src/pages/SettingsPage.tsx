@@ -3,11 +3,12 @@ import SectionLabel from '../components/SectionLabel';
 import { useAuth } from '../context/AuthContext';
 
 const CATEGORY_META = {
-  run:     { label: 'Running Coach', icon: '🏃', color: 'var(--run)'  },
-  swim:    { label: 'Swim Coach',    icon: '🏊', color: 'var(--swim)' },
-  bike:    { label: 'Bike Coach',    icon: '🚴', color: 'var(--bike)' },
-  tri:     { label: 'Tri Coach',     icon: '🏅', color: 'var(--tri)'  },
-  general: { label: 'Ogólne',        icon: '⚙️', color: 'var(--text-secondary)' },
+  tabs:    { label: 'Zakładki Coach',  icon: '🗂️', color: 'var(--text)'  },
+  tri:     { label: 'Tri Coach',       icon: '🏅', color: 'var(--tri)'   },
+  run:     { label: 'Run Coach',       icon: '🏃', color: 'var(--run)'   },
+  swim:    { label: 'Swim Coach',      icon: '🏊', color: 'var(--swim)'  },
+  bike:    { label: 'Bike Coach',      icon: '🚴', color: 'var(--bike)'  },
+  general: { label: 'Ogólne',          icon: '⚙️', color: 'var(--text-secondary)' },
 };
 
 function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {
@@ -44,7 +45,7 @@ export default function SettingsPage() {
   );
 
   // Group features by category
-  const categories = Object.keys(CATEGORY_META) as Array<keyof typeof CATEGORY_META>;
+  const categories = ['tabs', 'tri', 'run', 'swim', 'bike', 'general'] as Array<keyof typeof CATEGORY_META>;
   const byCategory = categories
     .map(cat => ({
       cat,

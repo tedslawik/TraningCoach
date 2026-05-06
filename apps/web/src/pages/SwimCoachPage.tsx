@@ -5,6 +5,7 @@ import CtaBanner from '../components/CtaBanner';
 import WeekCalendar, { WeekZoneSummaryBar, type CalendarActivity } from '../components/shared/WeekCalendar';
 import ActivityDetailModal from '../components/athlete/ActivityDetailModal';
 import { useAuth } from '../context/AuthContext';
+import { usePreferences } from '../context/PreferencesContext';
 
 interface SwimActivity { id:number; name:string; sportType:string; date:string; distanceKm:number; distanceM:number; timeFormatted:string; pace:string|null; sufferScore:number|null; avgHeartRate:number|null; hasHeartRate:boolean; zoneTimes:number[]|null; }
 interface SwimTotals  { distanceKm:number; timeFormatted:string; avgPace:string|null; avgHeartRate:number|null; sufferScore:number; sessions:number; longestKm:number; zoneTimes:number[]; }
@@ -59,6 +60,7 @@ function SwimLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAc
   if(loading) return <section className="alt"><div className="section-inner"><p style={{fontSize:13,color:'var(--text-secondary)'}}>Pobieranie pływań…</p></div></section>;
   if(!data) return null;
 
+  const { isEnabled } = usePreferences();
   const { totals, activities } = data;
   const deficit = isCurrentWeek && prevData ? (() => {
     const items: string[] = [];
@@ -95,20 +97,20 @@ function SwimLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAc
                 </div>
               ))}
             </div>
-            {deficit && (
+            {isEnabled('swim_weekly_comparison') && deficit && (
               <div style={{background:'#fef9e0',border:'0.5px solid #fbbf24',borderLeft:'3px solid #f59e0b',borderRadius:'var(--radius-md)',padding:'9px 14px',marginBottom:'1rem',fontSize:13,color:'#92400e',display:'flex',alignItems:'center',gap:8}}>
                 <span style={{fontWeight:700}}>💡 Do poziomu poprzedniego tygodnia brakuje:</span>
                 <span>{deficit}</span>
               </div>
             )}
-            {isCurrentWeek && prevData && (
+            {isEnabled('swim_weekly_comparison') && isCurrentWeek && prevData && (
               <div style={{fontSize:11,color:'var(--text-secondary)',marginBottom:8,textAlign:'right'}}>
                 Poprzedni tydzień: {prevData.totals.distanceKm} km · {prevData.totals.sessions} sesji
               </div>
             )}
             <WeekZoneSummaryBar zoneTimes={totals.zoneTimes} totalLabel="Strefy tętna — pływania tygodnia" />
             <WeekCalendar activities={calActs} weekStart={weekStart} loading={weekLoading} emptyLabel="REST" onActivityClick={onActivityClick} />
-            {assessment.length>0&&(
+            {isEnabled('swim_assessment') && assessment.length>0&&(
               <div style={{marginTop:'1.25rem',display:'flex',flexDirection:'column',gap:8}}>
                 {assessment.map((item,i)=><div key={i} className={`alert alert-${item.type}`} style={{margin:0}}>{item.type==='ok'?'✅':'⚠️'} {item.text}</div>)}
               </div>
