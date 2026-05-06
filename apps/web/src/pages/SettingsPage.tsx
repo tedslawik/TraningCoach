@@ -15,7 +15,7 @@ function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void 
     <button
       onClick={onToggle}
       style={{
-        width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+        width: 44, height: 24, borderRadius: 12, cursor: 'pointer',
         background: enabled ? 'var(--tri)' : 'var(--bg-secondary)',
         position: 'relative', flexShrink: 0, transition: 'background 0.2s',
         border: `0.5px solid ${enabled ? 'var(--tri)' : 'var(--border-md)'}`,
