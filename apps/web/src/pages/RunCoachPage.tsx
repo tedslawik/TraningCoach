@@ -5,6 +5,7 @@ import CtaBanner from '../components/CtaBanner';
 import WeekCalendar, { WeekZoneSummaryBar, type CalendarActivity } from '../components/shared/WeekCalendar';
 import ActivityDetailModal from '../components/athlete/ActivityDetailModal';
 import { useAuth } from '../context/AuthContext';
+import { usePreferences } from '../context/PreferencesContext';
 
 /* ── types & helpers ── */
 interface RunActivity { id:number; name:string; sportType:string; date:string; distanceKm:number; timeFormatted:string; pace:string|null; movingTimeSec:number; sufferScore:number|null; avgHeartRate:number|null; maxHeartRate:number|null; elevationGain:number; hasHeartRate:boolean; zoneTimes:number[]|null; }
@@ -71,6 +72,7 @@ function RunLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAct
   if(!data) return null;
 
   const { totals, activities } = data;
+  const { isEnabled } = usePreferences();
   const assessment = assessRuns(totals);
 
   // Deficit vs previous week (only shown when current week is active)
@@ -110,21 +112,21 @@ function RunLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAct
               ))}
             </div>
             {/* Deficit vs previous week */}
-            {deficit && (
+            {isEnabled('run_weekly_comparison') && deficit && (
               <div style={{background:'#fef9e0',border:'0.5px solid #fbbf24',borderLeft:'3px solid #f59e0b',borderRadius:'var(--radius-md)',padding:'9px 14px',marginBottom:'1rem',fontSize:13,color:'#92400e',display:'flex',alignItems:'center',gap:8}}>
                 <span style={{fontWeight:700}}>💡 Do poziomu poprzedniego tygodnia brakuje:</span>
                 <span>{deficit}</span>
               </div>
             )}
             {/* Previous week reference */}
-            {isCurrentWeek && prevData && (
+            {isEnabled('run_weekly_comparison') && isCurrentWeek && prevData && (
               <div style={{fontSize:11,color:'var(--text-secondary)',marginBottom:8,textAlign:'right'}}>
                 Poprzedni tydzień: {prevData.totals.distanceKm} km · {prevData.totals.sessions} sesji · śr. {prevData.totals.avgPace ?? '—'}
               </div>
             )}
             <WeekZoneSummaryBar zoneTimes={totals.zoneTimes} totalLabel="Strefy tętna — biegi tygodnia" />
             <WeekCalendar activities={calActs} weekStart={weekStart} loading={weekLoading} emptyLabel="REST" onActivityClick={onActivityClick} />
-            {assessment.length>0&&(
+            {isEnabled('run_assessment') && assessment.length>0&&(
               <div style={{marginTop:'1.25rem',display:'flex',flexDirection:'column',gap:8}}>
                 {assessment.map((item,i)=><div key={i} className={`alert alert-${item.type}`} style={{margin:0}}>{item.type==='ok'?'✅':'⚠️'} {item.text}</div>)}
               </div>
@@ -357,6 +359,7 @@ function RunTechniqueInsights() {
 
 export default function RunCoachPage() {
   const [selected, setSelected] = useState<CalendarActivity | null>(null);
+  const { isEnabled } = usePreferences();
 
   return (
     <>
@@ -367,7 +370,7 @@ export default function RunCoachPage() {
         subtitle="Biegasz po 90 lub 180 km w siodle. Twój bieg triathlonowy wymaga specjalnego przygotowania — nie tylko kondycji, ale i adaptacji nerwowo-mięśniowej."
       />
       <RunLiveSection onActivityClick={setSelected} />
-      <RunTechniqueInsights />
+      {isEnabled('run_technique_ai') && <RunTechniqueInsights />}
       <CtaBanner
         title="Sprawdź swoje proporcje treningowe"
         description="Analizator wyliczy czy Twoje treningi mają odpowiedni podział między dyscypliny."

@@ -16,6 +16,7 @@ export default function Nav() {
       {user && <li><NavLink to="/plan">Plan</NavLink></li>}
       {user && <li><NavLink to="/run-zones">Strefy</NavLink></li>}
       {user && <li><NavLink to="/athlete">Zawodnik</NavLink></li>}
+      {user && <li><NavLink to="/settings" title="Ustawienia">⚙️</NavLink></li>}
       </ul>
       {user ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { PreferencesProvider } from './context/PreferencesContext';
 import AuthModal from './components/auth/AuthModal';
 import Nav from './components/Nav';
 import Footer from './components/Footer';
@@ -13,6 +14,7 @@ import AthletePage from './pages/AthletePage';
 import DashboardPage from './pages/DashboardPage';
 import PlannerPage from './pages/PlannerPage';
 import RunZonesPage from './pages/RunZonesPage';
+import SettingsPage from './pages/SettingsPage';
 import AnalyzerPage from './pages/AnalyzerPage';
 
 function ScrollHandler() {
@@ -53,6 +55,7 @@ function AppShell() {
         <Route path="/dashboard"   element={<DashboardPage />} />
         <Route path="/plan"        element={<PlannerPage />} />
         <Route path="/run-zones"   element={<RunZonesPage />} />
+        <Route path="/settings"    element={<SettingsPage />} />
         <Route path="/analyzer"    element={<AnalyzerPage />} />
       </Routes>
       <Footer />
@@ -64,8 +67,10 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <ScrollHandler />
-        <AppShell />
+        <PreferencesProvider>
+          <ScrollHandler />
+          <AppShell />
+        </PreferencesProvider>
       </AuthProvider>
     </BrowserRouter>
   );
