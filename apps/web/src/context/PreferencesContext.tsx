@@ -41,8 +41,10 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (!user) { setLoading(false); return; }
     supabase.from('user_preferences').select('features').eq('user_id', user.id).single()
-      .then(r => { if (r.data?.features) setFeatures(r.data.features as Features); })
-      .finally(() => setLoading(false));
+      .then(r => {
+        if (r.data?.features) setFeatures(r.data.features as Features);
+        setLoading(false);
+      });
   }, [user]);
 
   const isEnabled = useCallback((id: FeatureId) => {
