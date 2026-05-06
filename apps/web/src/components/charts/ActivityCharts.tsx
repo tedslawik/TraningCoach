@@ -269,7 +269,10 @@ function optimalCadenceRange(avgVelMs: number | null, sportType?: string): [numb
 }
 
 /* ── Cadence chart ── */
+const SWIM_SPORTS_C = new Set(['Swim','OpenWaterSwim']);
+
 function CadenceChart({ time, cadence, avgVelocityMs, sportType }: { time: number[]; cadence: number[]; avgVelocityMs?: number | null; sportType?: string }) {
+  const isSwimC = SWIM_SPORTS_C.has(sportType ?? '');
   if (!cadence.length) return null;
   const W = 800, H = 130, pL = 44, pR = 12, pT = 10, pB = 22;
 
@@ -278,7 +281,8 @@ function CadenceChart({ time, cadence, avgVelocityMs, sportType }: { time: numbe
   if (!validCad.length) return null;
 
   const isBike = BIKE_SPORTS.has(sportType ?? '');
-  const [optLo, optHi] = optimalCadenceRange(avgVelocityMs ?? null, sportType);
+  const [optLoRaw, optHiRaw] = isSwimC ? [55, 75] : optimalCadenceRange(avgVelocityMs ?? null, sportType);
+  const [optLo, optHi] = [optLoRaw, optHiRaw];
   const minC = Math.max(120, Math.min(...validCad, optLo) - 5);
   const maxC = Math.min(220, Math.max(...validCad, optHi) + 5);
   const avgC = Math.round(validCad.reduce((s,v)=>s+v,0)/validCad.length);
@@ -306,9 +310,9 @@ function CadenceChart({ time, cadence, avgVelocityMs, sportType }: { time: numbe
   return (
     <div>
       <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--text-secondary)', marginBottom:6, display:'flex', justifyContent:'space-between' }}>
-        <span>Kadencja {isBike ? '(RPM)' : '(spm)'}</span>
+        <span>{isSwimC ? 'Tempo uderzeń' : isBike ? 'Kadencja (RPM)' : 'Kadencja (spm)'}</span>
         <span style={{ color: cadColor }}>
-          śr. {avgC} {isBike ? 'RPM' : 'spm'}{' '}
+          śr. {avgC} {isSwimC ? 'ud/min' : isBike ? 'RPM' : 'spm'}{' '}
           {avgC < optLo ? '↓ za niska' : avgC <= optHi ? '✓ optymalna' : '↑ wysoka'}
         </span>
       </div>
@@ -333,7 +337,12 @@ function CadenceChart({ time, cadence, avgVelocityMs, sportType }: { time: numbe
         ))}
       </svg>
       <div style={{ fontSize:11, color:'var(--text-secondary)', marginTop:4 }}>
-        {isBike ? (
+        {isSwimC ? (
+          <>Typowy zakres: <span style={{ color:'#34d399', fontWeight:600 }}>{optLo}–{optHi} ud/min</span>
+          {avgC < optLo && ' — wolne uderzenia, pracuj nad szybkością cyklu'}
+          {avgC >= optLo && avgC <= optHi && ' ✓ tempo uderzeń w typowym zakresie'}
+          {avgC > optHi && ' — szybkie uderzenia (charakter pływaka sprintującego)'}</>
+        ) : isBike ? (
           <>Optymalny zakres: <span style={{ color:'#34d399', fontWeight:600 }}>{optLo}–{optHi} RPM</span>
           {avgC < optLo && ' — zwiększ kadencję, mniejszy opór na pedały'}
           {avgC >= optLo && avgC <= optHi && ' ✓ kadencja w optymalnym zakresie'}
@@ -430,34 +439,61 @@ function PowerChart({ time, watts, avgWatts, normalizedWatts }: {
 /* ── Main export ── */
 export default function ActivityCharts({ data }: { data: StreamData }) {
   const { stats, sportType } = data;
-  const isRide = ['Ride','VirtualRide','EBikeRide'].includes(sportType);
+  const isRide = BIKE_SPORTS.has(sportType);
+  const isSwim = new Set(['Swim','OpenWaterSwim']).has(sportType);
+  const isRun  = new Set(['Run','TrailRun','VirtualRun']).has(sportType);
 
   const avgCadence = data.cadence.length > 0
     ? Math.round(data.cadence.reduce((s, v) => s + v, 0) / data.cadence.length)
     : null;
 
-  // Efficiency Factor = pace_m_per_min / avg_HR × 100 (higher = more efficient)
-  const ef = stats.avgVelocityMs && stats.avgHeartRate && stats.avgHeartRate > 0
+  const np = (stats as unknown as Record<string,number>).normalizedPower ?? null;
+
+  // EF only meaningful for running (pace/HR)
+  const ef = isRun && stats.avgVelocityMs && stats.avgHeartRate && stats.avgHeartRate > 0
     ? Math.round((stats.avgVelocityMs * 60 / stats.avgHeartRate) * 1000) / 10
     : null;
+
+  // Distance: show in meters for swimming <1km
+  const distLabel = isSwim && stats.totalDistKm < 1
+    ? `${Math.round(stats.totalDistKm * 1000)} m`
+    : `${stats.totalDistKm} km`;
+
+  // Sport-specific stat rows
+  const statItems: Array<[string, string | null]> = [
+    ['Dystans', distLabel],
+    ['Czas',    fmtTime(stats.totalTimeSec)],
+    // Elevation — NOT for swimming
+    ...(!isSwim ? [['Przewyżs.', stats.elevGain > 0 ? `${stats.elevGain} m` : null] as [string, string|null]] : []),
+    // Swim: pace in min/100m only
+    ...(isSwim ? [['Tempo /100m', stats.avgVelocityMs ? fmtPace(stats.avgVelocityMs, sportType) : null] as [string, string|null]] : []),
+    // Bike: speed in km/h
+    ...(isRide ? [['Śr. prędkość', stats.avgVelocityMs ? `${(stats.avgVelocityMs * 3.6).toFixed(1)} km/h` : null] as [string, string|null]] : []),
+    // Run: pace in min/km
+    ...(isRun ? [['Śr. tempo', stats.avgVelocityMs ? fmtPace(stats.avgVelocityMs, sportType) : null] as [string, string|null]] : []),
+    ['Śr. HR',   stats.avgHeartRate ? `${stats.avgHeartRate} bpm` : null],
+    ['Max HR',   stats.maxHeartRate ? `${stats.maxHeartRate} bpm` : null],
+    // Bike: power metrics
+    ...(isRide ? [
+      ['Śr. moc', stats.avgWatts ? `${stats.avgWatts} W` : null],
+      ['NP',      np ? `${np} W` : null],
+    ] as Array<[string, string|null]> : []),
+    // Run: power (if Stryd etc.)
+    ...(isRun && stats.avgWatts ? [['Moc bieg.', `${stats.avgWatts} W`] as [string, string|null]] : []),
+    // Cadence with sport-specific unit
+    ...(avgCadence ? [[
+      isRide ? 'Kadencja (RPM)' : isSwim ? 'Tempo uderzeń' : 'Kadencja (spm)',
+      isRide ? `${avgCadence} RPM` : isSwim ? `${avgCadence} ud/min` : `${avgCadence} spm`
+    ] as [string, string|null]] : []),
+    // EF only for running
+    ...(ef ? [['EF', `${ef}`] as [string, string|null]] : []),
+  ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* Key stats row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 10 }}>
-        {[
-          ['Dystans',  `${stats.totalDistKm} km`],
-          ['Czas',     fmtTime(stats.totalTimeSec)],
-          ['Przewyżs.', stats.elevGain > 0 ? `${stats.elevGain} m` : null],
-          ['Śr. HR',   stats.avgHeartRate ? `${stats.avgHeartRate} bpm` : null],
-          ['Max HR',   stats.maxHeartRate ? `${stats.maxHeartRate} bpm` : null],
-          isRide
-            ? ['Śr. moc', stats.avgWatts ? `${stats.avgWatts} W` : null]
-            : ['Śr. tempo', stats.avgVelocityMs ? fmtPace(stats.avgVelocityMs, sportType) : null],
-          isRide ? ['NP', (stats as unknown as Record<string,unknown>).normalizedPower ? `${(stats as unknown as Record<string,number>).normalizedPower} W` : null] : ['', null],
-          ['Kadencja', avgCadence ? `${avgCadence} spm` : null],
-          ['EF',       ef ? `${ef}` : null],
-        ].filter(([, v]) => v).map(([l, v]) => (
+        {statItems.filter(([, v]) => v).map(([l, v]) => (
           <div key={l as string} style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', padding: '10px 12px', textAlign: 'center' }}>
             <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)' }}>{v}</div>
             <div style={{ fontSize: 10, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>{l}</div>
@@ -466,7 +502,7 @@ export default function ActivityCharts({ data }: { data: StreamData }) {
       </div>
 
       {/* Charts */}
-      {data.altitude.length > 0 && (
+      {!isSwim && data.altitude.length > 0 && (
         <div className="card" style={{ marginBottom: 0 }}>
           <ElevationChart distance={data.distance} altitude={data.altitude} elevGain={stats.elevGain} />
         </div>
@@ -476,13 +512,13 @@ export default function ActivityCharts({ data }: { data: StreamData }) {
           <HeartRateChart time={data.time} heartrate={data.heartrate} hrZones={data.hrZones} />
         </div>
       )}
-      {data.velocity.length > 0 && (
+      {data.velocity.length > 0 && data.velocity.some(v => v > 0) && (
         <div className="card" style={{ marginBottom: 0 }}>
           <PaceChart time={data.time} velocity={data.velocity} sportType={sportType} />
         </div>
       )}
-
-      {data.watts.length > 0 && data.watts.some(v => v > 0) && (
+      {/* Power — not applicable for swimming */}
+      {!isSwim && data.watts.length > 0 && data.watts.some(v => v > 0) && (
         <div className="card" style={{ marginBottom: 0 }}>
           <PowerChart
             time={data.time}
