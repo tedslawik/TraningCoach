@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { usePreferences } from '../context/PreferencesContext';
 import { calculatePMC, type WeeklySummary } from '@tricoach/core';
 import { supabase } from '../lib/supabase';
 import TrendsChart from '../components/charts/TrendsChart';
@@ -20,6 +21,7 @@ function toLocalKey(d: Date) {
 
 export default function DashboardPage() {
   const { session, user, stravaToken } = useAuth();
+  const { isEnabled } = usePreferences();
   const [summaries, setSummaries]   = useState<WeeklySummary[]>([]);
   const [syncing, setSyncing]       = useState(false);
   const [syncMsg, setSyncMsg]       = useState('');
@@ -234,13 +236,13 @@ export default function DashboardPage() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(100px,1fr))', gap: 12 }}>
                 {[
-                  { to:'/plan',       icon:'🗓️', label:'Plan',       color:'var(--tri)' },
-                  { to:'/analyzer',   icon:'📊', label:'Analizator', color:'var(--tri)' },
-                  { to:'/tri-coach',  icon:'🏅', label:'Tri Coach',  color:'var(--tri)' },
-                  { to:'/run-coach',  icon:'🏃', label:'Run Coach',  color:'var(--run)' },
-                  { to:'/swim-coach', icon:'🏊', label:'Swim Coach', color:'var(--swim)' },
-                  { to:'/bike-coach', icon:'🚴', label:'Bike Coach', color:'var(--bike)' },
-                ].map(c => (
+                  { to:'/plan',       icon:'🗓️', label:'Plan',       color:'var(--tri)',  tabId: null },
+                  { to:'/analyzer',   icon:'📊', label:'Analizator', color:'var(--tri)',  tabId: null },
+                  { to:'/tri-coach',  icon:'🏅', label:'Tri Coach',  color:'var(--tri)',  tabId: 'tab_tri' },
+                  { to:'/run-coach',  icon:'🏃', label:'Run Coach',  color:'var(--run)',  tabId: 'tab_run' },
+                  { to:'/swim-coach', icon:'🏊', label:'Swim Coach', color:'var(--swim)', tabId: 'tab_swim' },
+                  { to:'/bike-coach', icon:'🚴', label:'Bike Coach', color:'var(--bike)', tabId: 'tab_bike' },
+                ].filter(c => !c.tabId || isEnabled(c.tabId as Parameters<typeof isEnabled>[0])).map(c => (
                   <Link key={c.to} to={c.to} style={{ display:'block', textDecoration:'none', background:'var(--bg)', border:'0.5px solid var(--border-md)', borderRadius:'var(--radius-lg)', padding:'1.25rem', textAlign:'center', transition:'transform 0.15s, box-shadow 0.15s' }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform='translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow='0 8px 24px rgba(0,0,0,0.08)'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform=''; (e.currentTarget as HTMLElement).style.boxShadow=''; }}

@@ -2,20 +2,22 @@ import { Link, Navigate } from 'react-router-dom';
 import SectionLabel from '../components/SectionLabel';
 import Analyzer from '../components/analyzer/Analyzer';
 import { useAuth } from '../context/AuthContext';
+import { usePreferences, type FeatureId } from '../context/PreferencesContext';
 
 const coaches = [
-  { to: '/tri-coach',  accent: 'tri',  icon: '🏅', title: 'Tri Coach',  link: 'tri',
+  { to: '/tri-coach',  tabId: 'tab_tri'  as FeatureId, accent: 'tri',  icon: '🏅', title: 'Tri Coach',  link: 'tri',
     desc: 'Kompleksowy plan triathlonowy — periodyzacja, proporcje dyscyplin, brick treningi i strategia wyścigu dla Sprint, Olympic, Half i Full Ironman.' },
-  { to: '/run-coach',  accent: 'run',  icon: '🏃', title: 'Run Coach',  link: 'run',
+  { to: '/run-coach',  tabId: 'tab_run'  as FeatureId, accent: 'run',  icon: '🏃', title: 'Run Coach',  link: 'run',
     desc: 'Strefy tętna, typy biegów i adaptacja do biegania po rowerze. Finiszuj mocno nawet gdy nogi mają za sobą 180 km w siodle.' },
-  { to: '/swim-coach', accent: 'swim', icon: '🏊', title: 'Swim Coach', link: 'swim',
+  { to: '/swim-coach', tabId: 'tab_swim' as FeatureId, accent: 'swim', icon: '🏊', title: 'Swim Coach', link: 'swim',
     desc: 'Dryle techniczne, plany dystansów i adaptacja do wód otwartych. Wyjedź z wody wypoczęty, z przewagą nad resztą peletonu.' },
-  { to: '/bike-coach', accent: 'bike', icon: '🚴', title: 'Bike Coach', link: 'bike',
+  { to: '/bike-coach', tabId: 'tab_bike' as FeatureId, accent: 'bike', icon: '🚴', title: 'Bike Coach', link: 'bike',
     desc: 'FTP, strefy mocy i strategia energetyczna. Rower to 45–55% czasu Half Ironmana — tu wygrywasz lub tracisz wyścig.' },
-] as const;
+];
 
 export default function HomePage() {
   const { session, loading } = useAuth();
+  const { isEnabled } = usePreferences();
   if (!loading && session) return <Navigate to="/dashboard" replace />;
   return (
     <>
@@ -49,7 +51,7 @@ export default function HomePage() {
             <p>Każda dyscyplina ma dedykowaną stronę z poradami, planami i wskazówkami dostosowanymi do jej specyfiki.</p>
           </div>
           <div className="coaches-grid">
-            {coaches.map(c => (
+            {coaches.filter(c => isEnabled(c.tabId)).map(c => (
               <Link key={c.to} className="coach-card" to={c.to}>
                 <div className={`coach-card-accent accent-${c.accent}`} />
                 <span className="coach-card-icon">{c.icon}</span>
