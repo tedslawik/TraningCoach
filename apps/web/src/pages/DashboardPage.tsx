@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
@@ -22,15 +22,28 @@ function toLocalKey(d: Date) {
 export default function DashboardPage() {
   const { session, user, stravaToken } = useAuth();
   const { isEnabled } = usePreferences();
-  const [summaries, setSummaries]   = useState<WeeklySummary[]>([]);
-  const [syncing, setSyncing]       = useState(false);
-  const [syncMsg, setSyncMsg]       = useState('');
-  const [lastSynced, setLastSynced] = useState<string | null>(null);
+  const [summaries, setSummaries]     = useState<WeeklySummary[]>([]);
+  const [syncing, setSyncing]         = useState(false);
+  const [syncMsg, setSyncMsg]         = useState('');
+  const [lastSynced, setLastSynced]   = useState<string | null>(null);
+  const [lastSyncedMs, setLastSyncedMs] = useState<number | null>(null); // null=loading, 0=never
+  const autoSyncDone = useRef(false);
 
   useEffect(() => {
     if (!user) return;
     loadSummaries();
   }, [user]);
+
+  // Auto-sync if Strava is connected and data is stale (> 8h) or never synced
+  useEffect(() => {
+    if (lastSyncedMs === null || !session || !stravaToken || syncing || autoSyncDone.current) return;
+    const staleMs = 8 * 60 * 60 * 1000;
+    if (lastSyncedMs === 0 || (Date.now() - lastSyncedMs) > staleMs) {
+      autoSyncDone.current = true;
+      handleSync();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastSyncedMs, session, stravaToken]);
 
   const loadSummaries = async () => {
     const { data } = await supabase
@@ -49,7 +62,14 @@ export default function DashboardPage() {
       }));
       setSummaries(mapped);
       const newest = data[data.length - 1]?.synced_at;
-      if (newest) setLastSynced(new Date(newest).toLocaleDateString('pl-PL', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }));
+      if (newest) {
+        setLastSynced(new Date(newest).toLocaleDateString('pl-PL', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }));
+        setLastSyncedMs(new Date(newest).getTime());
+      } else {
+        setLastSyncedMs(0);
+      }
+    } else {
+      setLastSyncedMs(0); // no rows at all → trigger auto-sync
     }
   };
 
@@ -112,7 +132,7 @@ export default function DashboardPage() {
                   disabled={syncing}
                   style={{ padding: '9px 18px', borderRadius: 'var(--radius-md)', background: syncing ? 'var(--bg-secondary)' : 'var(--text)', color: syncing ? 'var(--text-secondary)' : 'var(--bg)', border: 'none', fontSize: 13, fontWeight: 600, cursor: syncing ? 'not-allowed' : 'pointer', fontFamily: 'var(--font)', transition: 'all 0.15s' }}
                 >
-                  {syncing ? 'Synchronizacja…' : '↻ Syncuj historię'}
+                  {syncing ? '↻ Synchronizacja…' : '↻ Syncuj historię'}
                 </button>
                 {lastSynced && <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Ostatnio: {lastSynced}</span>}
                 {syncMsg && <span style={{ fontSize: 11, color: syncMsg.startsWith('Błąd') ? '#ef4444' : '#22c55e' }}>{syncMsg}</span>}

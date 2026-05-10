@@ -10,5 +10,8 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    { "path": "/api/strava/sync", "schedule": "0 3 * * *" }
   ]
 }

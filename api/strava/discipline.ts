@@ -22,7 +22,9 @@ function fmtTime(min: number) {
 }
 function fmtPace100m(dKm: number, tMin: number) {
   if (!dKm || !tMin) return null;
-  const p = tMin / (dKm * 10), m = Math.floor(p), s = Math.round((p - m) * 60);
+  const p = tMin / (dKm * 10);
+  if (p > 10) return null; // > 10 min/100m = bad Strava data (wrong pool length etc.)
+  const m = Math.floor(p), s = Math.round((p - m) * 60);
   return `${m}:${String(s).padStart(2, '0')}/100m`;
 }
 function fmtSpeed(dKm: number, tMin: number) {
