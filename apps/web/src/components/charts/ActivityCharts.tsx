@@ -53,10 +53,15 @@ function smoothed(arr: number[], window = 5): number[] {
 }
 
 function fmtPace(ms: number, sport: string): string {
-  if (sport === 'Ride' || sport === 'VirtualRide') {
+  if (sport === 'Ride' || sport === 'VirtualRide' || sport === 'EBikeRide') {
     return `${(ms * 3.6).toFixed(1)} km/h`;
   }
   if (ms <= 0) return '—';
+  if (sport === 'Swim' || sport === 'OpenWaterSwim') {
+    const secPer100m = 100 / ms;
+    const m = Math.floor(secPer100m / 60), s = Math.round(secPer100m % 60);
+    return `${m}:${String(s).padStart(2,'0')} /100m`;
+  }
   const secPerKm = 1000 / ms;
   const m = Math.floor(secPerKm / 60), s = Math.round(secPerKm % 60);
   return `${m}:${String(s).padStart(2,'0')} /km`;

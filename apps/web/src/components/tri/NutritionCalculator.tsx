@@ -49,7 +49,7 @@ function avgPace(s: WeeklySummary[], d: 'swim'|'bike'|'run') {
   r.forEach(x => { dist+=d==='swim'?x.swimDistKm:d==='bike'?x.bikeDistKm:x.runDistKm; time+=d==='swim'?x.swimTimeMin:d==='bike'?x.bikeTimeMin:x.runTimeMin; });
   if (dist<0.1||time<1) return null;
   if (d==='bike') return dist/(time/60);
-  if (d==='swim') return time/(dist*10);
+  if (d==='swim') { const p = time/(dist*10); return p > 10 ? null : p; }
   return time/dist;
 }
 

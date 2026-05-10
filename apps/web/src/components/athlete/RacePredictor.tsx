@@ -28,7 +28,7 @@ function avgFromSummaries(summaries: WeeklySummary[], disc: 'swim' | 'bike' | 'r
   });
   if (dist < 0.1 || time < 1) return null;
   if (disc === 'bike') return dist / (time / 60);
-  if (disc === 'swim') return time / (dist * 10);
+  if (disc === 'swim') { const p = time / (dist * 10); return p > 10 ? null : p; }
   return time / dist;
 }
 

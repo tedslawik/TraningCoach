@@ -49,7 +49,7 @@ export function analyzeWorkouts(
     runPct,
     totalTime,
     totalSessions: swimSessions + bikeSessions + runSessions,
-    swimPace:  swimDist > 0 && swimTime > 0 ? `${formatPace(swimTime, swimDist)} /100m` : null,
+    swimPace:  swimDist > 0 && swimTime > 0 ? `${formatPace(swimTime, swimDist * 10)} /100m` : null,
     bikeSpeed: bikeDist > 0 && bikeTime > 0 ? `${(bikeDist / bikeTime * 60).toFixed(1)} km/h` : null,
     runPace:   runDist  > 0 && runTime  > 0 ? `${formatPace(runTime, runDist)} /km` : null,
     alerts,
