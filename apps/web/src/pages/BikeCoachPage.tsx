@@ -6,6 +6,7 @@ import WeekCalendar, { WeekZoneSummaryBar, type CalendarActivity } from '../comp
 import ActivityDetailModal from '../components/athlete/ActivityDetailModal';
 import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
+import TrainingPlanSection from '../components/training/TrainingPlanSection';
 
 const PWR_ZONE_COLORS = ['#60a5fa','#34d399','#fbbf24','#fb923c','#f87171','#e11d48','#7c3aed'];
 const PWR_ZONE_LABELS = ['Z1','Z2','Z3 Tempo','Z4 Próg','Z5 VO2','Z6 Anaer.','Z7 Sprint'];
@@ -165,6 +166,7 @@ export default function BikeCoachPage() {
         subtitle="W Half Ironmanie spędzasz na rowerze 2.5–3 godziny. Tu wygrywasz lub tracisz wyścig — i tu możesz zdobyć najwięcej bez kontuzji."
       />
       <BikeLiveSection onActivityClick={setSelected} />
+      <TrainingPlanSection sport="bike" />
       <CtaBanner
         title="Sprawdź swoją prędkość na rowerze"
         description="Analizator wyliczy Twoją średnią prędkość i proporcję czasu na rowerze względem wyścigu docelowego."

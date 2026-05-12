@@ -2,6 +2,7 @@ import HeroSm from '../components/HeroSm';
 import SectionLabel from '../components/SectionLabel';
 import CtaBanner from '../components/CtaBanner';
 import NutritionCalculator from '../components/tri/NutritionCalculator';
+import TrainingPlanSection from '../components/training/TrainingPlanSection';
 
 const distances = [
   { name: 'Sprint',       swim: '0.75 km', bike: '20 km',  run: '5 km',    time: '~1h 15 min',   target: '15% / 45% / 40%' },
@@ -140,6 +141,8 @@ export default function TriCoachPage() {
           </div>
         </div>
       </section>
+
+      <TrainingPlanSection sport="triathlon" />
 
       <CtaBanner
         title="Sprawdź swoje proporcje treningowe"

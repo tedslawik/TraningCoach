@@ -6,6 +6,7 @@ import WeekCalendar, { WeekZoneSummaryBar, type CalendarActivity } from '../comp
 import ActivityDetailModal from '../components/athlete/ActivityDetailModal';
 import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
+import TrainingPlanSection from '../components/training/TrainingPlanSection';
 
 /* ── types & helpers ── */
 interface RunActivity { id:number; name:string; sportType:string; date:string; distanceKm:number; timeFormatted:string; pace:string|null; movingTimeSec:number; sufferScore:number|null; avgHeartRate:number|null; maxHeartRate:number|null; elevationGain:number; hasHeartRate:boolean; zoneTimes:number[]|null; }
@@ -371,6 +372,7 @@ export default function RunCoachPage() {
       />
       <RunLiveSection onActivityClick={setSelected} />
       {isEnabled('run_technique_ai') && <RunTechniqueInsights />}
+      <TrainingPlanSection sport="run" />
       <CtaBanner
         title="Sprawdź swoje proporcje treningowe"
         description="Analizator wyliczy czy Twoje treningi mają odpowiedni podział między dyscypliny."

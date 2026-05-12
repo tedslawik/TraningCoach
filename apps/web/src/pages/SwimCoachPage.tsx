@@ -6,6 +6,7 @@ import WeekCalendar, { WeekZoneSummaryBar, type CalendarActivity } from '../comp
 import ActivityDetailModal from '../components/athlete/ActivityDetailModal';
 import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
+import TrainingPlanSection from '../components/training/TrainingPlanSection';
 
 interface SwimActivity { id:number; name:string; sportType:string; date:string; distanceKm:number; distanceM:number; timeFormatted:string; pace:string|null; sufferScore:number|null; avgHeartRate:number|null; hasHeartRate:boolean; zoneTimes:number[]|null; }
 interface SwimTotals  { distanceKm:number; timeFormatted:string; avgPace:string|null; avgHeartRate:number|null; sufferScore:number; sessions:number; longestKm:number; zoneTimes:number[]; }
@@ -136,6 +137,7 @@ export default function SwimCoachPage() {
         subtitle="Pływanie to jedyna dyscyplina triathlonu, gdzie siła i fitness mają drugorzędne znaczenie. Zawodnik z doskonałą techniką pokona silniejszego amatora o złej technice."
       />
       <SwimLiveSection onActivityClick={setSelected} />
+      <TrainingPlanSection sport="swim" />
       <CtaBanner
         title="Oblicz swoje tempo pływania"
         description="Wpisz dystans i czas — analizator wyliczy Twoje tempo na 100m i szacowany czas wyścigu."
