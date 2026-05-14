@@ -5,10 +5,18 @@ import { createClient } from '@supabase/supabase-js';
 const supabase  = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
-type SportType = 'triathlon' | 'run' | 'bike' | 'swim';
+type SportType = 'triathlon' | 'run' | 'bike' | 'swim' | 'atp';
+type RaceType  = 'sprint' | 'olympic' | 'half' | 'full';
 
-const SPORT_LABELS: Record<SportType, string> = {
-  triathlon: 'Triathlon', run: 'Bieganie', bike: 'Kolarstwo', swim: 'Pływanie',
+const SPORT_LABELS: Record<string, string> = {
+  triathlon: 'Triathlon', run: 'Bieganie', bike: 'Kolarstwo', swim: 'Pływanie', atp: 'ATP',
+};
+
+const RACE_LABELS: Record<RaceType, string> = {
+  sprint: 'Sprint Triathlon (~1h 15min)',
+  olympic: 'Olympic Triathlon (~2h 30min)',
+  half: 'Half Ironman (~5–6h)',
+  full: 'Full Ironman (~10–14h)',
 };
 
 const SPORT_SETS: Record<string, Set<string>> = {
@@ -120,13 +128,92 @@ Analiza 4 tyg. — biegi: ${r?.avgKmPerWeek??0}km/tyg (${r?.hard??0} ciężkich)
 Balansuj 3 dyscypliny. Brick raz na 2 tyg. Pływanie min 2x/tydzień.`;
 }
 
+/* ── ATP prompt ── */
+function buildATPPrompt(
+  summaries: Array<Record<string,unknown>>,
+  raceDate: string,
+  raceType: RaceType,
+  profile: { weight?: number; ftp?: number },
+): string {
+  const pmc    = calcPMC(summaries);
+  const form   = pmc.tsb > 5 ? 'wypoczęty' : pmc.tsb > -10 ? 'optymalny' : 'zmęczony';
+  const recent = summaries.slice(-8);
+  const avg    = (k: string) => recent.length ? recent.reduce((s,r)=>s+((r[k] as number)??0),0)/recent.length : 0;
+  const avgTSS = Math.round(avg('tss'));
+
+  const today      = new Date();
+  const race       = new Date(raceDate);
+  const weeksUntil = Math.round((race.getTime() - today.getTime()) / (7*24*60*60*1000));
+
+  // First Monday on or after today
+  const startDay = new Date(today);
+  const dow = startDay.getDay();
+  if (dow !== 1) startDay.setDate(startDay.getDate() + (dow === 0 ? 1 : 8 - dow));
+  const planStart = startDay.toISOString().split('T')[0];
+
+  // End = 3 weeks after race
+  const endDay = new Date(race); endDay.setDate(endDay.getDate() + 21);
+  const planEnd = endDay.toISOString().split('T')[0];
+
+  return `Jesteś ekspertem w periodyzacji triatlonowej. Stwórz Annual Training Plan (ATP) dla zawodnika.
+
+PROFIL ZAWODNIKA:
+- Dzisiaj: ${today.toISOString().split('T')[0]}
+- CTL (forma): ${pmc.ctl} | ATL (zmęczenie): ${pmc.atl} | Form (TSB): ${pmc.tsb > 0?'+':''}${pmc.tsb} (${form})
+- Śr. TSS/tydzień (8 tyg.): ${avgTSS}
+- Pływanie: ${avg('swim_dist_km').toFixed(1)} km/tyg | Rower: ${avg('bike_dist_km').toFixed(1)} km/tyg | Bieg: ${avg('run_dist_km').toFixed(1)} km/tyg
+${profile.ftp ? `- FTP: ${profile.ftp} W` : ''}
+${profile.weight ? `- Waga: ${profile.weight} kg` : ''}
+
+WYŚCIG DOCELOWY (A):
+- Dystans: ${RACE_LABELS[raceType]}
+- Data wyścigu: ${raceDate}
+- Tygodni do wyścigu: ${weeksUntil}
+
+ZAKRES PLANU: od ${planStart} do ${planEnd} (3 tyg. po wyścigu).
+
+Zasady periodyzacji dla ${weeksUntil} tygodni:
+${weeksUntil >= 24 ? '- Baza 1 (8 tyg.) → Baza 2 (6 tyg.) → Budowanie 1 (5 tyg.) → Budowanie 2 (4 tyg.) → Szczyt (2 tyg.) → Wyścig (1 tyg.) → Regeneracja (2 tyg.)' :
+  weeksUntil >= 16 ? '- Baza (7 tyg.) → Budowanie 1 (4 tyg.) → Budowanie 2 (3 tyg.) → Szczyt (2 tyg.) → Wyścig (1 tyg.) → Regeneracja (2 tyg.)' :
+  weeksUntil >= 10 ? '- Baza (4 tyg.) → Budowanie (4 tyg.) → Szczyt (2 tyg.) → Wyścig (1 tyg.) → Regeneracja (2 tyg.)' :
+  '- Budowanie/Szczyt (weeksUntil-3 tyg.) → Tapering (2 tyg.) → Wyścig (1 tyg.) → Regeneracja (2 tyg.)'}
+
+Odpowiedz TYLKO tym JSON (bez markdown):
+{
+  "assessment": "2–3 zdania po polsku: ocena zawodnika i strategia roczna",
+  "raceDate": "${raceDate}",
+  "raceType": "${raceType}",
+  "phases": [
+    {
+      "name": "Baza 1",
+      "type": "base",
+      "startDate": "${planStart}",
+      "endDate": "RRRR-MM-DD",
+      "weeks": 6,
+      "focus": "Jedno zdanie po polsku opisujące fokus fazy",
+      "targetWeeklyTSS": 280,
+      "intensity": "low",
+      "keyWorkouts": ["opis treningu 1", "opis treningu 2", "opis treningu 3"]
+    }
+  ],
+  "races": [
+    { "date": "${raceDate}", "name": "${RACE_LABELS[raceType]}", "priority": "A" }
+  ]
+}
+Dozwolone type: "base", "build", "peak", "race", "recovery", "transition".
+Dozwolone intensity: "low", "moderate", "high".
+Fazy muszą być ciągłe: endDate jednej fazy = dzień przed startDate następnej.
+Fazy muszą pokrywać cały zakres od ${planStart} do ${planEnd}.
+Tylko JSON.`;
+}
+
 /* ── Main prompt ── */
 function buildPrompt(
   summaries: Array<Record<string,unknown>>,
   recentActs: Array<Record<string,unknown>>,
   trainingDays: number,
   weekStart: string,
-  sport: SportType,
+  sport: Exclude<SportType,'atp'>,
   hrZones: Array<{min:number;max:number}> | null,
   profile: { weight?: number; ftp?: number } = {},
 ): string {
@@ -224,9 +311,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { data: { user }, error } = await supabase.auth.getUser(jwt);
   if (error || !user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { trainingDays, sport = 'triathlon' } = req.body as { trainingDays: number; sport?: SportType };
-  if (!trainingDays || trainingDays < 2 || trainingDays > 7)
-    return res.status(400).json({ error: 'trainingDays must be 2–7' });
+  const body = req.body as { trainingDays?: number; sport?: SportType; raceDate?: string; raceType?: RaceType };
+  const sport = body.sport ?? 'triathlon';
 
   const { data: tokenRow } = await supabase.from('strava_tokens').select('*').eq('user_id', user.id).single();
   const { data: summaries = [] } = await supabase.from('weekly_summaries').select('*').eq('user_id', user.id).order('week_start',{ascending:false}).limit(12);
@@ -238,25 +324,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (tokenRow?.access_token) {
     const headers = { Authorization: `Bearer ${tokenRow.access_token}` };
     const fourWeeksAgo = Math.floor((Date.now() - 28*24*60*60*1000) / 1000);
-
     const [athleteRes, zonesRes, actsRes] = await Promise.all([
       fetch('https://www.strava.com/api/v3/athlete', { headers }).then(r=>r.ok?r.json():{}),
       fetch('https://www.strava.com/api/v3/athlete/zones', { headers }).then(r=>r.ok?r.json():{}),
       fetch(`https://www.strava.com/api/v3/athlete/activities?after=${fourWeeksAgo}&per_page=100`, { headers }).then(r=>r.ok?r.json():[]),
     ]);
-
     const a = athleteRes as { weight?: number; ftp?: number };
     if (a.weight) profile.weight = Math.round(a.weight);
     if (a.ftp)    profile.ftp    = a.ftp;
-
     const z = zonesRes as { heart_rate?: { zones?: Array<{min:number;max:number}> } };
     if (z?.heart_rate?.zones) hrZones = z.heart_rate.zones;
-
     recentActs = Array.isArray(actsRes) ? actsRes as Array<Record<string,unknown>> : [];
   }
 
+  /* ── ATP path ── */
+  if (sport === 'atp') {
+    const { raceDate, raceType = 'half' } = body;
+    if (!raceDate) return res.status(400).json({ error: 'raceDate required for ATP' });
+    const prompt = buildATPPrompt(summaries ?? [], raceDate, raceType as RaceType, profile);
+    const msg = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6', max_tokens: 3000,
+      system: 'You are a JSON generator. Respond with ONLY valid JSON, no markdown, no code blocks. Start with { end with }.',
+      messages: [{ role: 'user', content: prompt }],
+    });
+    const rawAtp = msg.content[0].type === 'text' ? msg.content[0].text.trim() : '{}';
+    let atpJson: Record<string,unknown>;
+    try {
+      let c = rawAtp.replace(/^```json?\s*/im,'').replace(/```\s*$/im,'').trim();
+      const f = c.indexOf('{'), l = c.lastIndexOf('}');
+      if (f !== -1 && l > f) c = c.slice(f, l+1);
+      atpJson = JSON.parse(c);
+    } catch { return res.status(502).json({ error: 'AI returned invalid JSON' }); }
+    const { data: saved, error: saveErr } = await supabase.from('training_plans')
+      .upsert({ user_id:user.id, training_days_per_week:0, suggested_days:0, plan_json:atpJson, week_start:nextMonday(), sport_type:'atp' }, { onConflict:'user_id,week_start,sport_type' })
+      .select().single();
+    if (saveErr) return res.status(500).json({ error: saveErr.message });
+    const { input_tokens, output_tokens } = msg.usage;
+    return res.json({ plan: saved, usage: { inputTokens:input_tokens, outputTokens:output_tokens, costUsd:(input_tokens*3+output_tokens*15)/1_000_000 } });
+  }
+
+  /* ── Weekly plan path ── */
+  const trainingDays = body.trainingDays ?? 5;
+  if (trainingDays < 2 || trainingDays > 7)
+    return res.status(400).json({ error: 'trainingDays must be 2–7' });
+
   const weekStart     = nextMonday();
-  const prompt        = buildPrompt(summaries ?? [], recentActs, trainingDays, weekStart, sport, hrZones, profile);
+  const prompt        = buildPrompt(summaries ?? [], recentActs, trainingDays, weekStart, sport as Exclude<SportType,'atp'>, hrZones, profile);
   const avgSessions   = (summaries ?? []).slice(0,4).reduce((s,r)=>s+((r.swim_sessions as number)??0)+((r.bike_sessions as number)??0)+((r.run_sessions as number)??0),0) / Math.max(1, Math.min((summaries??[]).length,4));
   const suggestedDays = Math.max(3, Math.min(6, Math.round(avgSessions)));
 

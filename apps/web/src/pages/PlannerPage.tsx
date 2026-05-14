@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import SectionLabel from '../components/SectionLabel';
+import ATPSection from '../components/training/ATPSection';
 
-type SportType = 'triathlon' | 'run' | 'bike' | 'swim';
+type SportType = 'triathlon' | 'run' | 'bike' | 'swim' | 'atp';
 
 const SPORTS: Array<{ value: SportType; icon: string; label: string; color: string }> = [
-  { value: 'triathlon', icon: '🏅', label: 'Triathlon',  color: 'var(--tri)'  },
-  { value: 'run',       icon: '🏃', label: 'Bieganie',   color: 'var(--run)'  },
-  { value: 'bike',      icon: '🚴', label: 'Rower',      color: 'var(--bike)' },
-  { value: 'swim',      icon: '🏊', label: 'Pływanie',   color: 'var(--swim)' },
+  { value: 'atp',       icon: '📅', label: 'ATP (roczny)', color: 'var(--tri)'  },
+  { value: 'triathlon', icon: '🏅', label: 'Triathlon',    color: 'var(--tri)'  },
+  { value: 'run',       icon: '🏃', label: 'Bieganie',     color: 'var(--run)'  },
+  { value: 'bike',      icon: '🚴', label: 'Rower',        color: 'var(--bike)' },
+  { value: 'swim',      icon: '🏊', label: 'Pływanie',     color: 'var(--swim)' },
 ];
 
 interface Session { type:'rest'|'swim'|'bike'|'run'|'brick'; label:string; distance:string; duration:string; description:string; }
@@ -213,7 +215,9 @@ export default function PlannerPage() {
         </div>
       </section>
 
-      <section>
+      {activeSport === 'atp' && <ATPSection />}
+
+      <section style={{ display: activeSport === 'atp' ? 'none' : undefined }}>
         <div style={{ maxWidth:1060, margin:'0 auto', padding:'2rem 5vw' }}>
           {loading && <p style={{ color:'var(--text-secondary)', fontSize:14 }}>Ładowanie planu…</p>}
           {error && <div className="alert alert-warn" style={{ marginBottom:16 }}>{error}</div>}
