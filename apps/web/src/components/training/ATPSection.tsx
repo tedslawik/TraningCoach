@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 
 type Discipline = 'triathlon' | 'run' | 'bike' | 'swim';
-type RaceType   = string;
 
 interface ATPPhase {
   name: string;
