@@ -39,7 +39,7 @@ export default function PMCChart({ data, height = 200 }: Props) {
   const range   = maxVal - minVal || 1;
 
   const toY = (v: number) => padT + chartH - ((v - minVal) / range) * chartH;
-  const toX = (i: number) => padL + (i / (data.length - 1)) * chartW * 0.70;
+  const toX = (i: number) => padL + (i / (data.length - 1)) * chartW * 0.80;
 
   const zeroY = toY(0);
 
