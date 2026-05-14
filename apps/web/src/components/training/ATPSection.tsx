@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 
-type RaceType = 'sprint' | 'olympic' | 'half' | 'full';
+type Discipline = 'triathlon' | 'run' | 'bike' | 'swim';
+type RaceType   = string;
 
 interface ATPPhase {
   name: string;
@@ -32,12 +33,39 @@ const INTENSITY_BADGE: Record<string, string> = {
   low: '#22c55e', moderate: '#f59e0b', high: '#ef4444',
 };
 
-const RACE_OPTIONS: { value: RaceType; label: string }[] = [
-  { value: 'sprint',  label: 'Sprint (~1:15h)'     },
-  { value: 'olympic', label: 'Olympic (~2:30h)'     },
-  { value: 'half',    label: 'Half Ironman (~5–6h)' },
-  { value: 'full',    label: 'Full Ironman (~12h)'  },
+const DISCIPLINES: { value: Discipline; icon: string; label: string; color: string }[] = [
+  { value: 'triathlon', icon: '🏅', label: 'Triathlon',  color: 'var(--tri)'  },
+  { value: 'run',       icon: '🏃', label: 'Bieganie',   color: 'var(--run)'  },
+  { value: 'bike',      icon: '🚴', label: 'Kolarstwo',  color: 'var(--bike)' },
+  { value: 'swim',      icon: '🏊', label: 'Pływanie',   color: 'var(--swim)' },
 ];
+
+const RACE_OPTIONS_BY_DISCIPLINE: Record<Discipline, { value: string; label: string }[]> = {
+  triathlon: [
+    { value: 'sprint',      label: 'Sprint (~1:15h)'     },
+    { value: 'olympic',     label: 'Olympic (~2:30h)'     },
+    { value: 'half',        label: 'Half Ironman (~5–6h)' },
+    { value: 'full',        label: 'Full Ironman (~12h)'  },
+  ],
+  run: [
+    { value: '5k',           label: '5 km'        },
+    { value: '10k',          label: '10 km'        },
+    { value: 'halfmarathon', label: 'Półmaraton'   },
+    { value: 'marathon',     label: 'Maraton'      },
+  ],
+  bike: [
+    { value: 'granfondo',    label: 'Gran Fondo'      },
+    { value: 'race100',      label: 'Wyścig 100 km'   },
+    { value: 'race200',      label: 'Wyścig 200 km'   },
+    { value: 'mtb',          label: 'Zawody MTB/XC'   },
+  ],
+  swim: [
+    { value: 'pool1500',     label: '1500 m (basen)'   },
+    { value: 'ow3k',         label: '3 km (otwarty)'   },
+    { value: 'ow5k',         label: '5 km (otwarty)'   },
+    { value: 'ow10k',        label: '10 km (otwarty)'  },
+  ],
+};
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('pl-PL', { day:'numeric', month:'short', year:'numeric' });
@@ -97,10 +125,11 @@ function PhaseBar({ phase, totalWeeks, selected, onClick }: {
 
 export default function ATPSection() {
   const { session } = useAuth();
-  const [plan, setPlan]       = useState<ATPPlan | null | undefined>(undefined);
+  const [plan, setPlan]         = useState<ATPPlan | null | undefined>(undefined);
+  const [discipline, setDisc]   = useState<Discipline>('triathlon');
   const [raceDate, setRaceDate] = useState('');
-  const [raceType, setRaceType] = useState<RaceType>('half');
-  const [generating, setGen]  = useState(false);
+  const [raceType, setRaceType] = useState('half');
+  const [generating, setGen]    = useState(false);
   const [error, setError]     = useState<string | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [lastUsage, setUsage] = useState<{ costUsd: number } | null>(null);
@@ -121,7 +150,7 @@ export default function ATPSection() {
       const res = await fetch('/api/ai/generate-plan', {
         method: 'POST',
         headers: { 'Content-Type':'application/json', Authorization:`Bearer ${session.access_token}` },
-        body: JSON.stringify({ sport:'atp', raceDate, raceType }),
+        body: JSON.stringify({ sport:'atp', raceDate, raceType, discipline }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Błąd');
@@ -177,6 +206,20 @@ export default function ATPSection() {
         {(showForm || plan === null) && (
           <div style={{ background:'var(--bg)', border:'0.5px solid var(--border)', borderRadius:'var(--radius-lg)', padding:'1.25rem', marginBottom:'1.5rem' }}>
             <div style={{ fontSize:13, fontWeight:600, marginBottom:12 }}>Skonfiguruj plan roczny</div>
+
+            {/* Discipline selector */}
+            <div style={{ marginBottom:14 }}>
+              <label style={{ fontSize:12, color:'var(--text-secondary)', display:'block', marginBottom:6 }}>Dyscyplina</label>
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                {DISCIPLINES.map(d => (
+                  <button key={d.value} onClick={() => { setDisc(d.value); setRaceType(RACE_OPTIONS_BY_DISCIPLINE[d.value][d.value==='triathlon'?2:0].value); }}
+                    style={{ padding:'7px 14px', borderRadius:'var(--radius-md)', border:`1.5px solid ${discipline===d.value ? d.color : 'var(--border-md)'}`, background: discipline===d.value ? `${d.color}18` : 'var(--bg)', color: discipline===d.value ? d.color : 'var(--text-secondary)', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'var(--font)', display:'flex', alignItems:'center', gap:5, transition:'all 0.12s' }}>
+                    {d.icon} {d.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:14 }}>
               <div>
                 <label style={{ fontSize:12, color:'var(--text-secondary)', display:'block', marginBottom:4 }}>Data wyścigu A</label>
@@ -184,10 +227,10 @@ export default function ATPSection() {
                   style={{ width:'100%', padding:'8px 10px', borderRadius:'var(--radius-md)', border:'0.5px solid var(--border-md)', background:'var(--bg)', color:'var(--text)', fontSize:13, fontFamily:'var(--font)', boxSizing:'border-box' }} />
               </div>
               <div>
-                <label style={{ fontSize:12, color:'var(--text-secondary)', display:'block', marginBottom:4 }}>Dystans</label>
-                <select value={raceType} onChange={e=>setRaceType(e.target.value as RaceType)}
+                <label style={{ fontSize:12, color:'var(--text-secondary)', display:'block', marginBottom:4 }}>Dystans / format</label>
+                <select value={raceType} onChange={e=>setRaceType(e.target.value)}
                   style={{ width:'100%', padding:'8px 10px', borderRadius:'var(--radius-md)', border:'0.5px solid var(--border-md)', background:'var(--bg)', color:'var(--text)', fontSize:13, fontFamily:'var(--font)', boxSizing:'border-box' }}>
-                  {RACE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  {RACE_OPTIONS_BY_DISCIPLINE[discipline].map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
             </div>

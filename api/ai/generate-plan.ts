@@ -129,11 +129,23 @@ Balansuj 3 dyscypliny. Brick raz na 2 tyg. Pływanie min 2x/tydzień.`;
 }
 
 /* ── ATP prompt ── */
+const DISCIPLINE_LABELS: Record<string, string> = {
+  triathlon: 'Triathlon', run: 'Bieganie', bike: 'Kolarstwo', swim: 'Pływanie',
+};
+
+const DISCIPLINE_WORKOUTS: Record<string, string> = {
+  triathlon: 'Pływanie techniczne, długa jazda Z2, bieg LSR, brick (rower+bieg)',
+  run:  'LSR (długi bieg Z2), tempo/próg, interwały (400m–1600m), bieg górski, strides',
+  bike: 'Długa jazda Z2 (3–5h), sweet spot 88–93% FTP, interwały FTP 2×20min, sprinty, siodło',
+  swim: 'Dryle techniczne (high-elbow, catch-up), wytrzymałość ciągła, interwały 400m/200m, długa seria 1500m+',
+};
+
 function buildATPPrompt(
   summaries: Array<Record<string,unknown>>,
   raceDate: string,
-  raceType: RaceType,
+  raceType: string,
   profile: { weight?: number; ftp?: number },
+  discipline = 'triathlon',
 ): string {
   const pmc    = calcPMC(summaries);
   const form   = pmc.tsb > 5 ? 'wypoczęty' : pmc.tsb > -10 ? 'optymalny' : 'zmęczony';
@@ -155,18 +167,27 @@ function buildATPPrompt(
   const endDay = new Date(race); endDay.setDate(endDay.getDate() + 21);
   const planEnd = endDay.toISOString().split('T')[0];
 
-  return `Jesteś ekspertem w periodyzacji triatlonowej. Stwórz Annual Training Plan (ATP) dla zawodnika.
+  const discLabel    = DISCIPLINE_LABELS[discipline] ?? discipline;
+  const discWorkouts = DISCIPLINE_WORKOUTS[discipline] ?? DISCIPLINE_WORKOUTS.triathlon;
+
+  return `Jesteś ekspertem w periodyzacji sportowej. Stwórz Annual Training Plan (ATP) dla zawodnika.
+
+DYSCYPLINA: ${discLabel}
+${discipline !== 'triathlon' ? `Plan skupia się WYŁĄCZNIE na ${discLabel.toLowerCase()}. Kluczowe treningi: ${discWorkouts}` : `Plan triathlonowy — wszystkie 3 dyscypliny. Kluczowe treningi: ${discWorkouts}`}
 
 PROFIL ZAWODNIKA:
 - Dzisiaj: ${today.toISOString().split('T')[0]}
 - CTL (forma): ${pmc.ctl} | ATL (zmęczenie): ${pmc.atl} | Form (TSB): ${pmc.tsb > 0?'+':''}${pmc.tsb} (${form})
 - Śr. TSS/tydzień (8 tyg.): ${avgTSS}
-- Pływanie: ${avg('swim_dist_km').toFixed(1)} km/tyg | Rower: ${avg('bike_dist_km').toFixed(1)} km/tyg | Bieg: ${avg('run_dist_km').toFixed(1)} km/tyg
+${discipline === 'triathlon' || discipline === 'swim' ? `- Pływanie: ${avg('swim_dist_km').toFixed(1)} km/tyg` : ''}
+${discipline === 'triathlon' || discipline === 'bike' ? `- Rower: ${avg('bike_dist_km').toFixed(1)} km/tyg` : ''}
+${discipline === 'triathlon' || discipline === 'run'  ? `- Bieg: ${avg('run_dist_km').toFixed(1)} km/tyg` : ''}
 ${profile.ftp ? `- FTP: ${profile.ftp} W` : ''}
 ${profile.weight ? `- Waga: ${profile.weight} kg` : ''}
 
 WYŚCIG DOCELOWY (A):
-- Dystans: ${RACE_LABELS[raceType]}
+- Dyscyplina: ${discLabel}
+- Format: ${raceType}
 - Data wyścigu: ${raceDate}
 - Tygodni do wyścigu: ${weeksUntil}
 
@@ -339,9 +360,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   /* ── ATP path ── */
   if (sport === 'atp') {
-    const { raceDate, raceType = 'half' } = body;
+    const { raceDate, raceType = 'half', discipline = 'triathlon' } = body as typeof body & { discipline?: string };
     if (!raceDate) return res.status(400).json({ error: 'raceDate required for ATP' });
-    const prompt = buildATPPrompt(summaries ?? [], raceDate, raceType as RaceType, profile);
+    const prompt = buildATPPrompt(summaries ?? [], raceDate, raceType as string, profile, discipline);
     const msg = await anthropic.messages.create({
       model: 'claude-sonnet-4-6', max_tokens: 3000,
       system: 'You are a JSON generator. Respond with ONLY valid JSON, no markdown, no code blocks. Start with { end with }.',
