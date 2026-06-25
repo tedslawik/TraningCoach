@@ -527,6 +527,128 @@ function CadenceChart({ time, cadence, avgVelocityMs, sportType, selection, onSe
   );
 }
 
+/* ── Swim laps chart (per pool length) ── */
+function SwimLapsChart({ laps }: { laps: LapSummary[] }) {
+  if (!laps.length) return null;
+
+  const W = 800, H = 180, pL = 38, pR = 14, pT = 24, pB = 28;
+  const cw = W - pL - pR, ch = H - pT - pB;
+  const N = laps.length;
+
+  const fmtSec = (s: number) => {
+    const m = Math.floor(s / 60), ss = Math.round(s % 60);
+    return m > 0 ? `${m}:${String(ss).padStart(2,'0')}` : `${ss}s`;
+  };
+
+  // Pool length = median of lap distances
+  const dists  = laps.map(l => l.distM);
+  const medD   = dists.slice().sort((a,b)=>a-b)[Math.floor(dists.length/2)];
+  const poolM  = medD || 25;
+
+  const times  = laps.map(l => l.timeSec);
+  const minT   = Math.min(...times);
+  const maxT   = Math.max(...times);
+  const avgT   = times.reduce((s,v)=>s+v,0)/N;
+
+  // Strokes per length: avgCadence (strokes/min) × time_sec / 60
+  const withCad = laps.filter(l => l.avgCadence && l.avgCadence > 0);
+  const strokes = withCad.map(l => (l.avgCadence! / 60) * l.timeSec);
+  const avgStrokes = strokes.length ? Math.round(strokes.reduce((s,v)=>s+v,0)/strokes.length) : null;
+
+  // SWOLF = time_sec + strokes_per_length
+  const swolfs = withCad.map(l => Math.round((l.avgCadence! / 60) * l.timeSec + l.timeSec));
+  const avgSwolf = swolfs.length ? Math.round(swolfs.reduce((s,v)=>s+v,0)/swolfs.length) : null;
+  const minSwolf = swolfs.length ? Math.min(...swolfs) : null;
+
+  // Y axis: 0 to maxT * 1.1
+  const yMax = maxT * 1.1;
+  const yAvg = pT + (1 - avgT / yMax) * ch;
+
+  // Bars
+  const barTotal = cw / N;
+  const barW = Math.max(2, barTotal * 0.78);
+
+  const colorForTime = (t: number) => {
+    const dev = (t - avgT) / avgT;
+    if (dev < -0.05) return '#22c55e';
+    if (dev >  0.10) return '#f87171';
+    if (dev >  0.05) return '#fbbf24';
+    return '#60a5fa';
+  };
+
+  // X label step: 1 / 5 / 10 depending on count
+  const tickStep = N <= 12 ? 1 : N <= 30 ? 5 : 10;
+
+  // Y ticks
+  const yTickVals = [0, Math.round(maxT/2), maxT];
+
+  return (
+    <div>
+      <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--text-secondary)', marginBottom:6, display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
+        <span>Czas / długość basenu</span>
+        <span style={{ color:'var(--text-secondary)', fontWeight:600, textTransform:'none', letterSpacing:0 }}>
+          {poolM} m basen · {N} długości
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', display:'block' }}>
+        {/* Y ticks */}
+        {yTickVals.map(v => {
+          const y = pT + (1 - v / yMax) * ch;
+          return <g key={v}>
+            <line x1={pL} y1={y} x2={W-pR} y2={y} stroke="var(--border)" strokeWidth={0.5} strokeDasharray="3,4" />
+            <text x={pL-4} y={y+3} textAnchor="end" fontSize={9} fill="var(--text-secondary)">{fmtSec(v)}</text>
+          </g>;
+        })}
+
+        {/* Avg line */}
+        <line x1={pL} y1={yAvg} x2={W-pR} y2={yAvg} stroke="#60a5fa" strokeWidth={1.2} strokeDasharray="6,3" />
+        <text x={W-pR-3} y={yAvg-4} fontSize={10} fill="#60a5fa" textAnchor="end" fontWeight={700}>
+          śr. {fmtSec(avgT)}
+        </text>
+
+        {/* Bars */}
+        {laps.map((l, i) => {
+          const x = pL + i * barTotal + (barTotal - barW) / 2;
+          const h = (l.timeSec / yMax) * ch;
+          const y = pT + ch - h;
+          const strokesThisLap = l.avgCadence ? Math.round((l.avgCadence/60) * l.timeSec) : null;
+          const swolfThisLap   = strokesThisLap !== null ? strokesThisLap + l.timeSec : null;
+          return (
+            <g key={i}>
+              <rect x={x} y={y} width={barW} height={Math.max(0, h)} fill={colorForTime(l.timeSec)} opacity={0.88} rx={1}>
+                <title>{`Długość ${i+1}: ${fmtSec(l.timeSec)}${strokesThisLap !== null ? ` · ${strokesThisLap} ruchów` : ''}${swolfThisLap !== null ? ` · SWOLF ${swolfThisLap}` : ''}${l.avgHR ? ` · ${Math.round(l.avgHR)} bpm` : ''}`}</title>
+              </rect>
+            </g>
+          );
+        })}
+
+        {/* X labels */}
+        {laps.map((_, i) => {
+          const showLabel = (i + 1) % tickStep === 0 || i === 0 || i === N - 1;
+          if (!showLabel) return null;
+          const x = pL + (i + 0.5) * barTotal;
+          return (
+            <text key={i} x={x} y={H - 8} textAnchor="middle" fontSize={9} fill="var(--text-secondary)">
+              {i + 1}
+            </text>
+          );
+        })}
+      </svg>
+
+      {/* Per-length stats row */}
+      <div style={{ display:'flex', gap:14, fontSize:11, color:'var(--text-secondary)', marginTop:6, flexWrap:'wrap' }}>
+        <span>Najszybsza: <strong style={{ color:'#22c55e' }}>{fmtSec(minT)}</strong></span>
+        <span>Najwolniejsza: <strong style={{ color:'#f87171' }}>{fmtSec(maxT)}</strong></span>
+        {avgStrokes !== null && <span>Śr. ruchów: <strong style={{ color:'var(--text)' }}>{avgStrokes}</strong>/długość</span>}
+        {avgSwolf !== null && <span>SWOLF: <strong style={{ color:'var(--text)' }}>{avgSwolf}</strong> (najlepszy {minSwolf})</span>}
+      </div>
+      <div style={{ fontSize:10, color:'var(--text-secondary)', marginTop:6, lineHeight:1.5 }}>
+        SWOLF = czas długości + liczba ruchów. Niższe = lepsza efektywność (mniej ruchów na ten sam dystans).
+      </div>
+    </div>
+  );
+}
+
 /* ── Power chart ── */
 function PowerChart({ time, watts, avgWatts, normalizedWatts, selection, onSelect }: {
   time: number[]; watts: number[];
@@ -637,6 +759,26 @@ export default function ActivityCharts({ data }: { data: StreamData }) {
     ? Math.round((stats.avgVelocityMs * 60 / stats.avgHeartRate) * 1000) / 10
     : null;
 
+  // Swim-specific aggregates from laps
+  const swimLapStats = (() => {
+    if (!isSwim || !data.laps?.length) return null;
+    const N = data.laps.length;
+    const dists = data.laps.map(l => l.distM);
+    const medD  = dists.slice().sort((a,b)=>a-b)[Math.floor(N/2)];
+    const times = data.laps.map(l => l.timeSec);
+    const minT  = Math.min(...times);
+    const withC = data.laps.filter(l => l.avgCadence && l.avgCadence > 0);
+    const strokes = withC.map(l => Math.round((l.avgCadence! / 60) * l.timeSec));
+    const swolfs  = withC.map((l, i) => strokes[i] + l.timeSec);
+    return {
+      poolLen: medD,
+      lengthsCount: N,
+      fastestSec: minT,
+      avgStrokes: strokes.length ? Math.round(strokes.reduce((s,v)=>s+v,0)/strokes.length) : null,
+      avgSwolf:   swolfs.length  ? Math.round(swolfs.reduce((s,v)=>s+v,0)/swolfs.length)   : null,
+    };
+  })();
+
   // Distance: show in meters for swimming <1km
   const distLabel = isSwim && stats.totalDistKm < 1
     ? `${Math.round(stats.totalDistKm * 1000)} m`
@@ -650,6 +792,14 @@ export default function ActivityCharts({ data }: { data: StreamData }) {
     ...(!isSwim ? [['Przewyżs.', stats.elevGain > 0 ? `${stats.elevGain} m` : null] as [string, string|null]] : []),
     // Swim: pace in min/100m only
     ...(isSwim ? [['Tempo /100m', stats.avgVelocityMs ? fmtPace(stats.avgVelocityMs, sportType) : null] as [string, string|null]] : []),
+    // Swim: pool length and lap counts
+    ...(swimLapStats ? [
+      ['Basen',         `${swimLapStats.poolLen} m`],
+      ['Długości',      `${swimLapStats.lengthsCount}`],
+      ['Najszybsza',    swimLapStats.fastestSec ? (() => { const m = Math.floor(swimLapStats.fastestSec/60), s = swimLapStats.fastestSec%60; return m > 0 ? `${m}:${String(s).padStart(2,'0')}` : `${s} s`; })() : null],
+      ...(swimLapStats.avgSwolf !== null ? [['SWOLF',  `${swimLapStats.avgSwolf}`] as [string, string|null]] : []),
+      ...(swimLapStats.avgStrokes !== null ? [['Ruchy/dł.', `${swimLapStats.avgStrokes}`] as [string, string|null]] : []),
+    ] as Array<[string, string|null]> : []),
     // Bike: speed in km/h
     ...(isRide ? [['Śr. prędkość', stats.avgVelocityMs ? `${(stats.avgVelocityMs * 3.6).toFixed(1)} km/h` : null] as [string, string|null]] : []),
     // Run: pace in min/km
@@ -688,6 +838,11 @@ export default function ActivityCharts({ data }: { data: StreamData }) {
       {!isSwim && data.altitude.length > 0 && (
         <div className="card" style={{ marginBottom: 0 }}>
           <ElevationChart distance={data.distance} altitude={data.altitude} elevGain={stats.elevGain} />
+        </div>
+      )}
+      {isSwim && data.laps?.length > 0 && (
+        <div className="card" style={{ marginBottom: 0 }}>
+          <SwimLapsChart laps={data.laps} />
         </div>
       )}
       {data.heartrate.length > 0 && (

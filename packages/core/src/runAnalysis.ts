@@ -1,11 +1,12 @@
 export interface LapSummary {
-  lapIndex:   number;
-  name:       string;
-  distM:      number;
-  timeSec:    number;
-  elapsedSec: number;
-  velMs:      number;
-  avgHR:      number | null;
+  lapIndex:    number;
+  name:        string;
+  distM:       number;
+  timeSec:     number;
+  elapsedSec:  number;
+  velMs:       number;
+  avgHR:       number | null;
+  avgCadence?: number | null;
 }
 
 export interface RunInterval {

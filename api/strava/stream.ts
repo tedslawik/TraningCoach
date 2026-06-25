@@ -112,19 +112,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const activity = activityRaw as { name?: string; sport_type?: string; start_date_local?: string };
 
   // Process laps: filter auto-laps (uniform distance = not useful) vs manual laps
-  type RawLap = { lap_index: number; name?: string; distance: number; moving_time: number; elapsed_time: number; average_speed: number; average_heartrate?: number };
+  type RawLap = { lap_index: number; name?: string; distance: number; moving_time: number; elapsed_time: number; average_speed: number; average_heartrate?: number; average_cadence?: number };
   const laps = (lapsRaw as RawLap[]).map(l => ({
-    lapIndex:  l.lap_index,
-    name:      l.name ?? `Lap ${l.lap_index}`,
-    distM:     Math.round(l.distance),
-    timeSec:   Math.round(l.moving_time),
+    lapIndex:   l.lap_index,
+    name:       l.name ?? `Lap ${l.lap_index}`,
+    distM:      Math.round(l.distance),
+    timeSec:    Math.round(l.moving_time),
     elapsedSec: Math.round(l.elapsed_time),
-    velMs:     l.average_speed,
-    avgHR:     l.average_heartrate ?? null,
+    velMs:      l.average_speed,
+    avgHR:      l.average_heartrate ?? null,
+    avgCadence: l.average_cadence ?? null,
   }));
 
-  // Detect if these are auto-laps (all same distance → useless for interval analysis)
-  const isAutoLap = laps.length > 2 && (() => {
+  // Detect if these are auto-laps. For swim, each "auto-lap" = pool length → KEEP them.
+  const isSwim = new Set(['Swim','OpenWaterSwim']).has(activity.sport_type ?? '');
+  const isAutoLap = !isSwim && laps.length > 2 && (() => {
     const dists = laps.map(l => l.distM);
     const medD  = dists.slice().sort((a,b)=>a-b)[Math.floor(dists.length/2)];
     const maxDev = Math.max(...dists.map(d => Math.abs(d - medD)));
