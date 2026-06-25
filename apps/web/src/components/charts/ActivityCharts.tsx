@@ -1,3 +1,4 @@
+import { useState, useRef } from 'react';
 import type { LapSummary } from '@tricoach/core';
 
 export interface StreamData {
@@ -68,8 +69,151 @@ function fmtPace(ms: number, sport: string): string {
 }
 
 function fmtTime(sec: number): string {
-  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
-  return h > 0 ? `${h}h ${m}min` : `${m} min`;
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.round(sec % 60);
+  if (h > 0) return `${h}h ${m}min`;
+  if (m > 0) return `${m}:${String(s).padStart(2,'0')} min`;
+  return `${s} s`;
+}
+
+/* ── Range selection (brush) ── */
+const BRUSH_COLOR = '#7c3aed';
+
+interface Selection { startPct: number; endPct: number; }
+type BrushProps = { selection?: Selection | null; onSelect?: (s: Selection | null) => void };
+
+function useBrush(W: number, pL: number, pR: number, selection: Selection | null | undefined, onSelect: ((s: Selection | null) => void) | undefined) {
+  const svgRef       = useRef<SVGSVGElement>(null);
+  const dragStartRef = useRef<number | null>(null);
+
+  const svgX = (clientX: number) => {
+    if (!svgRef.current) return 0;
+    const rect = svgRef.current.getBoundingClientRect();
+    return ((clientX - rect.left) / rect.width) * W;
+  };
+  const xToPct = (x: number) => Math.max(0, Math.min(1, (x - pL) / (W - pL - pR)));
+
+  if (!onSelect) return { svgRef, handlers: {} as React.SVGAttributes<SVGSVGElement> };
+
+  return {
+    svgRef,
+    handlers: {
+      style: { cursor: 'crosshair' as const, userSelect: 'none' as const },
+      onMouseDown: (e: React.MouseEvent) => {
+        const p = xToPct(svgX(e.clientX));
+        dragStartRef.current = p;
+        onSelect({ startPct: p, endPct: p });
+      },
+      onMouseMove: (e: React.MouseEvent) => {
+        if (dragStartRef.current === null) return;
+        const p = xToPct(svgX(e.clientX));
+        const start = dragStartRef.current;
+        onSelect({ startPct: Math.min(start, p), endPct: Math.max(start, p) });
+      },
+      onMouseUp: () => {
+        if (dragStartRef.current !== null && selection && Math.abs(selection.endPct - selection.startPct) < 0.005) {
+          onSelect(null);
+        }
+        dragStartRef.current = null;
+      },
+      onMouseLeave: () => { dragStartRef.current = null; },
+    } as React.SVGAttributes<SVGSVGElement>,
+  };
+}
+
+function BrushOverlay({ sel, W, pL, pR, pT, ch }: { sel: Selection | null | undefined; W: number; pL: number; pR: number; pT: number; ch: number }) {
+  if (!sel) return null;
+  const pctToX = (p: number) => pL + p * (W - pL - pR);
+  const x1 = pctToX(sel.startPct);
+  const x2 = pctToX(sel.endPct);
+  if (x2 - x1 < 1) return null;
+  return (
+    <g style={{ pointerEvents: 'none' }}>
+      <rect x={x1} y={pT} width={x2 - x1} height={ch} fill={BRUSH_COLOR} opacity={0.16} />
+      <line x1={x1} y1={pT} x2={x1} y2={pT + ch} stroke={BRUSH_COLOR} strokeWidth={1.2} />
+      <line x1={x2} y1={pT} x2={x2} y2={pT + ch} stroke={BRUSH_COLOR} strokeWidth={1.2} />
+    </g>
+  );
+}
+
+function computeRangeStats(data: StreamData, sel: Selection) {
+  const N = data.time.length;
+  if (N < 2) return null;
+  const startIdx = Math.max(0, Math.floor(sel.startPct * (N - 1)));
+  const endIdx   = Math.min(N - 1, Math.ceil(sel.endPct * (N - 1)));
+  if (endIdx - startIdx < 1) return null;
+
+  const slice = (arr: number[]) => arr.slice(startIdx, endIdx + 1);
+  const avg   = (arr: number[]) => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
+
+  const duration = (data.time[endIdx] ?? 0) - (data.time[startIdx] ?? 0);
+  const dist     = data.distance.length > endIdx ? (data.distance[endIdx] ?? 0) - (data.distance[startIdx] ?? 0) : 0;
+  const hr       = slice(data.heartrate).filter(v => v > 0);
+  const vel      = slice(data.velocity).filter(v => v > 0);
+  const watts    = slice(data.watts).filter(v => v > 0);
+  const cad      = slice(data.cadence).filter(v => v > 0);
+  const alt      = slice(data.altitude);
+
+  let elevGain = 0;
+  for (let i = 1; i < alt.length; i++) {
+    const d = alt[i] - alt[i-1];
+    if (d > 0) elevGain += d;
+  }
+
+  return {
+    duration,
+    dist,
+    avgHR:    hr.length    ? Math.round(avg(hr))             : null,
+    maxHR:    hr.length    ? Math.round(Math.max(...hr))     : null,
+    avgVel:   vel.length   ? avg(vel)                        : null,
+    avgWatts: watts.length ? Math.round(avg(watts))          : null,
+    maxWatts: watts.length ? Math.round(Math.max(...watts))  : null,
+    avgCad:   cad.length   ? Math.round(avg(cad))            : null,
+    elevGain: Math.round(elevGain),
+  };
+}
+
+function SelectionStatsPanel({ data, selection, onClear }: { data: StreamData; selection: Selection; onClear: () => void }) {
+  const s = computeRangeStats(data, selection);
+  if (!s) return null;
+  const isRide = ['Ride','VirtualRide','EBikeRide'].includes(data.sportType);
+  const isSwim = ['Swim','OpenWaterSwim'].includes(data.sportType);
+  const isRun  = ['Run','TrailRun','VirtualRun'].includes(data.sportType);
+
+  const cadenceUnit = isRide ? 'RPM' : isSwim ? 'ud/min' : 'spm';
+  const items: Array<[string, string]> = [
+    ['Czas',                                                  fmtTime(s.duration)],
+    ...(s.dist > 5                                          ? [['Dystans',     `${(s.dist/1000).toFixed(2)} km`] as [string,string]] : []),
+    ...(s.avgHR                                             ? [['Śr. HR',      `${s.avgHR} bpm`]                as [string,string]] : []),
+    ...(s.maxHR && s.maxHR !== s.avgHR                      ? [['Max HR',      `${s.maxHR} bpm`]                as [string,string]] : []),
+    ...(s.avgVel                                            ? [[isRide ? 'Śr. prędkość' : isSwim ? 'Tempo /100m' : 'Śr. tempo', fmtPace(s.avgVel, data.sportType)] as [string,string]] : []),
+    ...(s.avgWatts                                          ? [['Śr. moc',     `${s.avgWatts} W`]               as [string,string]] : []),
+    ...(s.maxWatts && s.maxWatts !== s.avgWatts             ? [['Max moc',     `${s.maxWatts} W`]               as [string,string]] : []),
+    ...(s.avgCad                                            ? [['Kadencja',    `${s.avgCad} ${cadenceUnit}`]    as [string,string]] : []),
+    ...(!isSwim && s.elevGain > 0                           ? [['Przewyżs.',   `${s.elevGain} m`]               as [string,string]] : []),
+    ...(isRun && s.avgVel && s.avgHR && s.avgHR > 0         ? [['EF',          `${Math.round(s.avgVel*60/s.avgHR*1000)/10}`] as [string,string]] : []),
+  ];
+
+  return (
+    <div style={{ background:'var(--bg)', border:`1.5px solid ${BRUSH_COLOR}`, borderRadius:'var(--radius-lg)', padding:'14px 16px', boxShadow:'0 4px 14px rgba(124,58,237,0.10)' }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10, gap:10, flexWrap:'wrap' }}>
+        <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:BRUSH_COLOR }}>
+          📍 Zaznaczony fragment
+        </div>
+        <button onClick={onClear}
+          style={{ background:'none', border:'0.5px solid var(--border-md)', color:'var(--text-secondary)', fontSize:11, padding:'4px 10px', borderRadius:'var(--radius-md)', cursor:'pointer', fontFamily:'var(--font)' }}>
+          Wyczyść ✕
+        </button>
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(95px, 1fr))', gap:8 }}>
+        {items.map(([label, value]) => (
+          <div key={label} style={{ background:'var(--bg-secondary)', borderRadius:'var(--radius-md)', padding:'8px 10px', textAlign:'center' }}>
+            <div style={{ fontSize:15, fontWeight:700, color:'var(--text)' }}>{value}</div>
+            <div style={{ fontSize:9, color:'var(--text-secondary)', textTransform:'uppercase', letterSpacing:'0.06em', marginTop:2 }}>{label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /* ── Elevation chart ── */
@@ -123,9 +267,10 @@ function ElevationChart({ distance, altitude, elevGain }: { distance: number[]; 
 }
 
 /* ── HR chart ── */
-function HeartRateChart({ time, heartrate, hrZones }: { time: number[]; heartrate: number[]; hrZones: Array<{min:number;max:number}> | null }) {
+function HeartRateChart({ time, heartrate, hrZones, selection, onSelect }: { time: number[]; heartrate: number[]; hrZones: Array<{min:number;max:number}> | null } & BrushProps) {
   if (!heartrate.length) return null;
   const W = 800, H = 150, pL = 44, pR = 12, pT = 10, pB = 22;
+  const { svgRef, handlers } = useBrush(W, pL, pR, selection, onSelect);
 
   const maxHR = Math.max(...heartrate);
   const minHR = Math.max(0, Math.min(...heartrate) - 10);
@@ -149,7 +294,7 @@ function HeartRateChart({ time, heartrate, hrZones }: { time: number[]; heartrat
       <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-secondary)', marginBottom: 6 }}>
         Tętno (uśrednione)
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', display: 'block' }}>
+      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} {...handlers} style={{ width: '100%', display: 'block', ...handlers.style }}>
         {/* HR zone bands */}
         {hrZones && hrZones.map((z, i) => {
           const lo = Math.max(minHR, z.min <= 0 ? 0 : z.min);
@@ -175,6 +320,7 @@ function HeartRateChart({ time, heartrate, hrZones }: { time: number[]; heartrat
           </g>;
         })}
         <polyline points={pts} fill="none" stroke="#f87171" strokeWidth={1.5} strokeLinejoin="round" />
+        <BrushOverlay sel={selection} W={W} pL={pL} pR={pR} pT={pT} ch={ch} />
         {timeTicks.map(({ p, label }) => (
           <text key={p} x={pL + p * cw} y={H - 4} textAnchor="middle" fontSize={9} fill="var(--text-secondary)">{label}</text>
         ))}
@@ -193,9 +339,11 @@ function HeartRateChart({ time, heartrate, hrZones }: { time: number[]; heartrat
 }
 
 /* ── Pace / Speed chart ── */
-function PaceChart({ time, velocity, sportType }: { time: number[]; velocity: number[]; sportType: string }) {
+function PaceChart({ time, velocity, sportType, selection, onSelect }: { time: number[]; velocity: number[]; sportType: string } & BrushProps) {
   if (!velocity.length || velocity.every(v => v === 0)) return null;
   const W = 800, H = 140, pL = 44, pR = 12, pT = 10, pB = 22;
+  const { svgRef, handlers } = useBrush(W, pL, pR, selection, onSelect);
+  const ch = H - pT - pB;
 
   const isRide = ['Ride','VirtualRide','EBikeRide'].includes(sportType);
   const isSwim = ['Swim','OpenWaterSwim'].includes(sportType);
@@ -240,7 +388,7 @@ function PaceChart({ time, velocity, sportType }: { time: number[]; velocity: nu
       <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-secondary)', marginBottom: 6 }}>
         {isRide ? 'Prędkość' : isSwim ? 'Tempo (/100m)' : 'Tempo (/km)'} · {unit}
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', display: 'block' }}>
+      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} {...handlers} style={{ width: '100%', display: 'block', ...handlers.style }}>
         {yTicks.map(({ v, label, yNorm: yn }) => {
           const y = pT + (1 - yn) * (H - pT - pB);
           return <g key={v}>
@@ -249,6 +397,7 @@ function PaceChart({ time, velocity, sportType }: { time: number[]; velocity: nu
           </g>;
         })}
         <polyline points={pts} fill="none" stroke={SPEED_COLOR} strokeWidth={1.5} strokeLinejoin="round" />
+        <BrushOverlay sel={selection} W={W} pL={pL} pR={pR} pT={pT} ch={ch} />
         {timeTicks.map(({ p, label }) => (
           <text key={p} x={pL + p * cw} y={H - 4} textAnchor="middle" fontSize={9} fill="var(--text-secondary)">{label}</text>
         ))}
@@ -276,10 +425,11 @@ function optimalCadenceRange(avgVelMs: number | null, sportType?: string): [numb
 /* ── Cadence chart ── */
 const SWIM_SPORTS_C = new Set(['Swim','OpenWaterSwim']);
 
-function CadenceChart({ time, cadence, avgVelocityMs, sportType }: { time: number[]; cadence: number[]; avgVelocityMs?: number | null; sportType?: string }) {
+function CadenceChart({ time, cadence, avgVelocityMs, sportType, selection, onSelect }: { time: number[]; cadence: number[]; avgVelocityMs?: number | null; sportType?: string } & BrushProps) {
   const isSwimC = SWIM_SPORTS_C.has(sportType ?? '');
   if (!cadence.length) return null;
   const W = 800, H = 130, pL = 44, pR = 12, pT = 10, pB = 22;
+  const { svgRef, handlers } = useBrush(W, pL, pR, selection, onSelect);
 
   const sm = smoothed(cadence, 12);
   const validCad = sm.filter(v => v > 60 && v < 250);
@@ -321,7 +471,7 @@ function CadenceChart({ time, cadence, avgVelocityMs, sportType }: { time: numbe
           {avgC < optLo ? '↓ za niska' : avgC <= optHi ? '✓ optymalna' : '↑ wysoka'}
         </span>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', display:'block' }}>
+      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} {...handlers} style={{ width:'100%', display:'block', ...handlers.style }}>
         {/* Dynamic optimal zone band */}
         <rect x={pL} y={Math.max(pT, optTop)} width={cw} height={Math.min(ch, optH)} fill="#34d399" opacity={0.15} />
         <text x={W - pR + 2} y={Math.min(pT + ch - 2, optTop + optH/2 + 3)} fontSize={8} fill="#34d399" fontWeight={700}>OPT</text>
@@ -336,6 +486,7 @@ function CadenceChart({ time, cadence, avgVelocityMs, sportType }: { time: numbe
         })}
 
         <polyline points={pts} fill="none" stroke={cadColor} strokeWidth={1.5} strokeLinejoin="round" />
+        <BrushOverlay sel={selection} W={W} pL={pL} pR={pR} pT={pT} ch={ch} />
 
         {timeTicks.map(({ p, label }) => (
           <text key={p} x={pL + p*cw} y={H-4} textAnchor="middle" fontSize={9} fill="var(--text-secondary)">{label}</text>
@@ -364,12 +515,13 @@ function CadenceChart({ time, cadence, avgVelocityMs, sportType }: { time: numbe
 }
 
 /* ── Power chart ── */
-function PowerChart({ time, watts, avgWatts, normalizedWatts }: {
+function PowerChart({ time, watts, avgWatts, normalizedWatts, selection, onSelect }: {
   time: number[]; watts: number[];
   avgWatts: number | null; normalizedWatts: number | null;
-}) {
+} & BrushProps) {
   if (!watts.length || watts.every(v => v === 0)) return null;
   const W = 800, H = 150, pL = 48, pR = 12, pT = 10, pB = 22;
+  const { svgRef, handlers } = useBrush(W, pL, pR, selection, onSelect);
 
   const sm      = smoothed(watts, 10);
   const valid   = sm.filter(v => v > 0 && v < 2000);
@@ -403,7 +555,7 @@ function PowerChart({ time, watts, avgWatts, normalizedWatts }: {
           {np  && <span style={{ color:'#7c3aed' }}>NP <strong>{np} W</strong></span>}
         </div>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', display:'block' }}>
+      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} {...handlers} style={{ width:'100%', display:'block', ...handlers.style }}>
         {/* Y grid */}
         {yTicks.map(({ v, y }) => (
           <g key={v}>
@@ -426,6 +578,7 @@ function PowerChart({ time, watts, avgWatts, normalizedWatts }: {
 
         {/* Power line */}
         <polyline points={pts} fill="none" stroke="#fbbf24" strokeWidth={1.5} strokeLinejoin="round" />
+        <BrushOverlay sel={selection} W={W} pL={pL} pR={pR} pT={pT} ch={ch} />
 
         {/* X labels */}
         {timeTicks.map(({ p, label }) => (
@@ -443,6 +596,7 @@ function PowerChart({ time, watts, avgWatts, normalizedWatts }: {
 
 /* ── Main export ── */
 export default function ActivityCharts({ data }: { data: StreamData }) {
+  const [selection, setSelection] = useState<Selection | null>(null);
   const { stats, sportType } = data;
   const isRide = BIKE_SPORTS.has(sportType);
   const isSwim = new Set(['Swim','OpenWaterSwim']).has(sportType);
@@ -506,6 +660,16 @@ export default function ActivityCharts({ data }: { data: StreamData }) {
         ))}
       </div>
 
+      {/* Selection stats panel */}
+      {selection
+        ? <SelectionStatsPanel data={data} selection={selection} onClear={() => setSelection(null)} />
+        : (
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', textAlign: 'center', padding: '6px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)' }}>
+            💡 Zaznacz fragment wykresu myszą, aby zobaczyć statystyki tego zakresu
+          </div>
+        )
+      }
+
       {/* Charts */}
       {!isSwim && data.altitude.length > 0 && (
         <div className="card" style={{ marginBottom: 0 }}>
@@ -514,12 +678,12 @@ export default function ActivityCharts({ data }: { data: StreamData }) {
       )}
       {data.heartrate.length > 0 && (
         <div className="card" style={{ marginBottom: 0 }}>
-          <HeartRateChart time={data.time} heartrate={data.heartrate} hrZones={data.hrZones} />
+          <HeartRateChart time={data.time} heartrate={data.heartrate} hrZones={data.hrZones} selection={selection} onSelect={setSelection} />
         </div>
       )}
       {data.velocity.length > 0 && data.velocity.some(v => v > 0) && (
         <div className="card" style={{ marginBottom: 0 }}>
-          <PaceChart time={data.time} velocity={data.velocity} sportType={sportType} />
+          <PaceChart time={data.time} velocity={data.velocity} sportType={sportType} selection={selection} onSelect={setSelection} />
         </div>
       )}
       {/* Power — not applicable for swimming */}
@@ -530,12 +694,14 @@ export default function ActivityCharts({ data }: { data: StreamData }) {
             watts={data.watts}
             avgWatts={data.stats.avgWatts}
             normalizedWatts={data.stats.normalizedPower}
+            selection={selection}
+            onSelect={setSelection}
           />
         </div>
       )}
       {data.cadence.length > 0 && (
         <div className="card" style={{ marginBottom: 0 }}>
-          <CadenceChart time={data.time} cadence={data.cadence} avgVelocityMs={data.stats.avgVelocityMs} sportType={sportType} />
+          <CadenceChart time={data.time} cadence={data.cadence} avgVelocityMs={data.stats.avgVelocityMs} sportType={sportType} selection={selection} onSelect={setSelection} />
         </div>
       )}
 
