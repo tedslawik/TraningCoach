@@ -135,84 +135,53 @@ function BrushOverlay({ sel, W, pL, pR, pT, ch }: { sel: Selection | null | unde
   );
 }
 
-function computeRangeStats(data: StreamData, sel: Selection) {
-  const N = data.time.length;
+/* Per-chart range stats helper */
+function rangeIndices(time: number[], sel: Selection) {
+  const N = time.length;
   if (N < 2) return null;
   const startIdx = Math.max(0, Math.floor(sel.startPct * (N - 1)));
   const endIdx   = Math.min(N - 1, Math.ceil(sel.endPct * (N - 1)));
   if (endIdx - startIdx < 1) return null;
-
-  const slice = (arr: number[]) => arr.slice(startIdx, endIdx + 1);
-  const avg   = (arr: number[]) => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
-
-  const duration = (data.time[endIdx] ?? 0) - (data.time[startIdx] ?? 0);
-  const dist     = data.distance.length > endIdx ? (data.distance[endIdx] ?? 0) - (data.distance[startIdx] ?? 0) : 0;
-  const hr       = slice(data.heartrate).filter(v => v > 0);
-  const vel      = slice(data.velocity).filter(v => v > 0);
-  const watts    = slice(data.watts).filter(v => v > 0);
-  const cad      = slice(data.cadence).filter(v => v > 0);
-  const alt      = slice(data.altitude);
-
-  let elevGain = 0;
-  for (let i = 1; i < alt.length; i++) {
-    const d = alt[i] - alt[i-1];
-    if (d > 0) elevGain += d;
-  }
-
-  return {
-    duration,
-    dist,
-    avgHR:    hr.length    ? Math.round(avg(hr))             : null,
-    maxHR:    hr.length    ? Math.round(Math.max(...hr))     : null,
-    avgVel:   vel.length   ? avg(vel)                        : null,
-    avgWatts: watts.length ? Math.round(avg(watts))          : null,
-    maxWatts: watts.length ? Math.round(Math.max(...watts))  : null,
-    avgCad:   cad.length   ? Math.round(avg(cad))            : null,
-    elevGain: Math.round(elevGain),
-  };
+  return { startIdx, endIdx, duration: (time[endIdx] ?? 0) - (time[startIdx] ?? 0) };
 }
 
-function SelectionStatsPanel({ data, selection, onClear }: { data: StreamData; selection: Selection; onClear: () => void }) {
-  const s = computeRangeStats(data, selection);
-  if (!s) return null;
-  const isRide = ['Ride','VirtualRide','EBikeRide'].includes(data.sportType);
-  const isSwim = ['Swim','OpenWaterSwim'].includes(data.sportType);
-  const isRun  = ['Run','TrailRun','VirtualRun'].includes(data.sportType);
+function RangeTooltip({ sel, W, pL, pR, pT, lines, color }: {
+  sel: Selection | null | undefined;
+  W: number; pL: number; pR: number; pT: number;
+  lines: string[];
+  color: string;
+}) {
+  if (!sel || !lines.length) return null;
+  const pctToX = (p: number) => pL + p * (W - pL - pR);
+  const cx = (pctToX(sel.startPct) + pctToX(sel.endPct)) / 2;
 
-  const cadenceUnit = isRide ? 'RPM' : isSwim ? 'ud/min' : 'spm';
-  const items: Array<[string, string]> = [
-    ['Czas',                                                  fmtTime(s.duration)],
-    ...(s.dist > 5                                          ? [['Dystans',     `${(s.dist/1000).toFixed(2)} km`] as [string,string]] : []),
-    ...(s.avgHR                                             ? [['Śr. HR',      `${s.avgHR} bpm`]                as [string,string]] : []),
-    ...(s.maxHR && s.maxHR !== s.avgHR                      ? [['Max HR',      `${s.maxHR} bpm`]                as [string,string]] : []),
-    ...(s.avgVel                                            ? [[isRide ? 'Śr. prędkość' : isSwim ? 'Tempo /100m' : 'Śr. tempo', fmtPace(s.avgVel, data.sportType)] as [string,string]] : []),
-    ...(s.avgWatts                                          ? [['Śr. moc',     `${s.avgWatts} W`]               as [string,string]] : []),
-    ...(s.maxWatts && s.maxWatts !== s.avgWatts             ? [['Max moc',     `${s.maxWatts} W`]               as [string,string]] : []),
-    ...(s.avgCad                                            ? [['Kadencja',    `${s.avgCad} ${cadenceUnit}`]    as [string,string]] : []),
-    ...(!isSwim && s.elevGain > 0                           ? [['Przewyżs.',   `${s.elevGain} m`]               as [string,string]] : []),
-    ...(isRun && s.avgVel && s.avgHR && s.avgHR > 0         ? [['EF',          `${Math.round(s.avgVel*60/s.avgHR*1000)/10}`] as [string,string]] : []),
-  ];
+  const padX = 7, padY = 5, lineH = 12, fontSize = 10.5;
+  // ~5.8 px per character at fontSize 10.5
+  const maxChars = Math.max(...lines.map(l => l.length));
+  const boxW = Math.max(60, maxChars * 5.8 + padX * 2);
+  const boxH = lines.length * lineH + padY * 2;
+  // Clamp inside chart area
+  let boxX = cx - boxW / 2;
+  boxX = Math.max(pL + 2, Math.min(W - pR - boxW - 2, boxX));
+  const boxY = pT + 3;
 
   return (
-    <div style={{ background:'var(--bg)', border:`1.5px solid ${BRUSH_COLOR}`, borderRadius:'var(--radius-lg)', padding:'14px 16px', boxShadow:'0 4px 14px rgba(124,58,237,0.10)' }}>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10, gap:10, flexWrap:'wrap' }}>
-        <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:BRUSH_COLOR }}>
-          📍 Zaznaczony fragment
-        </div>
-        <button onClick={onClear}
-          style={{ background:'none', border:'0.5px solid var(--border-md)', color:'var(--text-secondary)', fontSize:11, padding:'4px 10px', borderRadius:'var(--radius-md)', cursor:'pointer', fontFamily:'var(--font)' }}>
-          Wyczyść ✕
-        </button>
-      </div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(95px, 1fr))', gap:8 }}>
-        {items.map(([label, value]) => (
-          <div key={label} style={{ background:'var(--bg-secondary)', borderRadius:'var(--radius-md)', padding:'8px 10px', textAlign:'center' }}>
-            <div style={{ fontSize:15, fontWeight:700, color:'var(--text)' }}>{value}</div>
-            <div style={{ fontSize:9, color:'var(--text-secondary)', textTransform:'uppercase', letterSpacing:'0.06em', marginTop:2 }}>{label}</div>
-          </div>
-        ))}
-      </div>
-    </div>
+    <g style={{ pointerEvents: 'none' }}>
+      <rect x={boxX} y={boxY} width={boxW} height={boxH}
+        fill="var(--bg)" stroke={color} strokeWidth={1}
+        rx={4} ry={4} opacity={0.97} />
+      {lines.map((line, i) => (
+        <text key={i}
+          x={boxX + boxW / 2}
+          y={boxY + padY + (i + 0.82) * lineH}
+          textAnchor="middle"
+          fontSize={fontSize}
+          fontWeight={600}
+          fill="var(--text)">
+          {line}
+        </text>
+      ))}
+    </g>
   );
 }
 
@@ -321,6 +290,18 @@ function HeartRateChart({ time, heartrate, hrZones, selection, onSelect }: { tim
         })}
         <polyline points={pts} fill="none" stroke="#f87171" strokeWidth={1.5} strokeLinejoin="round" />
         <BrushOverlay sel={selection} W={W} pL={pL} pR={pR} pT={pT} ch={ch} />
+        {(() => {
+          if (!selection) return null;
+          const r = rangeIndices(time, selection);
+          if (!r) return null;
+          const hr = heartrate.slice(r.startIdx, r.endIdx + 1).filter(v => v > 0);
+          if (!hr.length) return null;
+          const avg = Math.round(hr.reduce((s,v)=>s+v,0)/hr.length);
+          const max = Math.round(Math.max(...hr));
+          const min = Math.round(Math.min(...hr));
+          return <RangeTooltip sel={selection} W={W} pL={pL} pR={pR} pT={pT} color="#f87171"
+            lines={[fmtTime(r.duration), `Śr ${avg} bpm`, `${min} – ${max}`]} />;
+        })()}
         {timeTicks.map(({ p, label }) => (
           <text key={p} x={pL + p * cw} y={H - 4} textAnchor="middle" fontSize={9} fill="var(--text-secondary)">{label}</text>
         ))}
@@ -398,6 +379,27 @@ function PaceChart({ time, velocity, sportType, selection, onSelect }: { time: n
         })}
         <polyline points={pts} fill="none" stroke={SPEED_COLOR} strokeWidth={1.5} strokeLinejoin="round" />
         <BrushOverlay sel={selection} W={W} pL={pL} pR={pR} pT={pT} ch={ch} />
+        {(() => {
+          if (!selection) return null;
+          const r = rangeIndices(time, selection);
+          if (!r) return null;
+          const vel = velocity.slice(r.startIdx, r.endIdx + 1).filter(v => v > 0);
+          if (!vel.length) return null;
+          const avg = vel.reduce((s,v)=>s+v,0)/vel.length;
+          // Distance via velocity * time integration (or zero if not avail)
+          let dist = 0;
+          for (let i = r.startIdx; i < r.endIdx; i++) {
+            const dt = (time[i+1] ?? 0) - (time[i] ?? 0);
+            if (dt > 0 && dt < 60) dist += (velocity[i] ?? 0) * dt;
+          }
+          const label = isRide ? 'Śr. prędkość' : isSwim ? 'Tempo /100m' : 'Śr. tempo';
+          const lines = [
+            fmtTime(r.duration),
+            ...(dist > 30 ? [`${(dist/1000).toFixed(2)} km`] : []),
+            `${label.replace('Śr. ', 'Śr ')} ${fmtPace(avg, sportType).replace(' ', '')}`,
+          ];
+          return <RangeTooltip sel={selection} W={W} pL={pL} pR={pR} pT={pT} color={SPEED_COLOR} lines={lines} />;
+        })()}
         {timeTicks.map(({ p, label }) => (
           <text key={p} x={pL + p * cw} y={H - 4} textAnchor="middle" fontSize={9} fill="var(--text-secondary)">{label}</text>
         ))}
@@ -487,6 +489,17 @@ function CadenceChart({ time, cadence, avgVelocityMs, sportType, selection, onSe
 
         <polyline points={pts} fill="none" stroke={cadColor} strokeWidth={1.5} strokeLinejoin="round" />
         <BrushOverlay sel={selection} W={W} pL={pL} pR={pR} pT={pT} ch={ch} />
+        {(() => {
+          if (!selection) return null;
+          const r = rangeIndices(time, selection);
+          if (!r) return null;
+          const c = cadence.slice(r.startIdx, r.endIdx + 1).filter(v => v > 60);
+          if (!c.length) return null;
+          const avg = Math.round(c.reduce((s,v)=>s+v,0)/c.length);
+          const unit = isSwimC ? 'ud/min' : isBike ? 'RPM' : 'spm';
+          return <RangeTooltip sel={selection} W={W} pL={pL} pR={pR} pT={pT} color={cadColor}
+            lines={[fmtTime(r.duration), `Śr ${avg} ${unit}`]} />;
+        })()}
 
         {timeTicks.map(({ p, label }) => (
           <text key={p} x={pL + p*cw} y={H-4} textAnchor="middle" fontSize={9} fill="var(--text-secondary)">{label}</text>
@@ -579,6 +592,17 @@ function PowerChart({ time, watts, avgWatts, normalizedWatts, selection, onSelec
         {/* Power line */}
         <polyline points={pts} fill="none" stroke="#fbbf24" strokeWidth={1.5} strokeLinejoin="round" />
         <BrushOverlay sel={selection} W={W} pL={pL} pR={pR} pT={pT} ch={ch} />
+        {(() => {
+          if (!selection) return null;
+          const r = rangeIndices(time, selection);
+          if (!r) return null;
+          const w = watts.slice(r.startIdx, r.endIdx + 1).filter(v => v > 0);
+          if (!w.length) return null;
+          const avg = Math.round(w.reduce((s,v)=>s+v,0)/w.length);
+          const max = Math.round(Math.max(...w));
+          return <RangeTooltip sel={selection} W={W} pL={pL} pR={pR} pT={pT} color="#fbbf24"
+            lines={[fmtTime(r.duration), `Śr ${avg} W`, `Max ${max} W`]} />;
+        })()}
 
         {/* X labels */}
         {timeTicks.map(({ p, label }) => (
@@ -659,16 +683,6 @@ export default function ActivityCharts({ data }: { data: StreamData }) {
           </div>
         ))}
       </div>
-
-      {/* Selection stats panel */}
-      {selection
-        ? <SelectionStatsPanel data={data} selection={selection} onClear={() => setSelection(null)} />
-        : (
-          <div style={{ fontSize: 11, color: 'var(--text-secondary)', textAlign: 'center', padding: '6px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)' }}>
-            💡 Zaznacz fragment wykresu myszą, aby zobaczyć statystyki tego zakresu
-          </div>
-        )
-      }
 
       {/* Charts */}
       {!isSwim && data.altitude.length > 0 && (
