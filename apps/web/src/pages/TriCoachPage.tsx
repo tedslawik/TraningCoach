@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import HeroSm from '../components/HeroSm';
 import SectionLabel from '../components/SectionLabel';
-import TrainingPlanSection from '../components/training/TrainingPlanSection';
 
 const overviewCards = [
   { to: '/swim-coach',  icon: '🏊', title: 'Swim Coach',  color: 'var(--swim)',  desc: 'Tygodniowe pływania, technika, dystanse, strefy tętna w wodzie.' },
@@ -168,7 +167,6 @@ export default function TriCoachPage() {
         </div>
       </section>
 
-      <TrainingPlanSection sport="triathlon" />
     </>
   );
 }
