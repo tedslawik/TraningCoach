@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { PreferencesProvider } from './context/PreferencesContext';
@@ -15,7 +15,7 @@ import DashboardPage from './pages/DashboardPage';
 import PlannerPage from './pages/PlannerPage';
 import RunZonesPage from './pages/RunZonesPage';
 import SettingsPage from './pages/SettingsPage';
-import AnalyzerPage from './pages/AnalyzerPage';
+import CalculatorsPage from './pages/CalculatorsPage';
 
 function ScrollHandler() {
   const { pathname, hash } = useLocation();
@@ -56,7 +56,8 @@ function AppShell() {
         <Route path="/plan"        element={<PlannerPage />} />
         <Route path="/run-zones"   element={<RunZonesPage />} />
         <Route path="/settings"    element={<SettingsPage />} />
-        <Route path="/analyzer"    element={<AnalyzerPage />} />
+        <Route path="/calculators" element={<CalculatorsPage />} />
+        <Route path="/analyzer"    element={<Navigate to="/calculators?tab=analyzer" replace />} />
       </Routes>
       <Footer />
     </>

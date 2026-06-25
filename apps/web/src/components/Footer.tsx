@@ -16,7 +16,7 @@ export default function Footer() {
           {isEnabled('tab_run')  && <Link to="/run-coach">Run Coach</Link>}
           {isEnabled('tab_swim') && <Link to="/swim-coach">Swim Coach</Link>}
           {isEnabled('tab_bike') && <Link to="/bike-coach">Bike Coach</Link>}
-          <Link to="/analyzer">Analizator</Link>
+          <Link to="/calculators">Kalkulatory</Link>
         </div>
       </div>
       <div className="footer-copy">

@@ -18,6 +18,7 @@ export default function Nav() {
           {isEnabled('tab_run')  && <li><NavLink to="/run-coach">Run Coach</NavLink></li>}
           {isEnabled('tab_swim') && <li><NavLink to="/swim-coach">Swim Coach</NavLink></li>}
           {isEnabled('tab_bike') && <li><NavLink to="/bike-coach">Bike Coach</NavLink></li>}
+          <li><NavLink to="/calculators">Kalkulatory</NavLink></li>
           {user && <li><NavLink to="/dashboard">Dashboard</NavLink></li>}
           {user && <li><NavLink to="/plan">Plan</NavLink></li>}
           {user && <li><NavLink to="/athlete">Zawodnik</NavLink></li>}
@@ -34,7 +35,7 @@ export default function Nav() {
             </button>
           </div>
         ) : (
-          <Link to="/analyzer" className="nav-cta">Analizuj trening</Link>
+          <Link to="/calculators?tab=analyzer" className="nav-cta">Analizuj trening</Link>
         )}
         <button
           className="nav-burger"
@@ -52,11 +53,11 @@ export default function Nav() {
             {isEnabled('tab_run')  && <li><NavLink to="/run-coach"  onClick={close}>Run Coach</NavLink></li>}
             {isEnabled('tab_swim') && <li><NavLink to="/swim-coach" onClick={close}>Swim Coach</NavLink></li>}
             {isEnabled('tab_bike') && <li><NavLink to="/bike-coach" onClick={close}>Bike Coach</NavLink></li>}
+            <li><NavLink to="/calculators" onClick={close}>Kalkulatory</NavLink></li>
             {user && <li><NavLink to="/dashboard" onClick={close}>Dashboard</NavLink></li>}
             {user && <li><NavLink to="/plan"      onClick={close}>Plan</NavLink></li>}
             {user && <li><NavLink to="/athlete"   onClick={close}>Zawodnik</NavLink></li>}
             {user && <li><NavLink to="/settings"  onClick={close}>Ustawienia</NavLink></li>}
-            {!user && <li><NavLink to="/analyzer" onClick={close}>Analizator</NavLink></li>}
           </ul>
           {user ? (
             <div className="nav-mobile-footer">
@@ -67,7 +68,7 @@ export default function Nav() {
             </div>
           ) : (
             <Link
-              to="/analyzer"
+              to="/calculators?tab=analyzer"
               className="btn-primary"
               onClick={close}
               style={{ display: 'block', textAlign: 'center' }}

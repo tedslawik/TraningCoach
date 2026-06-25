@@ -6,14 +6,14 @@ interface Props {
   buttonLabel?: string;
 }
 
-export default function CtaBanner({ title, description, buttonLabel = 'Otwórz analizator →' }: Props) {
+export default function CtaBanner({ title, description, buttonLabel = 'Otwórz kalkulatory →' }: Props) {
   return (
     <section>
       <div className="section-inner">
         <div className="cta-banner">
           <h2>{title}</h2>
           <p>{description}</p>
-          <Link to="/analyzer" className="btn-light">{buttonLabel}</Link>
+          <Link to="/calculators" className="btn-light">{buttonLabel}</Link>
         </div>
       </div>
     </section>

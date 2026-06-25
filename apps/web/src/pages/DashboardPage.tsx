@@ -257,7 +257,7 @@ export default function DashboardPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(100px,1fr))', gap: 12 }}>
                 {[
                   { to:'/plan',       icon:'🗓️', label:'Plan',       color:'var(--tri)',  tabId: null },
-                  { to:'/analyzer',   icon:'📊', label:'Analizator', color:'var(--tri)',  tabId: null },
+                  { to:'/calculators', icon:'🧮', label:'Kalkulatory', color:'var(--tri)',  tabId: null },
                   { to:'/tri-coach',  icon:'🏅', label:'Tri Coach',  color:'var(--tri)',  tabId: 'tab_tri' },
                   { to:'/run-coach',  icon:'🏃', label:'Run Coach',  color:'var(--run)',  tabId: 'tab_run' },
                   { to:'/swim-coach', icon:'🏊', label:'Swim Coach', color:'var(--swim)', tabId: 'tab_swim' },

@@ -1,8 +1,16 @@
+import { Link } from 'react-router-dom';
 import HeroSm from '../components/HeroSm';
 import SectionLabel from '../components/SectionLabel';
-import CtaBanner from '../components/CtaBanner';
-import NutritionCalculator from '../components/tri/NutritionCalculator';
 import TrainingPlanSection from '../components/training/TrainingPlanSection';
+
+const overviewCards = [
+  { to: '/swim-coach',  icon: '🏊', title: 'Swim Coach',  color: 'var(--swim)',  desc: 'Tygodniowe pływania, technika, dystanse, strefy tętna w wodzie.' },
+  { to: '/bike-coach',  icon: '🚴', title: 'Bike Coach',  color: 'var(--bike)',  desc: 'Strefy mocy z FTP, sweet spot, długie jazdy Z2 i TSS rowerowy.' },
+  { to: '/run-coach',   icon: '🏃', title: 'Run Coach',   color: 'var(--run)',   desc: 'Strefy VDOT, kadencja pace-zależna, analiza techniki, długi bieg.' },
+  { to: '/dashboard',   icon: '📊', title: 'Dashboard',   color: 'var(--tri)',   desc: 'PMC (CTL/ATL/Form), trendy 12 tygodni, predyktor wyścigu.' },
+  { to: '/plan',        icon: '📅', title: 'Plan AI',     color: 'var(--tri)',   desc: '2-tygodniowy plan generowany przez Claude + ATP roczny.' },
+  { to: '/calculators', icon: '🧮', title: 'Kalkulatory', color: 'var(--tri)',   desc: 'Analizator proporcji treningowych i kalkulator żywienia.' },
+];
 
 const distances = [
   { name: 'Sprint',       swim: '0.75 km', bike: '20 km',  run: '5 km',    time: '~1h 15 min',   target: '15% / 45% / 40%' },
@@ -12,18 +20,17 @@ const distances = [
 ];
 
 const phases = [
-  { num: '1', title: 'Baza (Base) — 8–16 tygodni',    desc: 'Niska intensywność, duża objętość. Budowanie silnika tlenowego. Minimum 80% czasu w strefie 1–2. Kluczowe dla trwałego postępu.' },
-  { num: '2', title: 'Budowanie (Build) — 6–10 tygodni', desc: 'Wzrost intensywności przy utrzymaniu objętości. Sesje sweet spot, treningi brick, długi bieg i jazda w tempie wyścigowym.' },
-  { num: '3', title: 'Szczyt (Peak) — 2–3 tygodnie',  desc: 'Najwyższa jakość, lekko zredukowana objętość. Symulacje wyścigu, treningi w docelowym tempie, testy przejść T1/T2.' },
-  { num: '4', title: 'Tapering — 1–2 tygodnie',       desc: 'Drastyczne obcięcie objętości, zachowanie intensywności. Odpoczynek, sen, odżywianie. Brak nowych bodźców treningowych.' },
+  { num: '1', title: 'Baza (Base) — 8–16 tygodni',       desc: 'Niska intensywność, duża objętość. Budowanie silnika tlenowego. Minimum 80% czasu w strefie 1–2.' },
+  { num: '2', title: 'Budowanie (Build) — 6–10 tygodni', desc: 'Wzrost intensywności przy utrzymaniu objętości. Sweet spot, brick, długi bieg i jazda w tempie wyścigowym.' },
+  { num: '3', title: 'Szczyt (Peak) — 2–3 tygodnie',     desc: 'Najwyższa jakość, zredukowana objętość. Symulacje wyścigu, treningi w docelowym tempie, testy przejść T1/T2.' },
+  { num: '4', title: 'Tapering — 1–2 tygodnie',          desc: 'Drastyczne obcięcie objętości, zachowanie intensywności. Odpoczynek, sen, odżywianie.' },
 ];
 
 const bricks = [
-  { title: 'Brick krótki',       desc: 'Rower 30–45 min + bieg 15–20 min. Dobry do nauki przejścia. Można robić co tydzień bez dużego obciążenia.' },
-  { title: 'Brick wyścigowy',    desc: '60–80% długości dystansu docelowego. Ćwicz pełny rytuał T2, odżywianie i nawodnienie na rowerze, start biegu w tempie wyścigowym.' },
-  { title: 'Brick pełny (symulacja)', desc: 'Pływanie + rower + bieg w tempie docelowym. Raz lub dwa razy w sezonie, 3–4 tygodnie przed wyścigiem. Najważniejszy trening w roku.' },
+  { title: 'Brick krótki',            desc: 'Rower 30–45 min + bieg 15–20 min. Dobry do nauki przejścia. Można robić co tydzień bez dużego obciążenia.' },
+  { title: 'Brick wyścigowy',         desc: '60–80% długości dystansu docelowego. Ćwicz pełny rytuał T2, odżywianie i nawodnienie na rowerze.' },
+  { title: 'Brick pełny (symulacja)', desc: 'Pływanie + rower + bieg w tempie docelowym. Raz lub dwa razy w sezonie, 3–4 tyg. przed wyścigiem.' },
 ];
-
 
 export default function TriCoachPage() {
   return (
@@ -35,23 +42,42 @@ export default function TriCoachPage() {
         subtitle="Trzy dyscypliny, jedna strategia. Naucz się łączyć pływanie, rower i bieg w spójny plan, który prowadzi prosto na metę."
       />
 
-      {/* ODŻYWIANIE — kalkulator */}
+      {/* ── CO ZNAJDZIESZ W TRICOACH ── */}
       <section>
         <div className="section-inner">
-          <div className="section-header">
-            <SectionLabel discipline="tri">Odżywianie wyścigowe</SectionLabel>
-            <h2>Nie można wygrać na pusto, ale można przegrać na pełno</h2>
-            <p>
-              Wybierz format i planowany czas — kalkulator przeliczy dokładne ilości żeli
-              i bidonów na podstawie Twojej wagi i dystansu.
-              {' '}Jeśli masz połączoną Stravę, przewidziany czas pojawi się automatycznie.
-            </p>
+          <div className="section-header center">
+            <SectionLabel discipline="tri">Twoje centrum treningowe</SectionLabel>
+            <h2>Co znajdziesz w TriCoach</h2>
+            <p>Wszystko czego potrzebujesz do treningu triathlonowego — od analizy proporcji, przez specjalistyczne strony dla każdej dyscypliny, po plan generowany przez AI.</p>
           </div>
-          <NutritionCalculator />
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
+            {overviewCards.map(c => (
+              <Link key={c.to} to={c.to}
+                style={{
+                  textDecoration: 'none',
+                  background: 'var(--bg)',
+                  border: '0.5px solid var(--border-md)',
+                  borderTop: `3px solid ${c.color}`,
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '1.25rem',
+                  transition: 'transform 0.15s, box-shadow 0.15s',
+                  display: 'flex', flexDirection: 'column', gap: 8,
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 24px rgba(0,0,0,0.08)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = ''; (e.currentTarget as HTMLElement).style.boxShadow = ''; }}
+              >
+                <div style={{ fontSize: 28 }}>{c.icon}</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: c.color }}>{c.title}</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55, flex: 1 }}>{c.desc}</div>
+                <div style={{ fontSize: 12, color: c.color, fontWeight: 600, marginTop: 4 }}>Przejdź →</div>
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* DYSTANSE */}
+      {/* ── DYSTANSE ── */}
       <section className="alt">
         <div className="section-inner">
           <div className="section-header">
@@ -74,7 +100,7 @@ export default function TriCoachPage() {
         </div>
       </section>
 
-      {/* PERIODYZACJA */}
+      {/* ── PERIODYZACJA ── */}
       <section>
         <div className="section-inner">
           <div className="coach-layout">
@@ -105,7 +131,7 @@ export default function TriCoachPage() {
         </div>
       </section>
 
-      {/* PRZEJŚCIA */}
+      {/* ── PRZEJŚCIA ── */}
       <section className="alt">
         <div className="section-inner">
           <div className="section-header">
@@ -113,7 +139,7 @@ export default function TriCoachPage() {
             <h2>T1 i T2 — czwarty sport triathlonu</h2>
             <p>Każda minuta zaoszczędzona w przejściu to minuta na mecie. Amatorzy tracą tu często 5–8 minut, które można odzyskać bez żadnego treningu fizycznego.</p>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
             <div className="info-card">
               <h4>T1 — Pływanie → Rower</h4>
               <p>Zdejmij piankę zanim wyjdziesz z wody. Przygotuj buty już w blokach na rowerze. Kask zakładaj przed dotknięciem roweru — dyskwalifikacja grozi za odwrotną kolejność. Ćwicz T1 co najmniej 3–4 razy przed wyścigiem.</p>
@@ -126,7 +152,7 @@ export default function TriCoachPage() {
         </div>
       </section>
 
-      {/* BRICK */}
+      {/* ── BRICK ── */}
       <section>
         <div className="section-inner">
           <div className="section-header center">
@@ -134,7 +160,7 @@ export default function TriCoachPage() {
             <h2>Trening kluczowy dla triathlonisty</h2>
             <p>Brick to jazda na rowerze zakończona biegiem bez przerwy. Uczy ciało zmiany wzorca ruchowego i eliminuje uczucie „cegły w nogach" na początku biegu.</p>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
             {bricks.map(b => (
               <div key={b.title} className="info-card"><h4>{b.title}</h4><p>{b.desc}</p></div>
             ))}
@@ -143,11 +169,6 @@ export default function TriCoachPage() {
       </section>
 
       <TrainingPlanSection sport="triathlon" />
-
-      <CtaBanner
-        title="Sprawdź swoje proporcje treningowe"
-        description="Analizator TriCoach wyliczy, czy Twoje treningi mają odpowiedni podział między dyscypliny względem Twojego wyścigu docelowego."
-      />
     </>
   );
 }

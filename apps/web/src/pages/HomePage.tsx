@@ -30,7 +30,7 @@ export default function HomePage() {
           dla triathlonistów i sportowców amatorów na każdym poziomie.
         </p>
         <div className="hero-actions">
-          <Link to="/analyzer" className="btn-primary">Zacznij analizę →</Link>
+          <Link to="/calculators?tab=analyzer" className="btn-primary">Zacznij analizę →</Link>
           <Link to="/#coaches" className="btn-secondary">Poznaj ofertę</Link>
         </div>
         <div className="hero-badges">
