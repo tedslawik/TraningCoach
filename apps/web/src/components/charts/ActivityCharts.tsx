@@ -532,7 +532,7 @@ function SwimLapsChart({ laps }: { laps: LapSummary[] }) {
   const valid = laps.filter(l => l.distM >= 5 && l.timeSec > 0);
   if (!valid.length) return null;
 
-  const W = 800, H = 200, pL = 44, pR = 14, pT = 28, pB = 32;
+  const W = 800, H = 210, pL = 50, pR = 14, pT = 28, pB = 38;
   const cw = W - pL - pR, ch = H - pT - pB;
   const N = valid.length;
 
@@ -547,17 +547,17 @@ function SwimLapsChart({ laps }: { laps: LapSummary[] }) {
 
   const totalDist = valid.reduce((s, l) => s + l.distM, 0);
   const totalTime = valid.reduce((s, l) => s + l.timeSec, 0);
-  const lapPace100 = (l: LapSummary) => (l.timeSec / l.distM) * 100;
+  const lapPace100 = (l: LapSummary) => (l.timeSec / l.distM) * 100; // sec/100m
   const avgPace    = (totalTime / totalDist) * 100;
   const fastestPace = Math.min(...valid.map(lapPace100));
-  const maxTime    = Math.max(...valid.map(l => l.timeSec));
-  const yMax       = maxTime * 1.1;
+  const maxPace    = Math.max(...valid.map(lapPace100));
+  const yMax       = maxPace * 1.1;
 
   // Pool length detection (uniform → show, varied → skip)
   const distBuckets = new Set(valid.map(l => Math.round(l.distM / 5) * 5));
   const poolLen = distBuckets.size <= 2 ? valid[0].distM : null;
 
-  // Bar layout — width proportional to distance
+  // Bar layout — width proportional to distance, height proportional to pace /100m
   const gap     = N > 30 ? 0 : 1;
   const usableW = cw - gap * (N - 1);
   let cumD = 0;
@@ -565,9 +565,9 @@ function SwimLapsChart({ laps }: { laps: LapSummary[] }) {
     const x = pL + (cumD / totalDist) * usableW + i * gap;
     cumD += l.distM;
     const w = Math.max(3, (l.distM / totalDist) * usableW);
-    const h = (l.timeSec / yMax) * ch;
-    const y = pT + ch - h;
     const pace = lapPace100(l);
+    const h = (pace / yMax) * ch;
+    const y = pT + ch - h;
     const dev  = (pace - avgPace) / avgPace;
     const color = dev < -0.05 ? '#22c55e'
                 : dev >  0.10 ? '#f87171'
@@ -589,25 +589,59 @@ function SwimLapsChart({ laps }: { laps: LapSummary[] }) {
   const allStrokesPer100 = withCad.map(l => (l.avgCadence! / 60) * (l.timeSec * 100 / l.distM));
   const avgStrokes100 = allStrokesPer100.length ? Math.round(allStrokesPer100.reduce((a,b)=>a+b,0)/allStrokesPer100.length) : null;
 
-  const yTicks = [0, Math.round(maxTime/2), maxTime];
+  // Y ticks — pace per 100m (nice round seconds — every 15 or 30 sec depending on range)
+  const paceRange = yMax;
+  const tickStepSec = paceRange > 240 ? 60 : paceRange > 120 ? 30 : 15;
+  const yTickVals: number[] = [];
+  for (let v = 0; v <= yMax; v += tickStepSec) yTickVals.push(v);
+  if (yTickVals[yTickVals.length - 1] < yMax * 0.92) yTickVals.push(Math.round(yMax / 5) * 5);
+
+  // X ticks — distance in meters, nice round
+  const distStep = totalDist <= 200 ? 50
+                 : totalDist <= 500 ? 100
+                 : totalDist <= 1000 ? 250
+                 : totalDist <= 2500 ? 500
+                 : 1000;
+  const xTickVals: number[] = [];
+  for (let d = 0; d <= totalDist; d += distStep) xTickVals.push(d);
+  if (xTickVals[xTickVals.length - 1] < totalDist - distStep * 0.3) xTickVals.push(totalDist);
+  const distToX = (d: number) => pL + (d / totalDist) * cw;
+  const yAvgPace = pT + (1 - avgPace / yMax) * ch;
+  const yFastPace = pT + (1 - fastestPace / yMax) * ch;
 
   return (
     <div>
       <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--text-secondary)', marginBottom:6, display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
-        <span>Czas / odcinek</span>
+        <span>Tempo /100m vs dystans</span>
         <span style={{ color:'var(--text-secondary)', fontWeight:600, textTransform:'none', letterSpacing:0 }}>
-          {poolLen ? `${poolLen} m basen · ` : ''}{N} {N === 1 ? 'odcinek' : N < 5 ? 'odcinki' : 'odcinków'} · szerokość = dystans
+          {poolLen ? `${poolLen} m basen · ` : ''}{N} {N === 1 ? 'odcinek' : N < 5 ? 'odcinki' : 'odcinków'} · {totalDist} m
         </span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', display:'block' }}>
-        {/* Y ticks (time) */}
-        {yTicks.map(v => {
+        {/* Y ticks — pace /100m */}
+        {yTickVals.map(v => {
           const y = pT + (1 - v / yMax) * ch;
           return <g key={v}>
             <line x1={pL} y1={y} x2={W-pR} y2={y} stroke="var(--border)" strokeWidth={0.5} strokeDasharray="3,4" />
             <text x={pL-4} y={y+3} textAnchor="end" fontSize={9} fill="var(--text-secondary)">{fmtSec(v)}</text>
           </g>;
         })}
+
+        {/* Avg pace line */}
+        <line x1={pL} y1={yAvgPace} x2={W-pR} y2={yAvgPace} stroke="#60a5fa" strokeWidth={1.2} strokeDasharray="6,3" />
+        <text x={W-pR-3} y={yAvgPace-4} fontSize={10} fill="#60a5fa" textAnchor="end" fontWeight={700}>
+          śr. {fmtPaceS100(avgPace)}
+        </text>
+
+        {/* Fastest pace line */}
+        {fastestPace < avgPace * 0.95 && (
+          <>
+            <line x1={pL} y1={yFastPace} x2={W-pR} y2={yFastPace} stroke="#22c55e" strokeWidth={1} strokeDasharray="3,4" opacity={0.7} />
+            <text x={pL+4} y={yFastPace-3} fontSize={9} fill="#22c55e" textAnchor="start" fontWeight={600}>
+              najszybsze {fmtPaceS100(fastestPace)}
+            </text>
+          </>
+        )}
 
         {/* Bars */}
         {bars.map(b => {
@@ -628,18 +662,22 @@ function SwimLapsChart({ laps }: { laps: LapSummary[] }) {
           );
         })}
 
-        {/* X labels: lap index */}
-        {bars.map(b => {
-          const step = N <= 8 ? 1 : N <= 20 ? 2 : N <= 40 ? 5 : 10;
-          if ((b.i + 1) % step !== 0 && b.i !== 0 && b.i !== N - 1) return null;
-          if (b.w < 8 && b.i !== 0 && b.i !== N - 1) return null;
+        {/* X axis baseline */}
+        <line x1={pL} y1={pT + ch} x2={W - pR} y2={pT + ch} stroke="var(--border-md)" strokeWidth={0.5} />
+
+        {/* X labels: distance in meters */}
+        {xTickVals.map((d, i) => {
+          const x = distToX(d);
           return (
-            <text key={b.i} x={b.x + b.w/2} y={H - 16} textAnchor="middle" fontSize={9} fill="var(--text-secondary)">
-              {b.i + 1}
-            </text>
+            <g key={i}>
+              <line x1={x} y1={pT + ch} x2={x} y2={pT + ch + 3} stroke="var(--border-md)" strokeWidth={0.5} />
+              <text x={x} y={H - 14} textAnchor="middle" fontSize={9} fill="var(--text-secondary)">
+                {d === 0 ? '0' : d < 1000 ? `${d}m` : `${(d/1000).toFixed(d % 1000 === 0 ? 0 : 1)}km`}
+              </text>
+            </g>
           );
         })}
-        <text x={pL} y={H - 4} fontSize={9} fill="var(--text-secondary)" fontStyle="italic">numer odcinka →</text>
+        <text x={(pL + W - pR) / 2} y={H - 3} textAnchor="middle" fontSize={9} fill="var(--text-secondary)" fontStyle="italic">dystans (m)</text>
       </svg>
 
       {/* Bottom stats */}
@@ -654,7 +692,7 @@ function SwimLapsChart({ laps }: { laps: LapSummary[] }) {
         <span><span style={{ display:'inline-block', width:10, height:8, background:'#60a5fa', borderRadius:2, marginRight:3, verticalAlign:'middle' }} />średnio</span>
         <span><span style={{ display:'inline-block', width:10, height:8, background:'#fbbf24', borderRadius:2, marginRight:3, verticalAlign:'middle' }} />wolniejsze</span>
         <span><span style={{ display:'inline-block', width:10, height:8, background:'#f87171', borderRadius:2, marginRight:3, verticalAlign:'middle' }} />dużo wolniejsze</span>
-        <span style={{ marginLeft:'auto', lineHeight:1.5, textAlign:'right' }}>kolor wg tempa /100m · wysokość = czas · szerokość = dystans</span>
+        <span style={{ marginLeft:'auto', lineHeight:1.5, textAlign:'right' }}>wysokość = tempo /100m · szerokość = dystans odcinka</span>
       </div>
     </div>
   );
