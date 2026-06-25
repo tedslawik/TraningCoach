@@ -529,6 +529,7 @@ function CadenceChart({ time, cadence, avgVelocityMs, sportType, selection, onSe
 
 /* ── Swim laps chart (per marked segment, width ∝ distance) ── */
 function SwimLapsChart({ laps }: { laps: LapSummary[] }) {
+  const [selected, setSelected] = useState<number | null>(null);
   const valid = laps.filter(l => l.distM >= 5 && l.timeSec > 0);
   if (!valid.length) return null;
 
@@ -558,7 +559,7 @@ function SwimLapsChart({ laps }: { laps: LapSummary[] }) {
   const poolLen = distBuckets.size <= 2 ? valid[0].distM : null;
 
   // Bar layout — width proportional to distance, height proportional to pace /100m
-  const gap     = N > 30 ? 0 : 1;
+  const gap     = N > 50 ? 1 : N > 20 ? 2 : 4;
   const usableW = cw - gap * (N - 1);
   let cumD = 0;
   const bars = valid.map((l, i) => {
@@ -647,14 +648,20 @@ function SwimLapsChart({ laps }: { laps: LapSummary[] }) {
         {bars.map(b => {
           const strokes = b.l.avgCadence ? Math.round((b.l.avgCadence/60) * b.l.timeSec) : null;
           const swolf   = strokes !== null ? strokes + b.l.timeSec : null;
+          const isSel   = selected === b.i;
+          const dimmed  = selected !== null && !isSel;
           return (
-            <g key={b.i}>
-              <rect x={b.x} y={b.y} width={b.w} height={Math.max(0, b.h)} fill={b.color} opacity={0.88} rx={1}>
+            <g key={b.i} style={{ cursor: 'pointer' }} onClick={() => setSelected(prev => prev === b.i ? null : b.i)}>
+              <rect x={b.x} y={b.y} width={b.w} height={Math.max(0, b.h)} fill={b.color}
+                opacity={dimmed ? 0.28 : 0.88}
+                stroke={isSel ? 'var(--text)' : 'none'}
+                strokeWidth={isSel ? 1.5 : 0}
+                rx={2}>
                 <title>{`Odcinek ${b.i+1}: ${b.l.distM}m w ${fmtSec(b.l.timeSec)} (${fmtPaceS100(b.pace)})${strokes !== null ? ` · ${strokes} ruchów` : ''}${swolf !== null ? ` · SWOLF ${swolf}` : ''}${b.l.avgHR ? ` · ${Math.round(b.l.avgHR)} bpm` : ''}`}</title>
               </rect>
               {/* Distance label inside bar if wide enough */}
               {b.w > 36 && (
-                <text x={b.x + b.w/2} y={b.y + Math.min(b.h - 4, 14)} textAnchor="middle" fontSize={9.5} fontWeight={700} fill="#fff" opacity={0.92}>
+                <text x={b.x + b.w/2} y={b.y + Math.min(b.h - 4, 14)} textAnchor="middle" fontSize={9.5} fontWeight={700} fill="#fff" opacity={dimmed ? 0.4 : 0.92} style={{ pointerEvents:'none' }}>
                   {b.l.distM}m
                 </text>
               )}
@@ -679,6 +686,46 @@ function SwimLapsChart({ laps }: { laps: LapSummary[] }) {
         })}
         <text x={(pL + W - pR) / 2} y={H - 3} textAnchor="middle" fontSize={9} fill="var(--text-secondary)" fontStyle="italic">dystans (m)</text>
       </svg>
+
+      {/* Selected lap detail */}
+      {selected !== null && (() => {
+        const b = bars[selected];
+        const lap = b.l;
+        const strokes = lap.avgCadence ? Math.round((lap.avgCadence/60) * lap.timeSec) : null;
+        const strokes100 = lap.avgCadence ? Math.round((lap.avgCadence/60) * (lap.timeSec * 100 / lap.distM)) : null;
+        const swolf = strokes !== null ? strokes + lap.timeSec : null;
+        const swolfTime100 = (lap.timeSec * 100) / lap.distM;
+        const swolf100 = strokes100 !== null ? Math.round(strokes100 + swolfTime100) : null;
+        const items: Array<[string, string]> = [
+          ['Dystans',     `${lap.distM} m`],
+          ['Czas',        fmtSec(lap.timeSec)],
+          ['Tempo /100m', fmtPaceS100(b.pace)],
+          ...(lap.avgHR ? [['Śr. tętno', `${Math.round(lap.avgHR)} bpm`] as [string,string]] : []),
+          ...(strokes !== null ? [['Ruchy', `${strokes}${strokes100 !== null ? ` (${strokes100}/100m)` : ''}`] as [string,string]] : []),
+          ...(swolf !== null ? [['SWOLF', `${swolf}${swolf100 !== null ? ` (${swolf100}/100m)` : ''}`] as [string,string]] : []),
+        ];
+        return (
+          <div style={{ background:'var(--bg)', border:`1.5px solid ${b.color}`, borderRadius:'var(--radius-lg)', padding:'12px 14px', marginTop:8 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10, gap:10 }}>
+              <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>
+                <span style={{ color: b.color }}>●</span> Odcinek {selected + 1}
+              </div>
+              <button onClick={() => setSelected(null)}
+                style={{ background:'none', border:'0.5px solid var(--border-md)', color:'var(--text-secondary)', fontSize:11, padding:'4px 10px', borderRadius:'var(--radius-md)', cursor:'pointer', fontFamily:'var(--font)' }}>
+                Zamknij ✕
+              </button>
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(110px, 1fr))', gap:8 }}>
+              {items.map(([label, value]) => (
+                <div key={label} style={{ background:'var(--bg-secondary)', borderRadius:'var(--radius-md)', padding:'8px 10px', textAlign:'center' }}>
+                  <div style={{ fontSize:15, fontWeight:700, color:'var(--text)' }}>{value}</div>
+                  <div style={{ fontSize:9, color:'var(--text-secondary)', textTransform:'uppercase', letterSpacing:'0.06em', marginTop:2 }}>{label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Bottom stats */}
       <div style={{ display:'flex', gap:14, fontSize:11, color:'var(--text-secondary)', marginTop:6, flexWrap:'wrap' }}>
