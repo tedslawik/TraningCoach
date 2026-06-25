@@ -527,72 +527,81 @@ function CadenceChart({ time, cadence, avgVelocityMs, sportType, selection, onSe
   );
 }
 
-/* ── Swim laps chart (per pool length) ── */
+/* ── Swim laps chart (per marked segment, width ∝ distance) ── */
 function SwimLapsChart({ laps }: { laps: LapSummary[] }) {
-  if (!laps.length) return null;
+  const valid = laps.filter(l => l.distM >= 5 && l.timeSec > 0);
+  if (!valid.length) return null;
 
-  const W = 800, H = 180, pL = 38, pR = 14, pT = 24, pB = 28;
+  const W = 800, H = 200, pL = 44, pR = 14, pT = 28, pB = 32;
   const cw = W - pL - pR, ch = H - pT - pB;
-  const N = laps.length;
+  const N = valid.length;
 
   const fmtSec = (s: number) => {
     const m = Math.floor(s / 60), ss = Math.round(s % 60);
     return m > 0 ? `${m}:${String(ss).padStart(2,'0')}` : `${ss}s`;
   };
-
-  // Pool length = median of lap distances
-  const dists  = laps.map(l => l.distM);
-  const medD   = dists.slice().sort((a,b)=>a-b)[Math.floor(dists.length/2)];
-  const poolM  = medD || 25;
-
-  const times  = laps.map(l => l.timeSec);
-  const minT   = Math.min(...times);
-  const maxT   = Math.max(...times);
-  const avgT   = times.reduce((s,v)=>s+v,0)/N;
-
-  // Strokes per length: avgCadence (strokes/min) × time_sec / 60
-  const withCad = laps.filter(l => l.avgCadence && l.avgCadence > 0);
-  const strokes = withCad.map(l => (l.avgCadence! / 60) * l.timeSec);
-  const avgStrokes = strokes.length ? Math.round(strokes.reduce((s,v)=>s+v,0)/strokes.length) : null;
-
-  // SWOLF = time_sec + strokes_per_length
-  const swolfs = withCad.map(l => Math.round((l.avgCadence! / 60) * l.timeSec + l.timeSec));
-  const avgSwolf = swolfs.length ? Math.round(swolfs.reduce((s,v)=>s+v,0)/swolfs.length) : null;
-  const minSwolf = swolfs.length ? Math.min(...swolfs) : null;
-
-  // Y axis: 0 to maxT * 1.1
-  const yMax = maxT * 1.1;
-  const yAvg = pT + (1 - avgT / yMax) * ch;
-
-  // Bars
-  const barTotal = cw / N;
-  const barW = Math.max(2, barTotal * 0.78);
-
-  const colorForTime = (t: number) => {
-    const dev = (t - avgT) / avgT;
-    if (dev < -0.05) return '#22c55e';
-    if (dev >  0.10) return '#f87171';
-    if (dev >  0.05) return '#fbbf24';
-    return '#60a5fa';
+  const fmtPaceS100 = (sec100: number) => {
+    const m = Math.floor(sec100 / 60), s = Math.round(sec100 % 60);
+    return `${m}:${String(s).padStart(2,'0')}/100m`;
   };
 
-  // X label step: 1 / 5 / 10 depending on count
-  const tickStep = N <= 12 ? 1 : N <= 30 ? 5 : 10;
+  const totalDist = valid.reduce((s, l) => s + l.distM, 0);
+  const totalTime = valid.reduce((s, l) => s + l.timeSec, 0);
+  const lapPace100 = (l: LapSummary) => (l.timeSec / l.distM) * 100;
+  const avgPace    = (totalTime / totalDist) * 100;
+  const fastestPace = Math.min(...valid.map(lapPace100));
+  const maxTime    = Math.max(...valid.map(l => l.timeSec));
+  const yMax       = maxTime * 1.1;
 
-  // Y ticks
-  const yTickVals = [0, Math.round(maxT/2), maxT];
+  // Pool length detection (uniform → show, varied → skip)
+  const distBuckets = new Set(valid.map(l => Math.round(l.distM / 5) * 5));
+  const poolLen = distBuckets.size <= 2 ? valid[0].distM : null;
+
+  // Bar layout — width proportional to distance
+  const gap     = N > 30 ? 0 : 1;
+  const usableW = cw - gap * (N - 1);
+  let cumD = 0;
+  const bars = valid.map((l, i) => {
+    const x = pL + (cumD / totalDist) * usableW + i * gap;
+    cumD += l.distM;
+    const w = Math.max(3, (l.distM / totalDist) * usableW);
+    const h = (l.timeSec / yMax) * ch;
+    const y = pT + ch - h;
+    const pace = lapPace100(l);
+    const dev  = (pace - avgPace) / avgPace;
+    const color = dev < -0.05 ? '#22c55e'
+                : dev >  0.10 ? '#f87171'
+                : dev >  0.05 ? '#fbbf24'
+                : '#60a5fa';
+    return { x, y, w, h, color, l, i, pace };
+  });
+
+  // Stroke / SWOLF aggregates (per length normalized for varied distances:
+  // strokes_per_100m for comparison — but classic SWOLF still useful per lap)
+  const withCad = valid.filter(l => l.avgCadence && l.avgCadence > 0);
+  const swolfsPer100 = withCad.map(l => {
+    const strokes100 = (l.avgCadence! / 60) * (l.timeSec * 100 / l.distM);
+    const time100    = (l.timeSec * 100) / l.distM;
+    return Math.round(strokes100 + time100);
+  });
+  const avgSwolf = swolfsPer100.length ? Math.round(swolfsPer100.reduce((a,b)=>a+b,0)/swolfsPer100.length) : null;
+  const minSwolf = swolfsPer100.length ? Math.min(...swolfsPer100) : null;
+  const allStrokesPer100 = withCad.map(l => (l.avgCadence! / 60) * (l.timeSec * 100 / l.distM));
+  const avgStrokes100 = allStrokesPer100.length ? Math.round(allStrokesPer100.reduce((a,b)=>a+b,0)/allStrokesPer100.length) : null;
+
+  const yTicks = [0, Math.round(maxTime/2), maxTime];
 
   return (
     <div>
       <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--text-secondary)', marginBottom:6, display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
-        <span>Czas / długość basenu</span>
+        <span>Czas / odcinek</span>
         <span style={{ color:'var(--text-secondary)', fontWeight:600, textTransform:'none', letterSpacing:0 }}>
-          {poolM} m basen · {N} długości
+          {poolLen ? `${poolLen} m basen · ` : ''}{N} {N === 1 ? 'odcinek' : N < 5 ? 'odcinki' : 'odcinków'} · szerokość = dystans
         </span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', display:'block' }}>
-        {/* Y ticks */}
-        {yTickVals.map(v => {
+        {/* Y ticks (time) */}
+        {yTicks.map(v => {
           const y = pT + (1 - v / yMax) * ch;
           return <g key={v}>
             <line x1={pL} y1={y} x2={W-pR} y2={y} stroke="var(--border)" strokeWidth={0.5} strokeDasharray="3,4" />
@@ -600,50 +609,52 @@ function SwimLapsChart({ laps }: { laps: LapSummary[] }) {
           </g>;
         })}
 
-        {/* Avg line */}
-        <line x1={pL} y1={yAvg} x2={W-pR} y2={yAvg} stroke="#60a5fa" strokeWidth={1.2} strokeDasharray="6,3" />
-        <text x={W-pR-3} y={yAvg-4} fontSize={10} fill="#60a5fa" textAnchor="end" fontWeight={700}>
-          śr. {fmtSec(avgT)}
-        </text>
-
         {/* Bars */}
-        {laps.map((l, i) => {
-          const x = pL + i * barTotal + (barTotal - barW) / 2;
-          const h = (l.timeSec / yMax) * ch;
-          const y = pT + ch - h;
-          const strokesThisLap = l.avgCadence ? Math.round((l.avgCadence/60) * l.timeSec) : null;
-          const swolfThisLap   = strokesThisLap !== null ? strokesThisLap + l.timeSec : null;
+        {bars.map(b => {
+          const strokes = b.l.avgCadence ? Math.round((b.l.avgCadence/60) * b.l.timeSec) : null;
+          const swolf   = strokes !== null ? strokes + b.l.timeSec : null;
           return (
-            <g key={i}>
-              <rect x={x} y={y} width={barW} height={Math.max(0, h)} fill={colorForTime(l.timeSec)} opacity={0.88} rx={1}>
-                <title>{`Długość ${i+1}: ${fmtSec(l.timeSec)}${strokesThisLap !== null ? ` · ${strokesThisLap} ruchów` : ''}${swolfThisLap !== null ? ` · SWOLF ${swolfThisLap}` : ''}${l.avgHR ? ` · ${Math.round(l.avgHR)} bpm` : ''}`}</title>
+            <g key={b.i}>
+              <rect x={b.x} y={b.y} width={b.w} height={Math.max(0, b.h)} fill={b.color} opacity={0.88} rx={1}>
+                <title>{`Odcinek ${b.i+1}: ${b.l.distM}m w ${fmtSec(b.l.timeSec)} (${fmtPaceS100(b.pace)})${strokes !== null ? ` · ${strokes} ruchów` : ''}${swolf !== null ? ` · SWOLF ${swolf}` : ''}${b.l.avgHR ? ` · ${Math.round(b.l.avgHR)} bpm` : ''}`}</title>
               </rect>
+              {/* Distance label inside bar if wide enough */}
+              {b.w > 36 && (
+                <text x={b.x + b.w/2} y={b.y + Math.min(b.h - 4, 14)} textAnchor="middle" fontSize={9.5} fontWeight={700} fill="#fff" opacity={0.92}>
+                  {b.l.distM}m
+                </text>
+              )}
             </g>
           );
         })}
 
-        {/* X labels */}
-        {laps.map((_, i) => {
-          const showLabel = (i + 1) % tickStep === 0 || i === 0 || i === N - 1;
-          if (!showLabel) return null;
-          const x = pL + (i + 0.5) * barTotal;
+        {/* X labels: lap index */}
+        {bars.map(b => {
+          const step = N <= 8 ? 1 : N <= 20 ? 2 : N <= 40 ? 5 : 10;
+          if ((b.i + 1) % step !== 0 && b.i !== 0 && b.i !== N - 1) return null;
+          if (b.w < 8 && b.i !== 0 && b.i !== N - 1) return null;
           return (
-            <text key={i} x={x} y={H - 8} textAnchor="middle" fontSize={9} fill="var(--text-secondary)">
-              {i + 1}
+            <text key={b.i} x={b.x + b.w/2} y={H - 16} textAnchor="middle" fontSize={9} fill="var(--text-secondary)">
+              {b.i + 1}
             </text>
           );
         })}
+        <text x={pL} y={H - 4} fontSize={9} fill="var(--text-secondary)" fontStyle="italic">numer odcinka →</text>
       </svg>
 
-      {/* Per-length stats row */}
+      {/* Bottom stats */}
       <div style={{ display:'flex', gap:14, fontSize:11, color:'var(--text-secondary)', marginTop:6, flexWrap:'wrap' }}>
-        <span>Najszybsza: <strong style={{ color:'#22c55e' }}>{fmtSec(minT)}</strong></span>
-        <span>Najwolniejsza: <strong style={{ color:'#f87171' }}>{fmtSec(maxT)}</strong></span>
-        {avgStrokes !== null && <span>Śr. ruchów: <strong style={{ color:'var(--text)' }}>{avgStrokes}</strong>/długość</span>}
-        {avgSwolf !== null && <span>SWOLF: <strong style={{ color:'var(--text)' }}>{avgSwolf}</strong> (najlepszy {minSwolf})</span>}
+        <span>Najszybsze: <strong style={{ color:'#22c55e' }}>{fmtPaceS100(fastestPace)}</strong></span>
+        <span>Średnie: <strong style={{ color:'var(--text)' }}>{fmtPaceS100(avgPace)}</strong></span>
+        {avgStrokes100 !== null && <span>Śr. ruchów: <strong style={{ color:'var(--text)' }}>{avgStrokes100}</strong>/100m</span>}
+        {avgSwolf !== null && <span>SWOLF /100m: <strong style={{ color:'var(--text)' }}>{avgSwolf}</strong> (najlepszy {minSwolf})</span>}
       </div>
-      <div style={{ fontSize:10, color:'var(--text-secondary)', marginTop:6, lineHeight:1.5 }}>
-        SWOLF = czas długości + liczba ruchów. Niższe = lepsza efektywność (mniej ruchów na ten sam dystans).
+      <div style={{ display:'flex', gap:10, fontSize:10, color:'var(--text-secondary)', marginTop:6, flexWrap:'wrap', alignItems:'center' }}>
+        <span><span style={{ display:'inline-block', width:10, height:8, background:'#22c55e', borderRadius:2, marginRight:3, verticalAlign:'middle' }} />szybsze</span>
+        <span><span style={{ display:'inline-block', width:10, height:8, background:'#60a5fa', borderRadius:2, marginRight:3, verticalAlign:'middle' }} />średnio</span>
+        <span><span style={{ display:'inline-block', width:10, height:8, background:'#fbbf24', borderRadius:2, marginRight:3, verticalAlign:'middle' }} />wolniejsze</span>
+        <span><span style={{ display:'inline-block', width:10, height:8, background:'#f87171', borderRadius:2, marginRight:3, verticalAlign:'middle' }} />dużo wolniejsze</span>
+        <span style={{ marginLeft:'auto', lineHeight:1.5, textAlign:'right' }}>kolor wg tempa /100m · wysokość = czas · szerokość = dystans</span>
       </div>
     </div>
   );
@@ -762,20 +773,23 @@ export default function ActivityCharts({ data }: { data: StreamData }) {
   // Swim-specific aggregates from laps
   const swimLapStats = (() => {
     if (!isSwim || !data.laps?.length) return null;
-    const N = data.laps.length;
-    const dists = data.laps.map(l => l.distM);
-    const medD  = dists.slice().sort((a,b)=>a-b)[Math.floor(N/2)];
-    const times = data.laps.map(l => l.timeSec);
-    const minT  = Math.min(...times);
-    const withC = data.laps.filter(l => l.avgCadence && l.avgCadence > 0);
-    const strokes = withC.map(l => Math.round((l.avgCadence! / 60) * l.timeSec));
-    const swolfs  = withC.map((l, i) => strokes[i] + l.timeSec);
+    const valid = data.laps.filter(l => l.distM >= 5 && l.timeSec > 0);
+    if (!valid.length) return null;
+    const N = valid.length;
+    const distBuckets = new Set(valid.map(l => Math.round(l.distM / 5) * 5));
+    const poolLen = distBuckets.size <= 2 ? valid[0].distM : null;
+    // Fastest pace /100m
+    const fastestPaceS100 = Math.min(...valid.map(l => (l.timeSec / l.distM) * 100));
+    // SWOLF normalized to /100m for comparison across varied distances
+    const withC = valid.filter(l => l.avgCadence && l.avgCadence > 0);
+    const strokes100 = withC.map(l => (l.avgCadence! / 60) * (l.timeSec * 100 / l.distM));
+    const swolfs100  = withC.map((l, i) => strokes100[i] + (l.timeSec * 100 / l.distM));
     return {
-      poolLen: medD,
-      lengthsCount: N,
-      fastestSec: minT,
-      avgStrokes: strokes.length ? Math.round(strokes.reduce((s,v)=>s+v,0)/strokes.length) : null,
-      avgSwolf:   swolfs.length  ? Math.round(swolfs.reduce((s,v)=>s+v,0)/swolfs.length)   : null,
+      poolLen,
+      segmentsCount: N,
+      fastestPaceS100,
+      avgStrokes100: strokes100.length ? Math.round(strokes100.reduce((s,v)=>s+v,0)/strokes100.length) : null,
+      avgSwolf100:   swolfs100.length  ? Math.round(swolfs100.reduce((s,v)=>s+v,0)/swolfs100.length)   : null,
     };
   })();
 
@@ -792,13 +806,13 @@ export default function ActivityCharts({ data }: { data: StreamData }) {
     ...(!isSwim ? [['Przewyżs.', stats.elevGain > 0 ? `${stats.elevGain} m` : null] as [string, string|null]] : []),
     // Swim: pace in min/100m only
     ...(isSwim ? [['Tempo /100m', stats.avgVelocityMs ? fmtPace(stats.avgVelocityMs, sportType) : null] as [string, string|null]] : []),
-    // Swim: pool length and lap counts
+    // Swim: lap-based stats (pace-normalized to /100m for varied-distance sets)
     ...(swimLapStats ? [
-      ['Basen',         `${swimLapStats.poolLen} m`],
-      ['Długości',      `${swimLapStats.lengthsCount}`],
-      ['Najszybsza',    swimLapStats.fastestSec ? (() => { const m = Math.floor(swimLapStats.fastestSec/60), s = swimLapStats.fastestSec%60; return m > 0 ? `${m}:${String(s).padStart(2,'0')}` : `${s} s`; })() : null],
-      ...(swimLapStats.avgSwolf !== null ? [['SWOLF',  `${swimLapStats.avgSwolf}`] as [string, string|null]] : []),
-      ...(swimLapStats.avgStrokes !== null ? [['Ruchy/dł.', `${swimLapStats.avgStrokes}`] as [string, string|null]] : []),
+      ...(swimLapStats.poolLen ? [['Basen', `${swimLapStats.poolLen} m`] as [string, string|null]] : []),
+      ['Odcinki', `${swimLapStats.segmentsCount}`],
+      ['Najszybsze /100m', (() => { const t = swimLapStats.fastestPaceS100; const m = Math.floor(t/60), s = Math.round(t%60); return `${m}:${String(s).padStart(2,'0')}`; })()],
+      ...(swimLapStats.avgSwolf100 !== null ? [['SWOLF /100m',  `${swimLapStats.avgSwolf100}`] as [string, string|null]] : []),
+      ...(swimLapStats.avgStrokes100 !== null ? [['Ruchy /100m', `${swimLapStats.avgStrokes100}`] as [string, string|null]] : []),
     ] as Array<[string, string|null]> : []),
     // Bike: speed in km/h
     ...(isRide ? [['Śr. prędkość', stats.avgVelocityMs ? `${(stats.avgVelocityMs * 3.6).toFixed(1)} km/h` : null] as [string, string|null]] : []),
