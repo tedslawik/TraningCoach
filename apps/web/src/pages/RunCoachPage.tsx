@@ -242,10 +242,10 @@ function RunTrainingInsights() {
       const sufferScores = acts.map((a: Record<string,unknown>) => a.sufferScore as number).filter((v: unknown): v is number => typeof v === 'number');
       const temps        = acts.map((a: Record<string,unknown>) => a.avgTemp as number).filter((v: unknown): v is number => typeof v === 'number');
       const elevGains    = acts.map((a: Record<string,unknown>) => a.elevationGain as number).filter((v: unknown): v is number => typeof v === 'number' && v > 0);
-      const workoutTypes = acts.map((a: Record<string,unknown>) => a.workoutType as number | null).filter((v): v is number => v !== null);
+      const workoutTypes = acts.map((a: Record<string,unknown>) => a.workoutType as number | null).filter((v: number | null): v is number => v !== null);
       // Strava workout_type for runs: 1=race, 2=long run, 3=workout
       const wtCounts = { race: 0, longRun: 0, workout: 0 };
-      workoutTypes.forEach(t => { if (t === 1) wtCounts.race++; else if (t === 2) wtCounts.longRun++; else if (t === 3) wtCounts.workout++; });
+      workoutTypes.forEach((t: number) => { if (t === 1) wtCounts.race++; else if (t === 2) wtCounts.longRun++; else if (t === 3) wtCounts.workout++; });
 
       const aiRes = await fetch('/api/ai/analyze-workout', {
         method: 'POST',
@@ -256,7 +256,7 @@ function RunTrainingInsights() {
           startDate:    new Date().toISOString(),
           totalDistKm:  avgDistKm,
           totalTimeSec: avgTimeSec,
-          elevGain:     elevGains.length ? Math.round(elevGains.reduce((s,v)=>s+v,0)/elevGains.length) : 0,
+          elevGain:     elevGains.length ? Math.round(elevGains.reduce((s: number, v: number) => s+v, 0)/elevGains.length) : 0,
           avgHR:        avgHRNum,
           maxHR:        null, avgWatts: null,
           avgVelocityMs: avgPaceMS ? 1000 / (avgPaceMS * 60) : null,
