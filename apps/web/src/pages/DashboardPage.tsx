@@ -6,7 +6,7 @@ import { calculatePMC, type WeeklySummary } from '@tricoach/core';
 import { supabase } from '../lib/supabase';
 import TrendsChart from '../components/charts/TrendsChart';
 import PMCChart from '../components/charts/PMCChart';
-import RacePredictor from '../components/athlete/RacePredictor';
+import TrainingInsights from '../components/athlete/TrainingInsights';
 import SectionLabel from '../components/SectionLabel';
 
 function getMonday(d: Date) {
@@ -237,16 +237,8 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          {/* ── RACE PREDICTOR ── */}
-          <section className="alt">
-            <div className="section-inner narrow">
-              <div className="section-header">
-                <SectionLabel discipline="tri">Predyktor wyścigu</SectionLabel>
-                <h2>Szacowany czas na podstawie treningów</h2>
-              </div>
-              <RacePredictor summaries={summaries} />
-            </div>
-          </section>
+          {/* ── AI TRAINING INSIGHTS ── */}
+          {isEnabled('run_technique_ai') && <TrainingInsights />}
 
           {/* ── QUICK NAV ── */}
           <section>

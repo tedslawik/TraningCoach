@@ -2,24 +2,54 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Analyzer from '../components/analyzer/Analyzer';
 import NutritionCalculator from '../components/tri/NutritionCalculator';
+import RacePredictor from '../components/athlete/RacePredictor';
 import SectionLabel from '../components/SectionLabel';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
+import type { WeeklySummary } from '@tricoach/core';
 
-type Calc = 'analyzer' | 'nutrition';
+type Calc = 'analyzer' | 'nutrition' | 'predictor';
 
 const TABS: { value: Calc; icon: string; label: string; short: string }[] = [
   { value: 'analyzer',  icon: '📊', label: 'Analizator treningowy', short: 'Analizator' },
   { value: 'nutrition', icon: '🍌', label: 'Kalkulator żywienia',   short: 'Żywienie'   },
+  { value: 'predictor', icon: '🏁', label: 'Predyktor wyścigu',      short: 'Predyktor'  },
 ];
 
 export default function CalculatorsPage() {
-  const [params, setParams] = useSearchParams();
-  const initial = (params.get('tab') === 'nutrition' ? 'nutrition' : 'analyzer') as Calc;
-  const [active, setActive] = useState<Calc>(initial);
+  const { user } = useAuth();
+  const [params, setParams]     = useSearchParams();
+  const initial                 = (() => {
+    const t = params.get('tab');
+    return t === 'nutrition' || t === 'predictor' ? t : 'analyzer';
+  })() as Calc;
+  const [active, setActive]     = useState<Calc>(initial);
+  const [summaries, setSums]    = useState<WeeklySummary[]>([]);
 
   useEffect(() => {
     const t = params.get('tab');
-    if (t === 'nutrition' || t === 'analyzer') setActive(t);
+    if (t === 'nutrition' || t === 'analyzer' || t === 'predictor') setActive(t);
   }, [params]);
+
+  // Fetch summaries lazily when predictor tab opens (or always for logged-in users — both work)
+  useEffect(() => {
+    if (active !== 'predictor' || !user) return;
+    supabase
+      .from('weekly_summaries')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('week_start', { ascending: true })
+      .then(({ data }) => {
+        if (!data?.length) { setSums([]); return; }
+        setSums(data.map(r => ({
+          weekStart:   r.week_start,
+          swimDistKm:  r.swim_dist_km,  swimTimeMin: r.swim_time_min,
+          bikeDistKm:  r.bike_dist_km,  bikeTimeMin: r.bike_time_min,
+          runDistKm:   r.run_dist_km,   runTimeMin:  r.run_time_min,
+          sufferScore: r.suffer_score,  tss: r.tss,  kilojoules: r.kilojoules,
+        })));
+      });
+  }, [active, user]);
 
   const switchTab = (t: Calc) => {
     setActive(t);
@@ -36,7 +66,7 @@ export default function CalculatorsPage() {
             Narzędzia obliczeniowe
           </h1>
           <p style={{ fontSize: 15, color: 'var(--text-secondary)', maxWidth: 640, lineHeight: 1.6 }}>
-            Praktyczne kalkulatory dla treningu i wyścigu — sprawdź proporcje treningowe lub oblicz żywienie wyścigowe.
+            Praktyczne kalkulatory dla treningu i wyścigu — proporcje, żywienie, predykcja czasu na mecie.
           </p>
 
           {/* Tabs */}
@@ -86,6 +116,25 @@ export default function CalculatorsPage() {
               <p>Wybierz format wyścigu i planowany czas — kalkulator przeliczy dokładne ilości węglowodanów, żeli i bidonów na podstawie Twojej wagi.</p>
             </div>
             <NutritionCalculator />
+          </div>
+        </section>
+      )}
+
+      {/* Predyktor wyścigu */}
+      {active === 'predictor' && (
+        <section>
+          <div className="section-inner narrow">
+            <div className="section-header">
+              <SectionLabel discipline="tri">Predyktor wyścigu</SectionLabel>
+              <h2>Szacowany czas na podstawie treningów</h2>
+              <p>Predyktor analizuje Twoje średnie tempa pływania, jazdy i biegu z ostatnich 8 tygodni i szacuje czas wyścigu na różnych dystansach triathlonowych.</p>
+            </div>
+            {!user
+              ? <p style={{ fontSize:14, color:'var(--text-secondary)', textAlign:'center', padding:'2rem' }}>Zaloguj się, aby zobaczyć predyktor.</p>
+              : summaries.length === 0
+                ? <p style={{ fontSize:14, color:'var(--text-secondary)', textAlign:'center', padding:'2rem' }}>Brak danych — synchronizuj historię ze Stravy w Dashboardzie.</p>
+                : <RacePredictor summaries={summaries} />
+            }
           </div>
         </section>
       )}
