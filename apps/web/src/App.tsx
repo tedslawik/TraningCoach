@@ -13,7 +13,6 @@ import BikeCoachPage from './pages/BikeCoachPage';
 import AthletePage from './pages/AthletePage';
 import DashboardPage from './pages/DashboardPage';
 import PlannerPage from './pages/PlannerPage';
-import RunZonesPage from './pages/RunZonesPage';
 import SettingsPage from './pages/SettingsPage';
 import CalculatorsPage from './pages/CalculatorsPage';
 
@@ -54,7 +53,7 @@ function AppShell() {
         <Route path="/athlete"     element={<AthletePage />} />
         <Route path="/dashboard"   element={<DashboardPage />} />
         <Route path="/plan"        element={<PlannerPage />} />
-        <Route path="/run-zones"   element={<RunZonesPage />} />
+        <Route path="/run-zones"   element={<Navigate to="/calculators?tab=vdot" replace />} />
         <Route path="/settings"    element={<SettingsPage />} />
         <Route path="/calculators" element={<CalculatorsPage />} />
         <Route path="/analyzer"    element={<Navigate to="/calculators?tab=analyzer" replace />} />

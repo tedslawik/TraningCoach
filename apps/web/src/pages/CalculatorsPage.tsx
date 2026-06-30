@@ -3,17 +3,19 @@ import { useSearchParams } from 'react-router-dom';
 import Analyzer from '../components/analyzer/Analyzer';
 import NutritionCalculator from '../components/tri/NutritionCalculator';
 import RacePredictor from '../components/athlete/RacePredictor';
+import VdotCalculator from '../components/training/VdotCalculator';
 import SectionLabel from '../components/SectionLabel';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import type { WeeklySummary } from '@tricoach/core';
 
-type Calc = 'analyzer' | 'nutrition' | 'predictor';
+type Calc = 'analyzer' | 'nutrition' | 'predictor' | 'vdot';
 
 const TABS: { value: Calc; icon: string; label: string; short: string }[] = [
   { value: 'analyzer',  icon: '📊', label: 'Analizator treningowy', short: 'Analizator' },
   { value: 'nutrition', icon: '🍌', label: 'Kalkulator żywienia',   short: 'Żywienie'   },
-  { value: 'predictor', icon: '🏁', label: 'Predyktor wyścigu',      short: 'Predyktor'  },
+  { value: 'predictor', icon: '🏁', label: 'Predyktor wyścigu',     short: 'Predyktor'  },
+  { value: 'vdot',      icon: '⏱️', label: 'VDOT — tempo biegu',    short: 'VDOT'       },
 ];
 
 export default function CalculatorsPage() {
@@ -21,14 +23,14 @@ export default function CalculatorsPage() {
   const [params, setParams]     = useSearchParams();
   const initial                 = (() => {
     const t = params.get('tab');
-    return t === 'nutrition' || t === 'predictor' ? t : 'analyzer';
+    return t === 'nutrition' || t === 'predictor' || t === 'vdot' ? t : 'analyzer';
   })() as Calc;
   const [active, setActive]     = useState<Calc>(initial);
   const [summaries, setSums]    = useState<WeeklySummary[]>([]);
 
   useEffect(() => {
     const t = params.get('tab');
-    if (t === 'nutrition' || t === 'analyzer' || t === 'predictor') setActive(t);
+    if (t === 'nutrition' || t === 'analyzer' || t === 'predictor' || t === 'vdot') setActive(t);
   }, [params]);
 
   // Fetch summaries lazily when predictor tab opens (or always for logged-in users — both work)
@@ -116,6 +118,20 @@ export default function CalculatorsPage() {
               <p>Wybierz format wyścigu i planowany czas — kalkulator przeliczy dokładne ilości węglowodanów, żeli i bidonów na podstawie Twojej wagi.</p>
             </div>
             <NutritionCalculator />
+          </div>
+        </section>
+      )}
+
+      {/* VDOT — kalkulator tempa */}
+      {active === 'vdot' && (
+        <section>
+          <div style={{ maxWidth: 1060, margin: '0 auto', padding: '2rem 5vw' }}>
+            <div className="section-header">
+              <SectionLabel discipline="run">VDOT — kalkulator tempa biegu</SectionLabel>
+              <h2>Strefy tempa wg Jacka Danielsa</h2>
+              <p>Wpisz swój wynik na 5K, 10K, półmaratonie lub innym dystansie. Kalkulator wyliczy VDOT i podpowie tempa dla każdego rodzaju treningu — od regeneracyjnego po interwały VO₂max. Opcjonalnie dodaj max HR, żeby dostać też strefy tętna.</p>
+            </div>
+            <VdotCalculator />
           </div>
         </section>
       )}
