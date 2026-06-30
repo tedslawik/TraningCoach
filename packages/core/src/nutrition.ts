@@ -52,6 +52,15 @@ const RUN_CARBS_PH: Record<RaceType, number> = {
 const BIKE_BOTTLE_ML = 750;
 const RUN_BOTTLE_ML  = 500;  // race-belt bottle
 
+// Pre-race meal: grams of carbs per kg body weight + minutes before start.
+// Longer races need bigger meal earlier (3h for full IM) to fully digest.
+const PRE_RACE_BY_TYPE: Record<RaceType, { gPerKg: number; minBefore: number }> = {
+  sprint:  { gPerKg: 1.5, minBefore: 75  },
+  olympic: { gPerKg: 2.0, minBefore: 90  },
+  half:    { gPerKg: 2.5, minBefore: 150 },
+  full:    { gPerKg: 3.0, minBefore: 180 },
+};
+
 export interface ProductConfig {
   gelCarbs:       number;
   gelName:        string;
@@ -136,14 +145,17 @@ export function generateNutritionPlan(
     ? Math.max(8, Math.round(runMin / runGels))
     : null;
 
+  // Rules are tailored to whether bike gels are actually needed (drinks may cover it)
   const bikeGelRule = bikeGelIntervalMin !== null
     ? `Żel co ~${bikeGelIntervalMin} min na rowerze${runGelIntervalMin !== null ? `, co ~${runGelIntervalMin} min na biegu` : ''}.`
-    : `Bidony pokrywają zapotrzebowanie na rowerze — żele opcjonalne (zabierz 1–2 na zapas).${runGelIntervalMin !== null ? ` Na biegu żel co ~${runGelIntervalMin} min.` : ''}`;
+    : runGelIntervalMin !== null
+        ? `Na rowerze bidony pokrywają zapotrzebowanie węgli — żele zostaw na bieg (co ~${runGelIntervalMin} min).`
+        : `Bidony i napój izotoniczny pokrywają zapotrzebowanie energetyczne — żele niepotrzebne.`;
 
-  const halfFullRule = raceType === 'full' || raceType === 'half'
+  const halfFullRule = (raceType === 'full' || raceType === 'half')
     ? (bikeGelIntervalMin !== null
         ? `Na pierwszej połowie roweru jedz regularnie co ${bikeGelIntervalMin} min, na drugiej możesz zwiększyć tempo żelowania.`
-        : `Na pierwszej połowie roweru ustal stały rytm picia z bidonów co 10–15 min, na drugiej dorzuć 1–2 żele dla świeżości.`)
+        : `Skup się na regularnym piciu z bidonów (co 10–15 min) — to pokrywa węgle i nawodnienie jednocześnie.`)
     : `Skorzystaj z izotonika zamiast wody — mniej tabletek elektrolitowych do pamiętania.`;
 
   const keyRules: string[] = [
@@ -164,8 +176,8 @@ export function generateNutritionPlan(
     runCarbs, runFluids, runSodium,
     bikeGels, bikeBottles, runGels, runBottles,
     bikeGelIntervalMin, runGelIntervalMin,
-    preRaceCarbs: 200,
-    preRaceMin:   90,
+    preRaceCarbs: Math.round(weightKg * PRE_RACE_BY_TYPE[raceType].gPerKg),
+    preRaceMin:   PRE_RACE_BY_TYPE[raceType].minBefore,
     keyRules,
   };
 }

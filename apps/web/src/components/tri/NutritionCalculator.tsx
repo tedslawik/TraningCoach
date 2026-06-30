@@ -59,6 +59,11 @@ function parseTime(val: string): number|null {
   const n=parseFloat(val); return isNaN(n)?null:n;
 }
 function fmtHHMM(min: number) { const h=Math.floor(min/60),m=Math.round(min%60); return `${h}:${String(m).padStart(2,'0')}`; }
+function fmtPreRaceMin(min: number) {
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60), m = min % 60;
+  return m > 0 ? `${h}h ${m} min` : `${h}h`;
+}
 
 /* ── Sub-components ──────────────────────────────────────── */
 function StatCard({ label, value, sub, color }: { label:string; value:string; sub?:string; color?:string }) {
@@ -246,7 +251,7 @@ export default function NutritionCalculator() {
           <div className="card" style={{marginBottom:'1rem',borderLeft:'3px solid var(--tri)'}}>
             <SegHeader icon="☀️" label="Przed startem" time={0} color="var(--tri)" />
             <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}>
-              <StatCard label="Posiłek węglowodanowy" value={`${plan.preRaceCarbs} g`} sub={`${plan.preRaceMin} min przed startem`} color="var(--tri)" />
+              <StatCard label="Posiłek węglowodanowy" value={`${plan.preRaceCarbs} g`} sub={`${fmtPreRaceMin(plan.preRaceMin)} przed startem`} color="var(--tri)" />
               <StatCard label="Ostatni żel/banan" value="30 min" sub="przed startem — proste cukry" />
               <StatCard label="Nawodnienie" value="500 ml" sub="do 60 min przed startem" />
             </div>
@@ -273,7 +278,7 @@ export default function NutritionCalculator() {
             <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}>
               <StatCard label={gelLabel} value={`${plan.bikeGels} szt.`} sub={plan.bikeGelIntervalMin !== null ? `co ~${plan.bikeGelIntervalMin} min` : 'pokryte bidonami'} />
               <StatCard label={`${drinkLabel}`} value={`${plan.bikeBottles} szt.`} sub={`750ml · ${Math.round(drinkCarbs*(750/500))}g węgli/bidon`} />
-              <StatCard label="Łącznie węgle" value={`${plan.bikeCarbs} g`} sub={`≈ ${Math.round(plan.bikeCarbs*4)} kcal`} />
+              <StatCard label="Cel węgli" value={`${plan.bikeCarbs} g`} sub={`≈ ${Math.round(plan.bikeCarbs*4)} kcal`} />
             </div>
           </div>
 
@@ -290,7 +295,7 @@ export default function NutritionCalculator() {
               {runLiquid && plan.runBottles > 0 && (
                 <StatCard label={`${drinkLabel} (pas)`} value={`${plan.runBottles} szt.`} sub={`500ml · ${drinkCarbs}g węgli/bidon`} />
               )}
-              <StatCard label="Łącznie węgle" value={`${plan.runCarbs} g`} sub={`≈ ${Math.round(plan.runCarbs*4)} kcal`} />
+              <StatCard label="Cel węgli" value={`${plan.runCarbs} g`} sub={`≈ ${Math.round(plan.runCarbs*4)} kcal`} />
             </div>
             {!runLiquid && (
               <div style={{marginTop:10,fontSize:12,color:'var(--text-secondary)',padding:'8px 10px',background:'var(--bg-secondary)',borderRadius:'var(--radius-md)'}}>
@@ -307,7 +312,7 @@ export default function NutritionCalculator() {
                 [gelLabel, `${plan.bikeGels + plan.runGels} szt.`],
                 [drinkLabel + ' (750ml)', `${plan.bikeBottles} szt.`],
                 ...(runLiquid && plan.runBottles > 0 ? [[drinkLabel + ' bieg (500ml)', `${plan.runBottles} szt.`]] : []),
-                ['Węgle razem', `${plan.bikeCarbs + plan.runCarbs} g`],
+                ['Cel węgli razem', `${plan.bikeCarbs + plan.runCarbs} g`],
                 ['Energia razem', `${Math.round((plan.bikeCarbs+plan.runCarbs)*4)} kcal`],
               ].map(([l,v]) => (
                 <div key={l} style={{textAlign:'center'}}>
