@@ -7,6 +7,7 @@ import ActivityDetailModal from '../components/athlete/ActivityDetailModal';
 import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
 import TrainingPlanSection from '../components/training/TrainingPlanSection';
+import { supabase } from '../lib/supabase';
 
 /* ── types & helpers ── */
 interface RunActivity { id:number; name:string; sportType:string; date:string; distanceKm:number; timeFormatted:string; pace:string|null; movingTimeSec:number; sufferScore:number|null; avgHeartRate:number|null; maxHeartRate:number|null; elevationGain:number; hasHeartRate:boolean; zoneTimes:number[]|null; }
@@ -143,8 +144,8 @@ function RunLiveSection({ onActivityClick }: { onActivityClick?: (a: CalendarAct
 
 /* ── page ── */
 /* ── AI Technique Insights ── */
-function RunTechniqueInsights() {
-  const { session } = useAuth();
+function RunTrainingInsights() {
+  const { session, user } = useAuth();
   const [text, setText]       = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string|null>(null);
@@ -160,13 +161,17 @@ function RunTechniqueInsights() {
   }, [session]);
 
   const analyze = async () => {
-    if (!session) return;
+    if (!session || !user) return;
     setLoading(true); setText(''); setError(null); setUsage(null);
     try {
-      // Fetch last 30 days then take last 7 runs — week boundary irrelevant
-      const actsRes = await fetch('/api/strava/discipline?sport=run&daysBack=30', {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
+      // Parallel: fetch runs + 4 weeks of weekly summaries (for proportions context)
+      const [actsRes, summariesRes] = await Promise.all([
+        fetch('/api/strava/discipline?sport=run&daysBack=30', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }),
+        supabase.from('weekly_summaries').select('*').eq('user_id', user.id).order('week_start', { ascending:false }).limit(4),
+      ]);
+
       if (!actsRes.ok) throw new Error('Brak danych biegowych');
       const actsData = await actsRes.json();
       const acts = (actsData.activities ?? [])
@@ -174,6 +179,24 @@ function RunTechniqueInsights() {
         .slice(0, 7); // last 7 runs (Strava returns most recent first)
 
       if (!acts.length) throw new Error('Brak aktywności biegowych z danymi');
+
+      // Training proportions from last 4 weeks (target: Half IM 20/45/35)
+      const summaries = summariesRes.data ?? [];
+      const wkSum = (k: string) => summaries.reduce((s: number, w: Record<string,unknown>) => s + ((w[k] as number) ?? 0), 0);
+      const swimMin = wkSum('swim_time_min'),  bikeMin = wkSum('bike_time_min'),  runMin = wkSum('run_time_min');
+      const totalMin = swimMin + bikeMin + runMin;
+      const proportions = totalMin > 0 ? {
+        weeks: summaries.length,
+        totalHours: Math.round((totalMin / 60) * 10) / 10,
+        swimPct: Math.round((swimMin / totalMin) * 100),
+        bikePct: Math.round((bikeMin / totalMin) * 100),
+        runPct:  Math.round((runMin  / totalMin) * 100),
+        swimSessions: summaries.reduce((s: number, w: Record<string,unknown>) => s + ((w.swim_sessions as number) ?? 0), 0),
+        bikeSessions: summaries.reduce((s: number, w: Record<string,unknown>) => s + ((w.bike_sessions as number) ?? 0), 0),
+        runSessions:  summaries.reduce((s: number, w: Record<string,unknown>) => s + ((w.run_sessions  as number) ?? 0), 0),
+        avgWeeklyTSS: summaries.length ? Math.round(summaries.reduce((s: number, w: Record<string,unknown>) => s + ((w.tss as number) ?? 0), 0) / summaries.length) : 0,
+        targetSwim: 20, targetBike: 45, targetRun: 35, // Half IM defaults
+      } : null;
 
       // Per-run stats (not totals — multiple separate runs)
       const n          = acts.length;
@@ -215,23 +238,31 @@ function RunTechniqueInsights() {
       const lowCadPct  = cadences.length ? Math.round(cadences.filter(c=>c<165).length/cadences.length*100) : null;
       const highCadPct = cadences.length ? Math.round(cadences.filter(c=>c>=170&&c<=185).length/cadences.length*100) : null;
 
+      // Per-run extended metrics (suffer, temp, workout type, elevation)
+      const sufferScores = acts.map((a: Record<string,unknown>) => a.sufferScore as number).filter((v: unknown): v is number => typeof v === 'number');
+      const temps        = acts.map((a: Record<string,unknown>) => a.avgTemp as number).filter((v: unknown): v is number => typeof v === 'number');
+      const elevGains    = acts.map((a: Record<string,unknown>) => a.elevationGain as number).filter((v: unknown): v is number => typeof v === 'number' && v > 0);
+      const workoutTypes = acts.map((a: Record<string,unknown>) => a.workoutType as number | null).filter((v): v is number => v !== null);
+      // Strava workout_type for runs: 1=race, 2=long run, 3=workout
+      const wtCounts = { race: 0, longRun: 0, workout: 0 };
+      workoutTypes.forEach(t => { if (t === 1) wtCounts.race++; else if (t === 2) wtCounts.longRun++; else if (t === 3) wtCounts.workout++; });
+
       const aiRes = await fetch('/api/ai/analyze-workout', {
         method: 'POST',
         headers: { 'Content-Type':'application/json', Authorization:`Bearer ${session.access_token}` },
         body: JSON.stringify({
-          activityName: `Analiza techniki biegowej — ${n} ostatnich biegów`,
+          activityName: `Kompleksowa analiza treningowa — ${n} ostatnich biegów`,
           sportType:    'Run',
           startDate:    new Date().toISOString(),
-          totalDistKm:  avgDistKm,      // avg per run, not sum
-          totalTimeSec: avgTimeSec,     // avg per run
-          elevGain:     0,
+          totalDistKm:  avgDistKm,
+          totalTimeSec: avgTimeSec,
+          elevGain:     elevGains.length ? Math.round(elevGains.reduce((s,v)=>s+v,0)/elevGains.length) : 0,
           avgHR:        avgHRNum,
           maxHR:        null, avgWatts: null,
           avgVelocityMs: avgPaceMS ? 1000 / (avgPaceMS * 60) : null,
           avgCadence:   avgCad,
           hrZones:      actsData.hrZones,
           lapAnalysis:  null, laps: [],
-          // Extra context about multi-run analysis
           multiRunContext: {
             runsAnalyzed:  n,
             avgDistKm,
@@ -241,13 +272,20 @@ function RunTechniqueInsights() {
             pctOptimal170_185spm: highCadPct,
             minCadence:    cadences.length ? Math.min(...cadences) : null,
             maxCadence:    cadences.length ? Math.max(...cadences) : null,
-            // Cadence per pace zone — KLUCZOWE: kadencja zależy od tempa
             cadenceByPaceZone: {
               easy:     { label:'>5:30/km (Z1-Z2 spokojny)',    ...zoneEasy,  optimalRange:'160–172' },
               moderate: { label:'4:30–5:30/km (Z3 umiarkowany)',...zoneMod,   optimalRange:'166–178' },
               fast:     { label:'<4:30/km (Z4-Z5 szybki)',       ...zoneFast, optimalRange:'172–184' },
             },
+            // NEW: physiological and effort context
+            avgSufferScore: sufferScores.length ? Math.round(sufferScores.reduce((s: number, v: number)=>s+v,0)/sufferScores.length) : null,
+            maxSufferScore: sufferScores.length ? Math.max(...sufferScores) : null,
+            avgTempC:       temps.length ? Math.round(temps.reduce((s: number, v: number)=>s+v,0)/temps.length) : null,
+            workoutMix:     workoutTypes.length ? wtCounts : null,
+            elevGainsSum:   elevGains.length ? elevGains.reduce((s: number, v: number)=>s+v,0) : 0,
           },
+          // NEW: training proportions context (cross-discipline)
+          trainingProportions: proportions,
           techniqueFocus: true,
         }),
       });
@@ -295,9 +333,10 @@ function RunTechniqueInsights() {
   if (!session) return null;
 
   const SECTIONS = [
-    { keys:['OCENA TRENINGU'],          label:'Ocena techniki',     color:'#60a5fa', icon:'📊' },
-    { keys:['OCENA ZAŁOŻEŃ'],           label:'Ocena założeń',      color:'#34d399', icon:'✅' },
-    { keys:['WSKAZÓWKI NA PRZYSZŁOŚĆ','WSKAZÓWKI'], label:'Wskazówki', color:'#fb923c', icon:'💡' },
+    { keys:['OGÓLNA OCENA'],                          label:'Ogólna ocena',         color:'#60a5fa', icon:'📊' },
+    { keys:['PROPORCJE TRENINGOWE','PROPORCJE'],      label:'Proporcje S/B/R',      color:'#a855f7', icon:'⚖️' },
+    { keys:['TECHNIKA I FIZJOLOGIA','TECHNIKA'],      label:'Technika i fizjologia', color:'#34d399', icon:'🏃' },
+    { keys:['WSKAZÓWKI NA PRZYSZŁOŚĆ','WSKAZÓWKI'],   label:'Wskazówki',            color:'#fb923c', icon:'💡' },
   ];
 
   const upperText = text.toUpperCase();
@@ -320,10 +359,10 @@ function RunTechniqueInsights() {
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'1.25rem', flexWrap:'wrap', gap:12 }}>
           <div>
             <p style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--run)', marginBottom:4 }}>AI Coach</p>
-            <h2 style={{ fontSize:'clamp(18px,2.5vw,24px)', fontWeight:700, letterSpacing:-0.5 }}>Analiza techniki biegu</h2>
+            <h2 style={{ fontSize:'clamp(18px,2.5vw,24px)', fontWeight:700, letterSpacing:-0.5 }}>Analiza treningowa</h2>
           </div>
           {!loading && <button onClick={analyze} style={{ padding:'9px 20px', borderRadius:'var(--radius-md)', background:'linear-gradient(135deg,var(--run),#b91c1c)', color:'#fff', border:'none', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'var(--font)', display:'flex', alignItems:'center', gap:8 }}>
-            <span>🤖</span> {text ? 'Odśwież analizę' : 'Analizuj technikę biegu'}
+            <span>🤖</span> {text ? 'Odśwież analizę' : 'Analizuj treningi'}
           </button>}
         </div>
 
@@ -349,8 +388,9 @@ function RunTechniqueInsights() {
         )}
 
         {!text && !loading && !error && (
-          <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text-secondary)', fontSize:14 }}>
-            Kliknij przycisk powyżej — AI przeanalizuje kadencję, efektywność aerobową i technikę biegu na podstawie Twoich ostatnich treningów.
+          <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text-secondary)', fontSize:14, lineHeight:1.6 }}>
+            Kliknij przycisk powyżej — AI przeanalizuje 7 ostatnich biegów (kadencja, EF, suffer, temperatura, typ treningu) <br/>
+            oraz proporcje treningowe S/B/R z ostatnich 4 tygodni.
           </div>
         )}
       </div>
@@ -371,7 +411,7 @@ export default function RunCoachPage() {
         subtitle="Biegasz po 90 lub 180 km w siodle. Twój bieg triathlonowy wymaga specjalnego przygotowania — nie tylko kondycji, ale i adaptacji nerwowo-mięśniowej."
       />
       <RunLiveSection onActivityClick={setSelected} />
-      {isEnabled('run_technique_ai') && <RunTechniqueInsights />}
+      {isEnabled('run_technique_ai') && <RunTrainingInsights />}
       <TrainingPlanSection sport="run" />
       <CtaBanner
         title="Sprawdź swoje proporcje treningowe"

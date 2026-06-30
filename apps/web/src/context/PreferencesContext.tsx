@@ -25,7 +25,7 @@ export const FEATURES: FeatureDef[] = [
   { id:'run_weekly_comparison',  label:'Porównanie tygodniowe',          description:'Deficit/surplus czasu biegu vs poprzedni tydzień.',                     category:'run', defaultOn:true  },
   { id:'run_assessment',         label:'Ocena tygodnia biegowego',       description:'Automatyczne alerty (ok/warn) dla wolumenu, intensywności i długiego biegu.', category:'run', defaultOn:true  },
   { id:'run_zones',              label:'Kalkulator stref VDOT',          description:'Oblicza strefy tempa i HR na podstawie wyników lub biegów ze Stravy.',   category:'run', defaultOn:true  },
-  { id:'run_technique_ai',       label:'Analiza techniki AI',            description:'AI analizuje kadencję, EF i technikę biegu (koszt ~$0.04/analizę).',     category:'run', defaultOn:false },
+  { id:'run_technique_ai',       label:'Analiza treningowa AI',          description:'AI analizuje technikę, oddechy, suffer score, temperaturę oraz proporcje treningowe S/B/R (koszt ~$0.05/analizę).', category:'run', defaultOn:false },
 
   /* ── Swim Coach ── */
   { id:'swim_weekly_comparison', label:'Porównanie tygodniowe',          description:'Deficit/surplus czasu pływania vs poprzedni tydzień.',                   category:'swim', defaultOn:true },

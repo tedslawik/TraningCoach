@@ -171,6 +171,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       timeFormatted:   fmtTime(tMin),
       pace,
       movingTimeSec:   (a.moving_time as number) ?? 0,
+      elapsedTimeSec:  (a.elapsed_time as number) ?? 0,
       elevationGain:   Math.round((a.total_elevation_gain as number) ?? 0),
       sufferScore:     suffer, avgHeartRate: avgHR,
       maxHeartRate:    (a.max_heartrate as number | null) ?? null,
@@ -184,6 +185,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       deviceWatts:     devW,
       zoneTimes:       null as number[] | null,
       powerZoneTimes:  null as number[] | null,
+      // Extended metadata for AI analysis
+      avgTemp:         (a.average_temp as number | null) ?? null,
+      workoutType:     (a.workout_type as number | null) ?? null,
+      deviceName:      (a.device_name as string | null) ?? null,
+      prCount:         (a.pr_count as number | null) ?? null,
+      kudosCount:      (a.kudos_count as number | null) ?? null,
     };
   });
 

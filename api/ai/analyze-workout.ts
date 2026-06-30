@@ -59,7 +59,20 @@ function buildPrompt(body: Record<string, unknown>): string {
       pctOptimal170_185spm: number | null;
       minCadence: number | null;
       maxCadence: number | null;
+      avgSufferScore?: number | null;
+      maxSufferScore?: number | null;
+      avgTempC?: number | null;
+      workoutMix?: { race: number; longRun: number; workout: number } | null;
+      elevGainsSum?: number;
     };
+    trainingProportions?: {
+      weeks: number;
+      totalHours: number;
+      swimPct: number;  bikePct: number;  runPct: number;
+      swimSessions: number; bikeSessions: number; runSessions: number;
+      avgWeeklyTSS: number;
+      targetSwim: number; targetBike: number; targetRun: number;
+    } | null;
     techniqueFocus?: boolean;
   };
 
@@ -72,16 +85,23 @@ function buildPrompt(body: Record<string, unknown>): string {
 
   const zoneNames = ['Z1 Regeneracja','Z2 Aerobowa','Z3 Tempo','Z4 Próg mleczanowy','Z5 VO2max'];
 
-  const { multiRunContext, techniqueFocus } = body as { multiRunContext?: NonNullable<typeof body>['multiRunContext']; techniqueFocus?: boolean };
+  const { multiRunContext, techniqueFocus, trainingProportions } = body as {
+    multiRunContext?: NonNullable<typeof body>['multiRunContext'];
+    techniqueFocus?: boolean;
+    trainingProportions?: NonNullable<typeof body>['trainingProportions'];
+  };
   const isMultiRun = !!multiRunContext && (multiRunContext.runsAnalyzed ?? 0) > 1;
+  const isFullTrainingAnalysis = isMultiRun && !!trainingProportions;
 
   const lines: string[] = [
-    isMultiRun
-      ? `Jesteś trenerem biegowym. Przeanalizuj technikę i nawyki biegowe zawodnika na podstawie danych z ${multiRunContext!.runsAnalyzed} ostatnich biegów.`
-      : `Przeanalizuj poniższy trening i napisz szczegółowe podsumowanie po polsku (300–450 słów).`,
+    isFullTrainingAnalysis
+      ? `Jesteś doświadczonym trenerem triathlonowym. Przeanalizuj KOMPLEKSOWO przygotowanie zawodnika: technikę biegu, dane fizjologiczne ORAZ proporcje treningowe między dyscyplinami.`
+      : isMultiRun
+        ? `Jesteś trenerem biegowym. Przeanalizuj technikę i nawyki biegowe zawodnika na podstawie danych z ${multiRunContext!.runsAnalyzed} ostatnich biegów.`
+        : `Przeanalizuj poniższy trening i napisz szczegółowe podsumowanie po polsku (300–450 słów).`,
     `Bądź konkretny — używaj liczb z danych. Pisz bezpośrednio do zawodnika.`,
     ``,
-    `═══ ${isMultiRun ? `ANALIZA TECHNIKI — ${multiRunContext!.runsAnalyzed} BIEGÓW` : 'TRENING'} ═══`,
+    `═══ ${isFullTrainingAnalysis ? `KOMPLEKSOWA ANALIZA TRENINGOWA — ${multiRunContext!.runsAnalyzed} BIEGÓW + 4 TYGODNIE` : isMultiRun ? `ANALIZA TECHNIKI — ${multiRunContext!.runsAnalyzed} BIEGÓW` : 'TRENING'} ═══`,
     `Typ: ${sport}`,
     `Nazwa: "${activityName}"`,
     `Data: ${new Date(startDate).toLocaleDateString('pl-PL', {day:'numeric',month:'long',year:'numeric'})}`,
@@ -166,6 +186,19 @@ function buildPrompt(body: Record<string, unknown>): string {
     if (multiRunContext.avgCadence) lines.push(`Śr. kadencja: ${multiRunContext.avgCadence} spm`);
     if (multiRunContext.pctBelow165spm != null) lines.push(`Biegi z kadencją < 165 spm (globalne): ${multiRunContext.pctBelow165spm}%`);
     if (multiRunContext.minCadence) lines.push(`Zakres kadencji ogółem: ${multiRunContext.minCadence}–${multiRunContext.maxCadence} spm`);
+    if (multiRunContext.avgSufferScore != null) lines.push(`Śr. Suffer Score (efektywne obciążenie z Strava): ${multiRunContext.avgSufferScore} (max ${multiRunContext.maxSufferScore})`);
+    if (multiRunContext.avgTempC != null) lines.push(`Śr. temperatura biegów: ${multiRunContext.avgTempC}°C`);
+    if (multiRunContext.workoutMix) {
+      const w = multiRunContext.workoutMix;
+      const desc: string[] = [];
+      if (w.race    > 0) desc.push(`${w.race} wyścig`);
+      if (w.longRun > 0) desc.push(`${w.longRun} długie biegi`);
+      if (w.workout > 0) desc.push(`${w.workout} treningi (interwały/tempo)`);
+      if (desc.length) lines.push(`Mix typów treningu (oznaczone w Strava): ${desc.join(', ')}`);
+    }
+    if (multiRunContext.elevGainsSum != null && multiRunContext.elevGainsSum > 0) {
+      lines.push(`Łączne przewyższenie w analizowanych biegach: ${multiRunContext.elevGainsSum} m`);
+    }
 
     // Pace-zone cadence breakdown
     const zones = (multiRunContext as Record<string,unknown>).cadenceByPaceZone as Record<string,{label:string;count:number;avgCad:number|null;avgPace:string|null;optimalRange:string}> | undefined;
@@ -186,21 +219,59 @@ function buildPrompt(body: Record<string, unknown>): string {
     lines.push('Skoncentruj się na wzorcach per-strefa. NIE analizuj jako jeden trening.');
   }
 
+  // Cross-discipline training proportions context
+  if (trainingProportions) {
+    const p = trainingProportions;
+    lines.push('');
+    lines.push(`═══ PROPORCJE TRENINGOWE (ostatnie ${p.weeks} tygodni) ═══`);
+    lines.push(`Łącznie: ${p.totalHours} h treningu, śr. TSS/tydz: ${p.avgWeeklyTSS}`);
+    lines.push(`Pływanie: ${p.swimPct}% (cel Half IM: ${p.targetSwim}%) — ${p.swimSessions} sesji`);
+    lines.push(`Rower:    ${p.bikePct}% (cel Half IM: ${p.targetBike}%) — ${p.bikeSessions} sesji`);
+    lines.push(`Bieg:     ${p.runPct}% (cel Half IM: ${p.targetRun}%) — ${p.runSessions} sesji`);
+    const dev = (actual: number, target: number) => {
+      const diff = actual - target;
+      if (Math.abs(diff) < 4) return '✓ OK';
+      return diff > 0 ? `↑ za dużo (+${diff}pp)` : `↓ za mało (${diff}pp)`;
+    };
+    lines.push(`Odchylenia od celu: S ${dev(p.swimPct,p.targetSwim)} · B ${dev(p.bikePct,p.targetBike)} · R ${dev(p.runPct,p.targetRun)}`);
+    lines.push(`Cele dotyczą Half Ironmana (najczęstszy cel amatorów). Skoryguj ocenę jeśli zawodnik celuje w inny dystans.`);
+  }
+
   lines.push('');
   lines.push(`═══ ZADANIE ═══`);
-  lines.push(`Odpowiedz w DOKŁADNIE trzech sekcjach. Każda sekcja jest OBOWIĄZKOWA.`);
-  lines.push(`Użyj DOKŁADNIE tych nagłówków (kopiuj bez zmian, bez dodatkowych znaków):`);
-  lines.push(``);
-  lines.push(`OCENA TRENINGU`);
-  lines.push(`(1-2 zdania: co się wydarzyło, kluczowe liczby)`);
-  lines.push(``);
-  lines.push(`OCENA ZAŁOŻEŃ`);
-  lines.push(`(1-2 zdania: czy tempo i przerwy były właściwe)`);
-  lines.push(``);
-  lines.push(`WSKAZÓWKI NA PRZYSZŁOŚĆ`);
-  lines.push(`(1-2 zdania: konkretna zmiana z liczbą na następny trening)`);
-  lines.push(``);
-  lines.push(`WAŻNE: Nie pomijaj żadnej sekcji. Nie zmieniaj nagłówków. Max 6 zdań łącznie. Pisz po polsku, bezpośrednio do zawodnika.`);
+
+  if (isFullTrainingAnalysis) {
+    lines.push(`Odpowiedz w DOKŁADNIE czterech sekcjach. Każda sekcja jest OBOWIĄZKOWA.`);
+    lines.push(`Użyj DOKŁADNIE tych nagłówków (kopiuj bez zmian, bez dodatkowych znaków):`);
+    lines.push(``);
+    lines.push(`OGÓLNA OCENA`);
+    lines.push(`(1-2 zdania: ogólny stan przygotowania, kluczowe wskaźniki, czego najwięcej)`);
+    lines.push(``);
+    lines.push(`PROPORCJE TRENINGOWE`);
+    lines.push(`(2-3 zdania: czy podział czasu S/B/R jest zbalansowany względem celu. Jeśli odchylenia > 4pp — konkretna sugestia ile minut przesunąć tygodniowo)`);
+    lines.push(``);
+    lines.push(`TECHNIKA I FIZJOLOGIA`);
+    lines.push(`(2-3 zdania: kadencja per strefa tempa, EF, suffer score, temperatura, długość kroku, co działa / co nie)`);
+    lines.push(``);
+    lines.push(`WSKAZÓWKI NA PRZYSZŁOŚĆ`);
+    lines.push(`(2-3 zdania: 1-2 konkretne zmiany z liczbą — np. "dodaj 30 min pływania tygodniowo", "zwiększ kadencję o 5spm na biegach Z2")`);
+    lines.push(``);
+    lines.push(`WAŻNE: Nie pomijaj żadnej sekcji. Nie zmieniaj nagłówków. Max 10 zdań łącznie. Pisz po polsku, bezpośrednio do zawodnika.`);
+  } else {
+    lines.push(`Odpowiedz w DOKŁADNIE trzech sekcjach. Każda sekcja jest OBOWIĄZKOWA.`);
+    lines.push(`Użyj DOKŁADNIE tych nagłówków (kopiuj bez zmian, bez dodatkowych znaków):`);
+    lines.push(``);
+    lines.push(`OCENA TRENINGU`);
+    lines.push(`(1-2 zdania: co się wydarzyło, kluczowe liczby)`);
+    lines.push(``);
+    lines.push(`OCENA ZAŁOŻEŃ`);
+    lines.push(`(1-2 zdania: czy tempo i przerwy były właściwe)`);
+    lines.push(``);
+    lines.push(`WSKAZÓWKI NA PRZYSZŁOŚĆ`);
+    lines.push(`(1-2 zdania: konkretna zmiana z liczbą na następny trening)`);
+    lines.push(``);
+    lines.push(`WAŻNE: Nie pomijaj żadnej sekcji. Nie zmieniaj nagłówków. Max 6 zdań łącznie. Pisz po polsku, bezpośrednio do zawodnika.`);
+  }
 
   return lines.filter(l => l !== undefined).join('\n');
 }
@@ -222,7 +293,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const stream = anthropic.messages.stream({
     model:      'claude-sonnet-4-6',
-    max_tokens: 900,
+    max_tokens: 1400,
     messages:   [{ role: 'user', content: prompt }],
   });
 
