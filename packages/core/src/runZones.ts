@@ -81,7 +81,12 @@ const RACE_DISTANCES = [
 ] as const;
 
 /* ── Main calculator ── */
-export function calcRunZones(vdot: number, maxHR?: number): RunZones {
+export function calcRunZones(
+  vdot: number,
+  maxHR?: number,
+  refDistM?: number,
+  refTimeSec?: number,
+): RunZones {
   const zones: PaceZone[] = ZONE_DEFS.map(z => {
     const loMpm = velAt(z.lo, vdot);
     const hiMpm = velAt(z.hi, vdot);
@@ -102,11 +107,17 @@ export function calcRunZones(vdot: number, maxHR?: number): RunZones {
     };
   });
 
+  // Riegel from the reference race when provided — guarantees that prediction for
+  // the reference distance matches the input. Falls back to %VO2max-based formula.
+  const hasRef = refDistM && refTimeSec && refDistM > 0 && refTimeSec > 0;
   const predictions: ZoneRacePrediction[] = RACE_DISTANCES.map(({ label, distM }) => {
-    // Use velocity at ~marathon %VO2max for longer, interval for short
-    const pct = distM <= 5000 ? 0.975 : distM <= 10000 ? 0.90 : distM <= 21097 ? 0.82 : 0.77;
-    const mpm = velAt(pct, vdot);
-    const timeSec = Math.round((distM / mpm) * 60);
+    const timeSec = hasRef
+      ? Math.round(refTimeSec! * Math.pow(distM / refDistM!, 1.06))
+      : (() => {
+          const pct = distM <= 1609 ? 1.00 : distM <= 5000 ? 0.985 : distM <= 10000 ? 0.94 : distM <= 21097 ? 0.86 : 0.76;
+          const mpm = velAt(pct, vdot);
+          return Math.round((distM / mpm) * 60);
+        })();
     return { label, distM, timeSec };
   });
 

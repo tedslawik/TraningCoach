@@ -27,6 +27,9 @@ export interface NutritionPlan {
   runGels:     number;
   runBottles:  number;   // 0 when runLiquidCarbs=false, × 500 ml when true
 
+  bikeGelIntervalMin: number | null;  // null when no gels (drinks cover demand)
+  runGelIntervalMin:  number | null;
+
   preRaceCarbs: number;
   preRaceMin:   number;
   keyRules:     string[];
@@ -123,17 +126,31 @@ export function generateNutritionPlan(
     runGels = Math.max(0, Math.round(runCarbs / GEL_CARBS));
   }
 
-  const gelIntervalMin = bikeCarbs_ph > 0
-    ? Math.round(60 / (bikeCarbs_ph / GEL_CARBS))
-    : 25;
+  // Gel interval: based on ACTUAL gels needed (after subtracting drink carbs)
+  // distributed over the effective eating window (no eating in first 20 min on bike).
+  const effectiveBikeMin = Math.max(0, bikeMin - 20);
+  const bikeGelIntervalMin = bikeGels > 0 && effectiveBikeMin > 0
+    ? Math.max(8, Math.round(effectiveBikeMin / bikeGels))
+    : null;
+  const runGelIntervalMin = runGels > 0 && runMin > 0
+    ? Math.max(8, Math.round(runMin / runGels))
+    : null;
+
+  const bikeGelRule = bikeGelIntervalMin !== null
+    ? `Żel co ~${bikeGelIntervalMin} min na rowerze${runGelIntervalMin !== null ? `, co ~${runGelIntervalMin} min na biegu` : ''}.`
+    : `Bidony pokrywają zapotrzebowanie na rowerze — żele opcjonalne (zabierz 1–2 na zapas).${runGelIntervalMin !== null ? ` Na biegu żel co ~${runGelIntervalMin} min.` : ''}`;
+
+  const halfFullRule = raceType === 'full' || raceType === 'half'
+    ? (bikeGelIntervalMin !== null
+        ? `Na pierwszej połowie roweru jedz regularnie co ${bikeGelIntervalMin} min, na drugiej możesz zwiększyć tempo żelowania.`
+        : `Na pierwszej połowie roweru ustal stały rytm picia z bidonów co 10–15 min, na drugiej dorzuć 1–2 żele dla świeżości.`)
+    : `Skorzystaj z izotonika zamiast wody — mniej tabletek elektrolitowych do pamiętania.`;
 
   const keyRules: string[] = [
     `Zacznij jeść na rowerze po 20 minutach — nie czekaj na głód.`,
-    `Żel co ${gelIntervalMin} min na rowerze, co 30–35 min na biegu.`,
+    bikeGelRule,
     `Pij co 10–15 min na rowerze (~${Math.round(bikeFluids_ph / 4)} ml na łyk), nie czekaj na pragnienie.`,
-    raceType === 'full' || raceType === 'half'
-      ? `Na pierwszej połowie roweru jedz regularnie co ${gelIntervalMin} min, na drugiej możesz zwiększyć tempo żelowania.`
-      : `Skorzystaj z izotonika zamiast wody — mniej tabletek elektrolitowych do pamiętania.`,
+    halfFullRule,
     `Przetestuj KAŻDY produkt w treningach. Zero eksperymentów w dniu wyścigu.`,
     `Kola i żele z kofeiną — zostaw na ostatnie 10–15 km biegu jako boost.`,
   ];
@@ -146,6 +163,7 @@ export function generateNutritionPlan(
     bikeCarbs, bikeFluids, bikeSodium,
     runCarbs, runFluids, runSodium,
     bikeGels, bikeBottles, runGels, runBottles,
+    bikeGelIntervalMin, runGelIntervalMin,
     preRaceCarbs: 200,
     preRaceMin:   90,
     keyRules,

@@ -271,7 +271,7 @@ export default function NutritionCalculator() {
               <StatCard label="Sód / h" value={`${plan.bikeSodium_ph} mg`} color="var(--bike)" />
             </div>
             <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}>
-              <StatCard label={gelLabel} value={`${plan.bikeGels} szt.`} sub={`co ~${Math.round(plan.bikeMin/Math.max(plan.bikeGels,1))} min`} />
+              <StatCard label={gelLabel} value={`${plan.bikeGels} szt.`} sub={plan.bikeGelIntervalMin !== null ? `co ~${plan.bikeGelIntervalMin} min` : 'pokryte bidonami'} />
               <StatCard label={`${drinkLabel}`} value={`${plan.bikeBottles} szt.`} sub={`750ml · ${Math.round(drinkCarbs*(750/500))}g węgli/bidon`} />
               <StatCard label="Łącznie węgle" value={`${plan.bikeCarbs} g`} sub={`≈ ${Math.round(plan.bikeCarbs*4)} kcal`} />
             </div>
@@ -286,7 +286,7 @@ export default function NutritionCalculator() {
               <StatCard label="Sód / h" value={`${plan.runSodium_ph} mg`} color="var(--run)" />
             </div>
             <div style={{display:'grid',gridTemplateColumns:`repeat(${runLiquid ? 3 : 2},1fr)`,gap:10}}>
-              <StatCard label={gelLabel} value={`${plan.runGels} szt.`} sub="co ~30–35 min" />
+              <StatCard label={gelLabel} value={`${plan.runGels} szt.`} sub={plan.runGelIntervalMin !== null ? `co ~${plan.runGelIntervalMin} min` : 'opcjonalne'} />
               {runLiquid && plan.runBottles > 0 && (
                 <StatCard label={`${drinkLabel} (pas)`} value={`${plan.runBottles} szt.`} sub={`500ml · ${drinkCarbs}g węgli/bidon`} />
               )}

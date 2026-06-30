@@ -124,7 +124,7 @@ export default function VdotCalculator() {
     const vdot = calcVDOT(distM, sec);
     if (vdot < 10 || vdot > 100) { setError('Podany wynik wydaje się nieprawidłowy — sprawdź dystans i czas'); return; }
 
-    const result = calcRunZones(vdot, maxHR ? +maxHR : undefined);
+    const result = calcRunZones(vdot, maxHR ? +maxHR : undefined, distM, sec);
     setZones(result);
   };
 
