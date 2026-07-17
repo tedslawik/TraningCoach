@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TrainingCoach</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: #f0f4f8;
+        color: #2d3748;
+      }
+
+      header {
+        background: linear-gradient(135deg, #2b6cb0, #2c7a7b);
+        color: white;
+        padding: 1.5rem 2rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      header h1 {
+        font-size: 1.8rem;
+        letter-spacing: 1px;
+      }
+
+      .emoji {
+        font-size: 2rem;
+      }
+
+      main {
+        max-width: 900px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2.5rem;
+      }
+
+      .card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        text-align: center;
+        transition: transform 0.2s, box-shadow 0.2s;
+        cursor: pointer;
+      }
+
+      .card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.13);
+      }
+
+      .card .icon {
+        font-size: 2.5rem;
+        margin-bottom: 0.75rem;
+      }
+
+      .card h2 {
+        font-size: 1.1rem;
+        margin-bottom: 0.4rem;
+        color: #2b6cb0;
+      }
+
+      .card p {
+        font-size: 0.9rem;
+        color: #718096;
+      }
+
+      .section-title {
+        font-size: 1.3rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        color: #2b6cb0;
+      }
+
+      .training-log {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      }
+
+      .training-log table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95rem;
+      }
+
+      .training-log th {
+        text-align: left;
+        border-bottom: 2px solid #e2e8f0;
+        padding: 0.5rem 0.75rem;
+        color: #4a5568;
+        font-weight: 600;
+      }
+
+      .training-log td {
+        padding: 0.55rem 0.75rem;
+        border-bottom: 1px solid #f0f4f8;
+      }
+
+      .training-log tr:last-child td {
+        border-bottom: none;
+      }
+
+      .badge {
+        display: inline-block;
+        padding: 0.2rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 600;
+      }
+
+      .badge-run   { background: #e9d8fd; color: #553c9a; }
+      .badge-bike  { background: #bee3f8; color: #2c5282; }
+      .badge-swim  { background: #b2f5ea; color: #234e52; }
+
+      footer {
+        text-align: center;
+        padding: 2rem;
+        font-size: 0.85rem;
+        color: #a0aec0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState } = React;
+
+      const disciplines = [
+        { icon: '🏃', name: 'Bieganie', desc: 'Analizuj trasy i tempa' },
+        { icon: '🚴', name: 'Kolarstwo', desc: 'Moc, kadencja, dystans' },
+        { icon: '🏊', name: 'Pływanie', desc: 'Style i interwały' },
+        { icon: '🏅', name: 'Triathlon', desc: 'Pełne zarządzanie trójbojem' },
+      ];
+
+      const initialLog = [
+        { date: '2026-04-20', type: 'run',  name: 'Bieg poranki',   dist: '10 km',  time: '52 min' },
+        { date: '2026-04-22', type: 'bike', name: 'Trasa górska',   dist: '45 km',  time: '1 h 40 min' },
+        { date: '2026-04-24', type: 'swim', name: 'Interwały 400m', dist: '2 km',   time: '38 min' },
+        { date: '2026-04-26', type: 'run',  name: 'Tempo run',      dist: '8 km',   time: '39 min' },
+      ];
+
+      const badgeClass = { run: 'badge-run', bike: 'badge-bike', swim: 'badge-swim' };
+      const badgeLabel = { run: 'Bieg', bike: 'Rower', swim: 'Pływanie' };
+
+      function App() {
+        const [log] = useState(initialLog);
+
+        return (
+          <>
+            <header>
+              <span className="emoji">🏋️</span>
+              <h1>TrainingCoach</h1>
+            </header>
+
+            <main>
+              <div className="cards">
+                {disciplines.map(d => (
+                  <div className="card" key={d.name}>
+                    <div className="icon">{d.icon}</div>
+                    <h2>{d.name}</h2>
+                    <p>{d.desc}</p>
+                  </div>
+                ))}
+              </div>
+
+              <p className="section-title">📋 Ostatnie treningi</p>
+              <div className="training-log">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Data</th>
+                      <th>Typ</th>
+                      <th>Trening</th>
+                      <th>Dystans</th>
+                      <th>Czas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {log.map((entry, i) => (
+                      <tr key={i}>
+                        <td>{entry.date}</td>
+                        <td>
+                          <span className={`badge ${badgeClass[entry.type]}`}>
+                            {badgeLabel[entry.type]}
+                          </span>
+                        </td>
+                        <td>{entry.name}</td>
+                        <td>{entry.dist}</td>
+                        <td>{entry.time}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </main>
+
+            <footer>© 2026 TrainingCoach — run · bike · swim</footer>
+          </>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
