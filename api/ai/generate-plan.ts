@@ -5,6 +5,23 @@ import { createClient } from '@supabase/supabase-js';
 const supabase  = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
+// Claude Sonnet 5.5 — $2 / $10 per MTok. Thinking off (`between_tools`) to keep latency
+// within Vercel function limits. SDK 0.92 types predate `between_tools`, hence the cast.
+const MODEL       = 'claude-sonnet-5-5';
+const NO_THINKING = { type: 'between_tools' } as unknown as Anthropic.ThinkingConfigParam;
+const costUsd     = (u: { input_tokens: number; output_tokens: number }) =>
+  (u.input_tokens * 2 + u.output_tokens * 10) / 1_000_000;
+function aiError(res: VercelResponse, e: unknown) {
+  console.error('[generate-plan] Claude API error:', e);
+  if (e instanceof Anthropic.RateLimitError)
+    return res.status(429).json({ error: 'Limit zapytań AI — spróbuj ponownie za minutę.' });
+  if (e instanceof Anthropic.APIError)
+    return res.status(502).json({ error: `Błąd AI (${e.status ?? '?'}) — spróbuj ponownie.` });
+  return res.status(502).json({ error: 'Nie udało się połączyć z AI — spróbuj ponownie.' });
+}
+const textOf      = (m: Anthropic.Message) =>
+  m.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map(b => b.text).join('').trim() || '{}';
+
 type SportType = 'triathlon' | 'run' | 'bike' | 'swim' | 'atp';
 type RaceType  = 'sprint' | 'olympic' | 'half' | 'full';
 
@@ -363,12 +380,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { raceDate, raceType = 'half', discipline = 'triathlon' } = body as typeof body & { discipline?: string };
     if (!raceDate) return res.status(400).json({ error: 'raceDate required for ATP' });
     const prompt = buildATPPrompt(summaries ?? [], raceDate, raceType as string, profile, discipline);
-    const msg = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6', max_tokens: 3000,
-      system: 'You are a JSON generator. Respond with ONLY valid JSON, no markdown, no code blocks. Start with { end with }.',
-      messages: [{ role: 'user', content: prompt }],
-    });
-    const rawAtp = msg.content[0].type === 'text' ? msg.content[0].text.trim() : '{}';
+    let msg: Anthropic.Message;
+    try {
+      msg = await anthropic.messages.create({
+        model: MODEL, max_tokens: 4000, thinking: NO_THINKING,
+        system: 'You are a JSON generator. Respond with ONLY valid JSON, no markdown, no code blocks. Start with { end with }.',
+        messages: [{ role: 'user', content: prompt }],
+      });
+    } catch (e) { return aiError(res, e); }
+    const rawAtp = textOf(msg);
     let atpJson: Record<string,unknown>;
     try {
       let c = rawAtp.replace(/^```json?\s*/im,'').replace(/```\s*$/im,'').trim();
@@ -381,7 +401,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .select().single();
     if (saveErr) return res.status(500).json({ error: saveErr.message });
     const { input_tokens, output_tokens } = msg.usage;
-    return res.json({ plan: saved, usage: { inputTokens:input_tokens, outputTokens:output_tokens, costUsd:(input_tokens*3+output_tokens*15)/1_000_000 } });
+    return res.json({ plan: saved, usage: { inputTokens:input_tokens, outputTokens:output_tokens, costUsd:costUsd(msg.usage) } });
   }
 
   /* ── Weekly plan path ── */
@@ -394,14 +414,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const avgSessions   = (summaries ?? []).slice(0,4).reduce((s,r)=>s+((r.swim_sessions as number)??0)+((r.bike_sessions as number)??0)+((r.run_sessions as number)??0),0) / Math.max(1, Math.min((summaries??[]).length,4));
   const suggestedDays = Math.max(3, Math.min(6, Math.round(avgSessions)));
 
-  const message = await anthropic.messages.create({
-    model:      'claude-sonnet-4-6',
-    max_tokens: 4500,
-    system:     'You are a JSON generator. Respond with ONLY valid JSON, no markdown, no explanation, no code blocks. Start your response with { and end with }.',
-    messages:   [{ role: 'user', content: prompt }],
-  });
+  let message: Anthropic.Message;
+  try {
+    message = await anthropic.messages.create({
+      model:      MODEL,
+      max_tokens: 6000,
+      thinking:   NO_THINKING,
+      system:     'You are a JSON generator. Respond with ONLY valid JSON, no markdown, no explanation, no code blocks. Start your response with { and end with }.',
+      messages:   [{ role: 'user', content: prompt }],
+    });
+  } catch (e) { return aiError(res, e); }
 
-  const raw = message.content[0].type === 'text' ? message.content[0].text.trim() : '{}';
+  const raw = textOf(message);
 
   // Aggressively extract JSON: find first { and last }
   let planJson: Record<string,unknown>;
@@ -431,7 +455,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (saveErr) return res.status(500).json({ error: saveErr.message });
 
   const { input_tokens, output_tokens } = message.usage;
-  const costUsd = (input_tokens * 3 + output_tokens * 15) / 1_000_000;
 
-  res.json({ plan: saved, suggestedDays, usage: { inputTokens: input_tokens, outputTokens: output_tokens, costUsd } });
+  res.json({ plan: saved, suggestedDays, usage: { inputTokens: input_tokens, outputTokens: output_tokens, costUsd: costUsd(message.usage) } });
 }

@@ -1,6 +1,10 @@
 {
+  "fluid": true,
   "buildCommand": "npm run build --workspace=apps/web",
   "outputDirectory": "apps/web/dist",
+  "functions": {
+    "api/ai/*.ts": { "maxDuration": 300 }
+  },
   "headers": [
     {
       "source": "/index.html",

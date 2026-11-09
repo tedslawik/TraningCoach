@@ -210,7 +210,7 @@ export default function ActivityDetailModal({ activityId, activityName, sportTyp
                     <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
                       <span style={{ fontSize:16 }}>🤖</span>
                       <span style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--text-secondary)' }}>
-                        Analiza AI · claude-sonnet-4-6
+                        Analiza AI · Claude Sonnet 5.5
                       </span>
                       {aiLoading && (
                         <span style={{ fontSize:10, color:'#7c3aed' }}>● generowanie…</span>

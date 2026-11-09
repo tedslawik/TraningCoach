@@ -177,7 +177,7 @@ export default function PlannerPage() {
         headers: { 'Content-Type':'application/json', Authorization:`Bearer ${session.access_token}` },
         body: JSON.stringify({ trainingDays: days, sport: activeSport }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ error: `Serwer nie odpowiedział poprawnie (${res.status}) — spróbuj ponownie za chwilę.` }));
       if (!res.ok) throw new Error(data.error ?? 'Błąd');
       setPlans(p => ({ ...p, [activeSport]: data.plan }));
       setSuggested(data.suggestedDays ?? days);

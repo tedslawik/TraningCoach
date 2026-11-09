@@ -98,4 +98,4 @@ else → 'other'
 
 ## AI endpoints
 
-`api/ai/analyze-workout.ts` and `api/ai/generate-plan.ts` use `@anthropic-ai/sdk` (`ANTHROPIC_API_KEY`), model hardcoded as `'claude-sonnet-4-6'` (3 places). Plans are stored in `training_plans`; GET returns the latest one.
+`api/ai/analyze-workout.ts` and `api/ai/generate-plan.ts` use `@anthropic-ai/sdk` (`ANTHROPIC_API_KEY`), model in a `MODEL` const per file (`claude-sonnet-5-5`, thinking off via `between_tools`; SDK 0.92 needs a cast for it), cost via `costUsd()` at $2/$10 per MTok. Plans are stored in `training_plans`; GET returns the latest one.

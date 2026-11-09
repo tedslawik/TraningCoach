@@ -138,7 +138,7 @@ export default function TrainingPlanSection({ sport }: { sport: PlanSport }) {
         headers: { 'Content-Type':'application/json', Authorization:`Bearer ${session.access_token}` },
         body: JSON.stringify({ trainingDays: days, sport }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ error: `Serwer nie odpowiedział poprawnie (${res.status}) — spróbuj ponownie za chwilę.` }));
       if (!res.ok) throw new Error(data.error ?? 'Błąd');
       setPlan(data.plan);
       setSug(data.suggestedDays ?? days);

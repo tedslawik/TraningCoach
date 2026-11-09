@@ -5,6 +5,13 @@ import { createClient } from '@supabase/supabase-js';
 const supabase   = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
 const anthropic  = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
+// Claude Sonnet 5.5 — $2 / $10 per MTok. Thinking off (`between_tools`) to keep latency
+// within Vercel function limits. SDK 0.92 types predate `between_tools`, hence the cast.
+const MODEL       = 'claude-sonnet-5-5';
+const NO_THINKING = { type: 'between_tools' } as unknown as Anthropic.ThinkingConfigParam;
+const costUsd     = (u: { input_tokens: number; output_tokens: number }) =>
+  (u.input_tokens * 2 + u.output_tokens * 10) / 1_000_000;
+
 /* ── helpers ── */
 function fmtPace(minKm: number): string {
   if (!minKm || minKm > 20) return '—';
@@ -292,19 +299,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Transfer-Encoding', 'chunked');
 
   const stream = anthropic.messages.stream({
-    model:      'claude-sonnet-4-6',
-    max_tokens: 1400,
+    model:      MODEL,
+    max_tokens: 2000,
+    thinking:   NO_THINKING,
     messages:   [{ role: 'user', content: prompt }],
   });
 
   stream.on('text', (text: string) => res.write(text));
 
-  const finalMsg = await stream.finalMessage();
+  let finalMsg: Anthropic.Message;
+  try {
+    finalMsg = await stream.finalMessage();
+  } catch (e) {
+    console.error('[analyze-workout] Claude API error:', e);
+    res.write('\n\n_Błąd połączenia z AI — spróbuj ponownie._');
+    return res.end();
+  }
+  if (finalMsg.stop_reason === 'refusal') res.write('\n\n_Model odmówił analizy tego treningu._');
   const { input_tokens, output_tokens } = finalMsg.usage;
-  // Sonnet 4.6 pricing: $3/MTok input, $15/MTok output
-  const costUsd = (input_tokens * 3 + output_tokens * 15) / 1_000_000;
 
   // Send usage as null-byte-separated JSON epilogue
-  res.write(`\x00${JSON.stringify({ inputTokens: input_tokens, outputTokens: output_tokens, costUsd })}`);
+  res.write(`\x00${JSON.stringify({ inputTokens: input_tokens, outputTokens: output_tokens, costUsd: costUsd(finalMsg.usage) })}`);
   res.end();
 }

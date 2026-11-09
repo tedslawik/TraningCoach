@@ -151,7 +151,7 @@ export default function ATPSection() {
         headers: { 'Content-Type':'application/json', Authorization:`Bearer ${session.access_token}` },
         body: JSON.stringify({ sport:'atp', raceDate, raceType, discipline }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ error: `Serwer nie odpowiedział poprawnie (${res.status}) — spróbuj ponownie za chwilę.` }));
       if (!res.ok) throw new Error(data.error ?? 'Błąd');
       setPlan(data.plan);
       if (data.usage) setUsage(data.usage);
