@@ -87,6 +87,7 @@ else → 'other'
 | `training_plans` | user_id, sport_type (`run`/`swim`/`bike`/`atp`), created_at — AI plans |
 | `running_zones` | VDOT zones saved per user (`training/run-zones`) |
 | `run_insights` | AI run-analysis notes (`training/run-zones`) |
+| `race_events` | user_id, date, priority A/B/C, distance, name — planned races; read/written **from the browser** via RLS (`apps/web/src/lib/raceEvents.ts`); migration in `supabase/migrations/` |
 
 ## OAuth flow
 

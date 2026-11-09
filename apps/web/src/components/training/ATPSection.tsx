@@ -1,22 +1,35 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import {
+  buildSeasonSkeleton, validateSeasonRaces, distancesFor, distanceLabel, disciplineOfDistance, seasonStart, DEFAULT_DISTANCE,
+  type SeasonRace, type SeasonDiscipline, type RacePriority, type SeasonPhaseType,
+} from '@tricoach/core';
 import { useAuth } from '../../context/AuthContext';
+import { useRaceEvents } from '../../lib/raceEvents';
+import RaceListEditor, { PRIORITY_STYLE, RaceChip, newRace } from '../events/RaceListEditor';
 
-type Discipline = 'triathlon' | 'run' | 'bike' | 'swim';
+interface ATPRace extends Partial<SeasonRace> { date: string; priority: RacePriority; label?: string; }
 
 interface ATPPhase {
   name: string;
-  type: 'base' | 'build' | 'peak' | 'race' | 'recovery' | 'transition';
+  type: SeasonPhaseType;
   startDate: string;
   endDate: string;
   weeks: number;
-  focus: string;
-  targetWeeklyTSS: number;
-  intensity: 'low' | 'moderate' | 'high';
-  keyWorkouts: string[];
+  races?: ATPRace[];
+  focus?: string;
+  targetWeeklyTSS?: number;
+  intensity?: 'low' | 'moderate' | 'high';
+  keyWorkouts?: string[];
 }
 
-interface ATPRace { date: string; name: string; priority: 'A' | 'B' | 'C'; }
-interface ATPPlanJson { assessment: string; raceDate: string; raceType: string; phases: ATPPhase[]; races: ATPRace[]; }
+interface ATPPlanJson {
+  assessment: string;
+  discipline?: SeasonDiscipline;
+  races: ATPRace[];
+  phases: ATPPhase[];
+  raceDate?: string;   // legacy single-race plans
+  raceType?: string;
+}
 interface ATPPlan { id: string; plan_json: ATPPlanJson; created_at: string; week_start: string; }
 
 const PHASE_STYLE: Record<string, { bg: string; border: string; text: string; label: string }> = {
@@ -32,80 +45,57 @@ const INTENSITY_BADGE: Record<string, string> = {
   low: '#22c55e', moderate: '#f59e0b', high: '#ef4444',
 };
 
-const DISCIPLINES: { value: Discipline; icon: string; label: string; color: string }[] = [
+const DISCIPLINES: { value: SeasonDiscipline; icon: string; label: string; color: string }[] = [
   { value: 'triathlon', icon: '🏅', label: 'Triathlon',  color: 'var(--tri)'  },
   { value: 'run',       icon: '🏃', label: 'Bieganie',   color: 'var(--run)'  },
   { value: 'bike',      icon: '🚴', label: 'Kolarstwo',  color: 'var(--bike)' },
   { value: 'swim',      icon: '🏊', label: 'Pływanie',   color: 'var(--swim)' },
 ];
 
-const RACE_OPTIONS_BY_DISCIPLINE: Record<Discipline, { value: string; label: string }[]> = {
-  triathlon: [
-    { value: 'sprint',      label: 'Sprint (~1:15h)'     },
-    { value: 'olympic',     label: 'Olympic (~2:30h)'     },
-    { value: 'half',        label: 'Half Ironman (~5–6h)' },
-    { value: 'full',        label: 'Full Ironman (~12h)'  },
-  ],
-  run: [
-    { value: '5k',           label: '5 km'        },
-    { value: '10k',          label: '10 km'        },
-    { value: 'halfmarathon', label: 'Półmaraton'   },
-    { value: 'marathon',     label: 'Maraton'      },
-  ],
-  bike: [
-    { value: 'granfondo',    label: 'Gran Fondo'      },
-    { value: 'race100',      label: 'Wyścig 100 km'   },
-    { value: 'race200',      label: 'Wyścig 200 km'   },
-    { value: 'mtb',          label: 'Zawody MTB/XC'   },
-  ],
-  swim: [
-    { value: 'pool1500',     label: '1500 m (basen)'   },
-    { value: 'ow3k',         label: '3 km (otwarty)'   },
-    { value: 'ow5k',         label: '5 km (otwarty)'   },
-    { value: 'ow10k',        label: '10 km (otwarty)'  },
-  ],
-};
-
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('pl-PL', { day:'numeric', month:'short', year:'numeric' });
+}
+const raceLabel = (r: ATPRace) => r.label ?? (r.distance ? distanceLabel(r.distance) : '');
+
+/** Races from a saved plan, as editable form rows (handles legacy single-race plans). */
+function racesFromPlan(pj: ATPPlanJson): SeasonRace[] {
+  const withDistance = (pj.races ?? []).filter(r => r.distance);
+  if (withDistance.length) return withDistance.map(r => ({ date: r.date, priority: r.priority, distance: r.distance!, name: r.name ?? '' }));
+  if (pj.raceDate && pj.raceType) return [{ date: pj.raceDate, priority: 'A', distance: pj.raceType, name: '' }];
+  return [];
 }
 
 function monthsBetween(start: string, end: string): { label: string; pct: number }[] {
   const s = new Date(start), e = new Date(end);
   const totalMs = e.getTime() - s.getTime();
   const months: { label: string; pct: number }[] = [];
-  const cur = new Date(s.getFullYear(), s.getMonth(), 1);
+  const cur = new Date(s.getFullYear(), s.getMonth() + (s.getDate() > 1 ? 1 : 0), 1);
   while (cur <= e) {
-    const pct = ((cur.getTime() - s.getTime()) / totalMs) * 100;
-    months.push({ label: cur.toLocaleDateString('pl-PL', { month:'short' }), pct: Math.max(0, pct) });
+    months.push({ label: cur.toLocaleDateString('pl-PL', { month:'short' }), pct: ((cur.getTime() - s.getTime()) / totalMs) * 100 });
     cur.setMonth(cur.getMonth() + 1);
   }
   return months;
 }
 
-function PhaseBar({ phase, totalWeeks, selected, onClick }: {
-  phase: ATPPhase; totalWeeks: number; selected: boolean; onClick: () => void;
+function PhaseBar({ phase, selected, onClick }: {
+  phase: ATPPhase; selected: boolean; onClick?: () => void;
 }) {
   const style = PHASE_STYLE[phase.type] ?? PHASE_STYLE.base;
-  const widthPct = (phase.weeks / totalWeeks) * 100;
   const narrow = phase.weeks <= 2;
 
   return (
     <div
       onClick={onClick}
-      title={`${phase.name} · ${phase.weeks} tyg.\n${phase.focus}`}
+      title={`${phase.name} · ${phase.weeks} tyg.\n${fmtDate(phase.startDate)} – ${fmtDate(phase.endDate)}${phase.focus ? `\n${phase.focus}` : ''}`}
       style={{
-        width: `${widthPct}%`, minWidth: 24,
-        background: style.bg,
-        border: `1.5px solid ${style.border}`,
-        borderRadius: 6,
-        padding: narrow ? '6px 4px' : '8px 10px',
-        cursor: 'pointer',
+        flex: `${phase.weeks} 0 0`, minWidth: 22,
+        background: style.bg, border: `1.5px solid ${style.border}`, borderRadius: 6,
+        padding: narrow ? '6px 3px' : '8px 8px',
+        cursor: onClick ? 'pointer' : 'default',
         transition: 'transform 0.1s, box-shadow 0.1s',
         boxShadow: selected ? `0 0 0 2px ${style.border}` : 'none',
         transform: selected ? 'translateY(-2px)' : 'none',
-        userSelect: 'none',
-        overflow: 'hidden',
+        userSelect: 'none', overflow: 'hidden',
         display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 2,
       }}
     >
@@ -113,11 +103,53 @@ function PhaseBar({ phase, totalWeeks, selected, onClick }: {
         {narrow ? phase.name.charAt(0) : phase.name}
       </div>
       {!narrow && (
-        <>
-          <div style={{ fontSize: 9, color: style.text, opacity: 0.75 }}>{phase.weeks}t · TSS {phase.targetWeeklyTSS}</div>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: INTENSITY_BADGE[phase.intensity] ?? '#9ca3af', marginTop: 2, flexShrink: 0 }} />
-        </>
+        <div style={{ fontSize: 9, color: style.text, opacity: 0.75, whiteSpace: 'nowrap' }}>
+          {phase.weeks}t{phase.targetWeeklyTSS ? ` · TSS ${phase.targetWeeklyTSS}` : ''}
+        </div>
       )}
+      {!narrow && phase.intensity && (
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: INTENSITY_BADGE[phase.intensity] ?? '#9ca3af', marginTop: 2, flexShrink: 0 }} />
+      )}
+    </div>
+  );
+}
+
+function SeasonTimeline({ phases, races, selected, onSelect }: {
+  phases: ATPPhase[]; races: ATPRace[]; selected?: number | null; onSelect?: (i: number) => void;
+}) {
+  const start = phases[0]?.startDate, end = phases[phases.length - 1]?.endDate;
+  if (!start || !end) return null;
+  const startMs = new Date(start).getTime();
+  const spanMs  = new Date(end).getTime() + 24 * 3600 * 1000 - startMs;
+  const months  = monthsBetween(start, end);
+  const markers = races.map(r => ({ ...r, pct: ((new Date(r.date).getTime() + 12 * 3600 * 1000 - startMs) / spanMs) * 100 }))
+    .filter(r => r.pct >= 0 && r.pct <= 100);
+
+  return (
+    <div style={{ overflowX:'auto', paddingBottom: 4 }}>
+      <div style={{ minWidth: Math.max(phases.length * 25, 320) }}>
+        <div style={{ position:'relative', height:18, marginBottom:4 }}>
+          {months.map((m, i) => (
+            <span key={i} style={{ position:'absolute', left:`${m.pct}%`, fontSize:10, color:'var(--text-secondary)', fontWeight:600, whiteSpace:'nowrap', letterSpacing:'0.06em', textTransform:'uppercase' }}>
+              {m.label}
+            </span>
+          ))}
+        </div>
+        <div style={{ position:'relative', marginBottom: markers.length ? 30 : 8 }}>
+          <div style={{ display:'flex', gap:3, width:'100%' }}>
+            {phases.map((p, i) => (
+              <PhaseBar key={i} phase={p} selected={selected === i} onClick={onSelect ? () => onSelect(i) : undefined} />
+            ))}
+          </div>
+          {markers.map((r, i) => (
+            <div key={i} title={`${fmtDate(r.date)} · ${r.priority} · ${raceLabel(r)}${r.name ? ` · ${r.name}` : ''}`}
+              style={{ position:'absolute', bottom:-28, left:`${r.pct}%`, transform:'translateX(-50%)', textAlign:'center', cursor:'default' }}>
+              <div style={{ width:0, height:0, margin:'0 auto', borderLeft:'5px solid transparent', borderRight:'5px solid transparent', borderBottom:`7px solid ${PRIORITY_STYLE[r.priority].color}` }} />
+              <div style={{ fontSize:10, fontWeight:800, color:'#fff', background:PRIORITY_STYLE[r.priority].color, borderRadius:4, padding:'1px 5px', marginTop:1 }}>{r.priority}</div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -125,14 +157,15 @@ function PhaseBar({ phase, totalWeeks, selected, onClick }: {
 export default function ATPSection() {
   const { session } = useAuth();
   const [plan, setPlan]         = useState<ATPPlan | null | undefined>(undefined);
-  const [discipline, setDisc]   = useState<Discipline>('triathlon');
-  const [raceDate, setRaceDate] = useState('');
-  const [raceType, setRaceType] = useState('half');
+  const [discipline, setDisc]   = useState<SeasonDiscipline>('triathlon');
+  const [races, setRaces]       = useState<SeasonRace[]>([newRace<SeasonRace>('triathlon')]);
   const [generating, setGen]    = useState(false);
-  const [error, setError]     = useState<string | null>(null);
+  const [error, setError]       = useState<string | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
-  const [lastUsage, setUsage] = useState<{ costUsd: number } | null>(null);
+  const [lastUsage, setUsage]   = useState<{ costUsd: number } | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+  const { events: profileEvents, loading: eventsLoading, error: eventsError } = useRaceEvents();
 
   useEffect(() => {
     if (!session) return;
@@ -142,14 +175,58 @@ export default function ATPSection() {
       .catch(() => setPlan(null));
   }, [session]);
 
+  // Prefill the form with the saved season so it can be edited and regenerated.
+  useEffect(() => {
+    const pj = plan?.plan_json;
+    if (!pj) return;
+    const saved = racesFromPlan(pj);
+    if (saved.length) setRaces(saved);
+    if (pj.discipline) setDisc(pj.discipline);
+  }, [plan]);
+
+  const validation = useMemo(() => validateSeasonRaces(races, discipline), [races, discipline]);
+  const skeleton   = useMemo(() => validation ? null : buildSeasonSkeleton(races), [races, validation]);
+
+  const changeDiscipline = (d: SeasonDiscipline) => {
+    setDisc(d);
+    setImportMsg(null);
+    const allowed = new Set(distancesFor(d).map(x => x.value));
+    setRaces(rs => rs.map(r => allowed.has(r.distance) ? r : { ...r, distance: DEFAULT_DISTANCE[d] }));
+  };
+
+  // Merge the profile's upcoming events (matching this plan's discipline) into the race list.
+  const importFromProfile = () => {
+    if (eventsError) { setImportMsg(eventsError); return; }
+    const from = seasonStart();
+    const upcoming = profileEvents.filter(e => e.date >= from);
+    if (!upcoming.length) { setImportMsg('Brak nadchodzących startów w profilu — dodaj je na stronie Zawodnik.'); return; }
+    const matching = upcoming.filter(e => disciplineOfDistance(e.distance) === discipline);
+    const current  = races.filter(r => r.date);                       // drop empty placeholder rows
+    const key = (r: SeasonRace) => `${r.date}|${r.distance}`;
+    const have = new Set(current.map(key));
+    const added = matching.filter(e => !have.has(key(e)))
+      .map(e => ({ date: e.date, priority: e.priority, distance: e.distance, name: e.name ?? '' }));
+    setRaces([...current, ...added].sort((a, b) => a.date.localeCompare(b.date)).concat(current.length + added.length ? [] : [newRace<SeasonRace>(discipline)]));
+    const skipped = upcoming.length - matching.length;
+    setImportMsg(
+      (added.length ? `Dodano ${added.length} ${added.length === 1 ? 'start' : 'starty/startów'} z profilu.` : 'Wszystkie pasujące starty z profilu są już na liście.') +
+      (skipped ? ` Pominięto ${skipped} z innej dyscypliny niż ${DISCIPLINES.find(d => d.value === discipline)?.label.toLowerCase()}.` : ''),
+    );
+  };
+
   const handleGenerate = async () => {
-    if (!session || !raceDate) return;
+    if (!session || !skeleton) return;
     setGen(true); setError(null);
+    const withLabel = (r: SeasonRace) => ({ ...r, name: r.name?.trim() || undefined, label: distanceLabel(r.distance) });
     try {
       const res = await fetch('/api/ai/generate-plan', {
         method: 'POST',
         headers: { 'Content-Type':'application/json', Authorization:`Bearer ${session.access_token}` },
-        body: JSON.stringify({ sport:'atp', raceDate, raceType, discipline }),
+        body: JSON.stringify({
+          sport: 'atp', discipline,
+          races: races.map(withLabel),
+          phases: skeleton.phases.map(p => ({ ...p, races: p.races.map(withLabel) })),
+        }),
       });
       const data = await res.json().catch(() => ({ error: `Serwer nie odpowiedział poprawnie (${res.status}) — spróbuj ponownie za chwilę.` }));
       if (!res.ok) throw new Error(data.error ?? 'Błąd');
@@ -165,18 +242,14 @@ export default function ATPSection() {
 
   const planJson  = plan?.plan_json ?? null;
   const phases    = planJson?.phases ?? [];
+  const planRaces = sortedPlanRaces(planJson);
   const totalWeeks = phases.reduce((s, p) => s + p.weeks, 0);
-  const planStart = phases[0]?.startDate ?? '';
-  const planEnd   = phases[phases.length - 1]?.endDate ?? '';
-  const months    = planStart && planEnd ? monthsBetween(planStart, planEnd) : [];
   const selPhase  = selected !== null ? phases[selected] : null;
-
-  const raceMarkers = (planJson?.races ?? []).map(r => {
-    if (!planStart || !planEnd) return null;
-    const totalMs = new Date(planEnd).getTime() - new Date(planStart).getTime();
-    const pct = ((new Date(r.date).getTime() - new Date(planStart).getTime()) / totalMs) * 100;
-    return { ...r, pct };
-  }).filter(Boolean);
+  const selRaces  = selPhase
+    ? (selPhase.races?.length ? selPhase.races : planRaces.filter(r => r.date >= selPhase.startDate && r.date <= selPhase.endDate))
+    : [];
+  const aRaces    = planRaces.filter(r => r.priority === 'A');
+  const sortedFormRaces = [...races].sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
 
   return (
     <section className="alt">
@@ -189,29 +262,31 @@ export default function ATPSection() {
               Annual Training Plan
             </p>
             <h2 style={{ fontSize:'clamp(18px,2.5vw,24px)', fontWeight:700, letterSpacing:-0.5 }}>
-              {planJson ? `Plan roczny · ${planJson.raceType?.toUpperCase() ?? ''}` : 'Brak planu rocznego'}
+              {planJson
+                ? `Plan sezonu · ${planRaces.length} ${planRaces.length === 1 ? 'start' : planRaces.length < 5 ? 'starty' : 'startów'}${aRaces.length ? ` · A: ${aRaces.map(r => r.name || raceLabel(r)).join(', ')}` : ''}`
+                : 'Brak planu rocznego'}
             </h2>
           </div>
           <button
             onClick={() => setShowForm(s => !s)}
             style={{ padding:'8px 18px', borderRadius:'var(--radius-md)', background: planJson ? 'var(--bg)' : 'var(--tri)', color: planJson ? 'var(--text)' : '#fff', border: planJson ? '0.5px solid var(--border-md)' : 'none', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'var(--font)' }}>
-            {planJson ? '↻ Nowy plan' : '🤖 Generuj ATP'}
+            {planJson ? '✎ Edytuj starty' : '🤖 Generuj ATP'}
           </button>
         </div>
 
         {error && <div className="alert alert-warn" style={{ marginBottom:16 }}>{error}</div>}
 
-        {/* Generate form */}
+        {/* Season form */}
         {(showForm || plan === null) && (
           <div style={{ background:'var(--bg)', border:'0.5px solid var(--border)', borderRadius:'var(--radius-lg)', padding:'1.25rem', marginBottom:'1.5rem' }}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:12 }}>Skonfiguruj plan roczny</div>
+            <div style={{ fontSize:13, fontWeight:600, marginBottom:12 }}>Skonfiguruj sezon</div>
 
             {/* Discipline selector */}
             <div style={{ marginBottom:14 }}>
               <label style={{ fontSize:12, color:'var(--text-secondary)', display:'block', marginBottom:6 }}>Dyscyplina</label>
               <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                 {DISCIPLINES.map(d => (
-                  <button key={d.value} onClick={() => { setDisc(d.value); setRaceType(RACE_OPTIONS_BY_DISCIPLINE[d.value][d.value==='triathlon'?2:0].value); }}
+                  <button key={d.value} onClick={() => changeDiscipline(d.value)}
                     style={{ padding:'7px 14px', borderRadius:'var(--radius-md)', border:`1.5px solid ${discipline===d.value ? d.color : 'var(--border-md)'}`, background: discipline===d.value ? `${d.color}18` : 'var(--bg)', color: discipline===d.value ? d.color : 'var(--text-secondary)', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'var(--font)', display:'flex', alignItems:'center', gap:5, transition:'all 0.12s' }}>
                     {d.icon} {d.label}
                   </button>
@@ -219,28 +294,39 @@ export default function ATPSection() {
               </div>
             </div>
 
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:14 }}>
-              <div>
-                <label style={{ fontSize:12, color:'var(--text-secondary)', display:'block', marginBottom:4 }}>Data wyścigu A</label>
-                <input type="date" value={raceDate} onChange={e=>setRaceDate(e.target.value)}
-                  style={{ width:'100%', padding:'8px 10px', borderRadius:'var(--radius-md)', border:'0.5px solid var(--border-md)', background:'var(--bg)', color:'var(--text)', fontSize:13, fontFamily:'var(--font)', boxSizing:'border-box' }} />
-              </div>
-              <div>
-                <label style={{ fontSize:12, color:'var(--text-secondary)', display:'block', marginBottom:4 }}>Dystans / format</label>
-                <select value={raceType} onChange={e=>setRaceType(e.target.value)}
-                  style={{ width:'100%', padding:'8px 10px', borderRadius:'var(--radius-md)', border:'0.5px solid var(--border-md)', background:'var(--bg)', color:'var(--text)', fontSize:13, fontFamily:'var(--font)', boxSizing:'border-box' }}>
-                  {RACE_OPTIONS_BY_DISCIPLINE[discipline].map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </div>
+            {/* Race list */}
+            <label style={{ fontSize:12, color:'var(--text-secondary)', display:'block', marginBottom:6 }}>Starty w sezonie</label>
+            <div style={{ marginBottom:14 }}>
+              <RaceListEditor races={races} onChange={setRaces} discipline={discipline}
+                actions={
+                  <button type="button" onClick={importFromProfile} disabled={eventsLoading}
+                    title="Dodaj do listy starty zapisane w profilu zawodnika"
+                    style={{ padding:'7px 14px', borderRadius:'var(--radius-md)', border:'0.5px solid var(--border-md)', background:'var(--bg)', color:'var(--text)', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'var(--font)' }}>
+                    ⬇ Dodaj starty z profilu
+                  </button>
+                } />
+              {importMsg && <p style={{ fontSize:12, color:'var(--text-secondary)', marginTop:8, marginBottom:0 }}>{importMsg}</p>}
             </div>
+
+            {/* Live structure preview */}
+            {skeleton ? (
+              <div style={{ marginBottom:14 }}>
+                <div style={{ fontSize:12, color:'var(--text-secondary)', marginBottom:8 }}>
+                  Podgląd struktury: <strong style={{ color:'var(--text)' }}>{skeleton.totalWeeks} tyg.</strong> · {fmtDate(skeleton.startDate)} – {fmtDate(skeleton.endDate)} · {skeleton.phases.length} faz
+                </div>
+                <SeasonTimeline phases={skeleton.phases} races={sortedFormRaces} />
+              </div>
+            ) : (
+              <p style={{ fontSize:12, color:'var(--text-secondary)', marginBottom:14 }}>{validation}</p>
+            )}
+
             <div style={{ display:'flex', gap:8 }}>
-              <button onClick={handleGenerate} disabled={generating || !raceDate}
-                style={{ padding:'9px 20px', borderRadius:'var(--radius-md)', background: (!raceDate||generating)?'var(--bg-secondary)':'var(--tri)', color: (!raceDate||generating)?'var(--text-secondary)':'#fff', border:'none', fontSize:13, fontWeight:600, cursor:(!raceDate||generating)?'not-allowed':'pointer', fontFamily:'var(--font)' }}>
-                {generating ? '✨ Generowanie…' : '🤖 Generuj z AI'}
+              <button onClick={handleGenerate} disabled={generating || !skeleton}
+                style={{ padding:'9px 20px', borderRadius:'var(--radius-md)', background: (!skeleton||generating)?'var(--bg-secondary)':'var(--tri)', color: (!skeleton||generating)?'var(--text-secondary)':'#fff', border:'none', fontSize:13, fontWeight:600, cursor:(!skeleton||generating)?'not-allowed':'pointer', fontFamily:'var(--font)' }}>
+                {generating ? '✨ Generowanie… (do minuty)' : '🤖 Generuj plan z AI'}
               </button>
               {planJson && <button onClick={()=>setShowForm(false)} style={{ padding:'9px 14px', borderRadius:'var(--radius-md)', background:'none', border:'0.5px solid var(--border-md)', fontSize:13, color:'var(--text-secondary)', cursor:'pointer', fontFamily:'var(--font)' }}>Anuluj</button>}
             </div>
-            {!raceDate && <p style={{ fontSize:11, color:'var(--text-secondary)', marginTop:8 }}>Wybierz datę wyścigu A, żeby wygenerować plan.</p>}
           </div>
         )}
 
@@ -250,39 +336,24 @@ export default function ATPSection() {
         {/* Plan display */}
         {planJson && phases.length > 0 && (
           <>
-            {/* Assessment */}
-            <div style={{ background:'var(--bg)', border:'0.5px solid var(--border)', borderLeft:`3px solid var(--tri)`, borderRadius:'var(--radius-lg)', padding:'1rem 1.25rem', marginBottom:'1.5rem', fontSize:13, lineHeight:1.7 }}>
-              <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--text-secondary)', marginBottom:5 }}>🤖 Strategia roczna</div>
-              {planJson.assessment}
-            </div>
-
-            {/* Month labels */}
-            <div style={{ position:'relative', height:18, marginBottom:4, overflow:'hidden' }}>
-              {months.map((m, i) => (
-                <span key={i} style={{ position:'absolute', left:`${m.pct}%`, fontSize:10, color:'var(--text-secondary)', fontWeight:600, whiteSpace:'nowrap', transform:'translateX(-50%)', letterSpacing:'0.06em', textTransform:'uppercase' }}>
-                  {m.label}
-                </span>
-              ))}
-            </div>
-
-            {/* Timeline */}
-            <div style={{ position:'relative', marginBottom: raceMarkers.length ? 24 : 8 }}>
-              <div style={{ display:'flex', gap:3, width:'100%' }}>
-                {phases.map((p, i) => (
-                  <PhaseBar key={i} phase={p} totalWeeks={totalWeeks} selected={selected === i} onClick={() => setSelected(selected === i ? null : i)} />
-                ))}
+            {planJson.assessment && (
+              <div style={{ background:'var(--bg)', border:'0.5px solid var(--border)', borderLeft:`3px solid var(--tri)`, borderRadius:'var(--radius-lg)', padding:'1rem 1.25rem', marginBottom:'1.5rem', fontSize:13, lineHeight:1.7 }}>
+                <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--text-secondary)', marginBottom:5 }}>🤖 Strategia na sezon</div>
+                {planJson.assessment}
               </div>
-              {/* Race markers */}
-              {raceMarkers.map((r, i) => r && (
-                <div key={i} style={{ position:'absolute', bottom:-20, left:`${r.pct}%`, transform:'translateX(-50%)', textAlign:'center' }}>
-                  <div style={{ fontSize:14 }}>🏁</div>
-                  <div style={{ fontSize:9, fontWeight:700, color:'var(--tri)', whiteSpace:'nowrap' }}>{r.priority}</div>
-                </div>
-              ))}
-            </div>
+            )}
+
+            <SeasonTimeline phases={phases} races={planRaces} selected={selected} onSelect={i => setSelected(selected === i ? null : i)} />
+
+            {/* Races */}
+            {planRaces.length > 0 && (
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:8, marginBottom:12 }}>
+                {planRaces.map((r, i) => <RaceChip key={i} r={r} />)}
+              </div>
+            )}
 
             {/* Legend */}
-            <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginBottom: selPhase ? '1.25rem' : 0, marginTop: raceMarkers.length ? 16 : 8 }}>
+            <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginBottom: selPhase ? '1.25rem' : 0, marginTop:8 }}>
               {Object.entries(PHASE_STYLE).map(([key, s]) => (
                 <div key={key} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, color:'var(--text-secondary)' }}>
                   <div style={{ width:10, height:10, background:s.bg, border:`1.5px solid ${s.border}`, borderRadius:2 }} />
@@ -308,20 +379,29 @@ export default function ATPSection() {
                     </div>
                   </div>
                   <div style={{ display:'flex', gap:8 }}>
-                    <div style={{ textAlign:'center', background:'var(--bg-secondary)', borderRadius:'var(--radius-md)', padding:'6px 12px' }}>
-                      <div style={{ fontSize:16, fontWeight:700, color:'var(--text)' }}>{selPhase.targetWeeklyTSS}</div>
-                      <div style={{ fontSize:10, color:'var(--text-secondary)' }}>TSS/tydzień</div>
-                    </div>
-                    <div style={{ textAlign:'center', background:'var(--bg-secondary)', borderRadius:'var(--radius-md)', padding:'6px 12px' }}>
-                      <div style={{ fontSize:16 }}>
-                        {selPhase.intensity === 'low' ? '🟢' : selPhase.intensity === 'moderate' ? '🟡' : '🔴'}
+                    {!!selPhase.targetWeeklyTSS && (
+                      <div style={{ textAlign:'center', background:'var(--bg-secondary)', borderRadius:'var(--radius-md)', padding:'6px 12px' }}>
+                        <div style={{ fontSize:16, fontWeight:700, color:'var(--text)' }}>{selPhase.targetWeeklyTSS}</div>
+                        <div style={{ fontSize:10, color:'var(--text-secondary)' }}>TSS/tydzień</div>
                       </div>
-                      <div style={{ fontSize:10, color:'var(--text-secondary)' }}>{selPhase.intensity === 'low' ? 'Niska' : selPhase.intensity === 'moderate' ? 'Umiark.' : 'Wysoka'}</div>
-                    </div>
+                    )}
+                    {selPhase.intensity && (
+                      <div style={{ textAlign:'center', background:'var(--bg-secondary)', borderRadius:'var(--radius-md)', padding:'6px 12px' }}>
+                        <div style={{ fontSize:16 }}>
+                          {selPhase.intensity === 'low' ? '🟢' : selPhase.intensity === 'moderate' ? '🟡' : '🔴'}
+                        </div>
+                        <div style={{ fontSize:10, color:'var(--text-secondary)' }}>{selPhase.intensity === 'low' ? 'Niska' : selPhase.intensity === 'moderate' ? 'Umiark.' : 'Wysoka'}</div>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <p style={{ fontSize:13, color:'var(--text-secondary)', lineHeight:1.6, marginBottom:10 }}>{selPhase.focus}</p>
-                {selPhase.keyWorkouts?.length > 0 && (
+                {selRaces.length > 0 && (
+                  <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:10 }}>
+                    {selRaces.map((r, i) => <RaceChip key={i} r={r} />)}
+                  </div>
+                )}
+                {selPhase.focus && <p style={{ fontSize:13, color:'var(--text-secondary)', lineHeight:1.6, marginBottom:10 }}>{selPhase.focus}</p>}
+                {!!selPhase.keyWorkouts?.length && (
                   <div>
                     <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--text-secondary)', marginBottom:6 }}>Kluczowe treningi</div>
                     <ul style={{ listStyle:'none', display:'flex', flexDirection:'column', gap:4 }}>
@@ -350,4 +430,12 @@ export default function ATPSection() {
       </div>
     </section>
   );
+}
+
+/** Races of a saved plan, sorted; legacy plans only stored raceDate/raceType. */
+function sortedPlanRaces(pj: ATPPlanJson | null): ATPRace[] {
+  if (!pj) return [];
+  const list: ATPRace[] = pj.races?.length ? pj.races
+    : pj.raceDate ? [{ date: pj.raceDate, priority: 'A', distance: pj.raceType }] : [];
+  return [...list].sort((a, b) => a.date.localeCompare(b.date));
 }

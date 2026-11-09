@@ -23,17 +23,9 @@ const textOf      = (m: Anthropic.Message) =>
   m.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map(b => b.text).join('').trim() || '{}';
 
 type SportType = 'triathlon' | 'run' | 'bike' | 'swim' | 'atp';
-type RaceType  = 'sprint' | 'olympic' | 'half' | 'full';
 
 const SPORT_LABELS: Record<string, string> = {
   triathlon: 'Triathlon', run: 'Bieganie', bike: 'Kolarstwo', swim: 'Pływanie', atp: 'ATP',
-};
-
-const RACE_LABELS: Record<RaceType, string> = {
-  sprint: 'Sprint Triathlon (~1h 15min)',
-  olympic: 'Olympic Triathlon (~2h 30min)',
-  half: 'Half Ironman (~5–6h)',
-  full: 'Full Ironman (~10–14h)',
 };
 
 const SPORT_SETS: Record<string, Set<string>> = {
@@ -157,12 +149,61 @@ const DISCIPLINE_WORKOUTS: Record<string, string> = {
   swim: 'Dryle techniczne (high-elbow, catch-up), wytrzymałość ciągła, interwały 400m/200m, długa seria 1500m+',
 };
 
+/* Season input sent by the client: races + the deterministic phase skeleton from
+   @tricoach/core buildSeasonSkeleton. The AI fills phase content only — never dates. */
+type PhaseType = 'base' | 'build' | 'peak' | 'race' | 'recovery' | 'transition';
+interface SeasonRaceIn  { date: string; priority: 'A' | 'B' | 'C'; distance: string; label?: string; name?: string }
+interface SeasonPhaseIn { name: string; type: PhaseType; startDate: string; endDate: string; weeks: number; races: SeasonRaceIn[] }
+
+const PHASE_TYPES = new Set<PhaseType>(['base', 'build', 'peak', 'race', 'recovery', 'transition']);
+const ISO_DATE    = /^\d{4}-\d{2}-\d{2}$/;
+const shortStr    = (v: unknown, max: number) => typeof v === 'string' ? v.trim().slice(0, max) : '';
+
+function parseRace(r: unknown): SeasonRaceIn | null {
+  const o = r as Record<string, unknown>;
+  if (!o || !ISO_DATE.test(String(o.date)) || !['A', 'B', 'C'].includes(String(o.priority))) return null;
+  const distance = shortStr(o.distance, 30);
+  if (!distance) return null;
+  return { date: String(o.date), priority: o.priority as 'A' | 'B' | 'C', distance,
+           label: shortStr(o.label, 40) || distance, name: shortStr(o.name, 60) || undefined };
+}
+
+function parseSeason(body: Record<string, unknown>): { races: SeasonRaceIn[]; phases: SeasonPhaseIn[] } | string {
+  if (!Array.isArray(body.races) || !Array.isArray(body.phases)) return 'races and phases required';
+  if (body.races.length < 1 || body.races.length > 20) return 'Od 1 do 20 startów.';
+  if (body.phases.length < 1 || body.phases.length > 60) return 'Nieprawidłowa struktura sezonu.';
+  const races = body.races.map(parseRace);
+  if (races.some(r => !r)) return 'Nieprawidłowe dane startu.';
+  if (!races.some(r => r!.priority === 'A')) return 'Wymagany co najmniej jeden start A.';
+  const phases: SeasonPhaseIn[] = [];
+  for (const raw of body.phases as Array<Record<string, unknown>>) {
+    const weeks = Number(raw?.weeks);
+    if (!raw || !PHASE_TYPES.has(raw.type as PhaseType) || !ISO_DATE.test(String(raw.startDate)) ||
+        !ISO_DATE.test(String(raw.endDate)) || !Number.isInteger(weeks) || weeks < 1 || weeks > 60)
+      return 'Nieprawidłowa faza w strukturze sezonu.';
+    phases.push({
+      name: shortStr(raw.name, 60) || String(raw.type), type: raw.type as PhaseType,
+      startDate: String(raw.startDate), endDate: String(raw.endDate), weeks,
+      races: Array.isArray(raw.races) ? raw.races.map(parseRace).filter((r): r is SeasonRaceIn => !!r) : [],
+    });
+  }
+  return { races: races as SeasonRaceIn[], phases };
+}
+
+const DEFAULT_INTENSITY: Record<PhaseType, 'low' | 'moderate' | 'high'> = {
+  base: 'low', build: 'moderate', peak: 'high', race: 'high', recovery: 'low', transition: 'low',
+};
+
+function raceLine(r: SeasonRaceIn): string {
+  return `${r.date} · ${r.priority} · ${r.label}${r.name ? ` · „${r.name}”` : ''}`;
+}
+
 function buildATPPrompt(
   summaries: Array<Record<string,unknown>>,
-  raceDate: string,
-  raceType: string,
+  discipline: string,
+  races: SeasonRaceIn[],
+  phases: SeasonPhaseIn[],
   profile: { weight?: number; ftp?: number },
-  discipline = 'triathlon',
 ): string {
   const pmc    = calcPMC(summaries);
   const form   = pmc.tsb > 5 ? 'wypoczęty' : pmc.tsb > -10 ? 'optymalny' : 'zmęczony';
@@ -170,30 +211,22 @@ function buildATPPrompt(
   const avg    = (k: string) => recent.length ? recent.reduce((s,r)=>s+((r[k] as number)??0),0)/recent.length : 0;
   const avgTSS = Math.round(avg('tss'));
 
-  const today      = new Date();
-  const race       = new Date(raceDate);
-  const weeksUntil = Math.round((race.getTime() - today.getTime()) / (7*24*60*60*1000));
-
-  // First Monday on or after today
-  const startDay = new Date(today);
-  const dow = startDay.getDay();
-  if (dow !== 1) startDay.setDate(startDay.getDate() + (dow === 0 ? 1 : 8 - dow));
-  const planStart = startDay.toISOString().split('T')[0];
-
-  // End = 3 weeks after race
-  const endDay = new Date(race); endDay.setDate(endDay.getDate() + 21);
-  const planEnd = endDay.toISOString().split('T')[0];
-
   const discLabel    = DISCIPLINE_LABELS[discipline] ?? discipline;
   const discWorkouts = DISCIPLINE_WORKOUTS[discipline] ?? DISCIPLINE_WORKOUTS.triathlon;
+  const totalWeeks   = phases.reduce((s, p) => s + p.weeks, 0);
 
-  return `Jesteś ekspertem w periodyzacji sportowej. Stwórz Annual Training Plan (ATP) dla zawodnika.
+  const phaseLines = phases.map((p, i) =>
+    `${i} · ${p.name} · ${p.type} · ${p.startDate} – ${p.endDate} · ${p.weeks} tyg.` +
+    (p.races.length ? ` · starty: ${p.races.map(r => `${r.priority} ${r.date} ${r.label}`).join(', ')}` : ''),
+  ).join('\n');
+
+  return `Jesteś ekspertem w periodyzacji sportowej. Uzupełnij Annual Training Plan (ATP) na cały sezon.
 
 DYSCYPLINA: ${discLabel}
 ${discipline !== 'triathlon' ? `Plan skupia się WYŁĄCZNIE na ${discLabel.toLowerCase()}. Kluczowe treningi: ${discWorkouts}` : `Plan triathlonowy — wszystkie 3 dyscypliny. Kluczowe treningi: ${discWorkouts}`}
 
 PROFIL ZAWODNIKA:
-- Dzisiaj: ${today.toISOString().split('T')[0]}
+- Dzisiaj: ${new Date().toISOString().split('T')[0]}
 - CTL (forma): ${pmc.ctl} | ATL (zmęczenie): ${pmc.atl} | Form (TSB): ${pmc.tsb > 0?'+':''}${pmc.tsb} (${form})
 - Śr. TSS/tydzień (8 tyg.): ${avgTSS}
 ${discipline === 'triathlon' || discipline === 'swim' ? `- Pływanie: ${avg('swim_dist_km').toFixed(1)} km/tyg` : ''}
@@ -202,47 +235,31 @@ ${discipline === 'triathlon' || discipline === 'run'  ? `- Bieg: ${avg('run_dist
 ${profile.ftp ? `- FTP: ${profile.ftp} W` : ''}
 ${profile.weight ? `- Waga: ${profile.weight} kg` : ''}
 
-WYŚCIG DOCELOWY (A):
-- Dyscyplina: ${discLabel}
-- Format: ${raceType}
-- Data wyścigu: ${raceDate}
-- Tygodni do wyścigu: ${weeksUntil}
+STARTY W SEZONIE (data · priorytet · dystans · nazwa):
+${races.map(raceLine).join('\n')}
 
-ZAKRES PLANU: od ${planStart} do ${planEnd} (3 tyg. po wyścigu).
+Priorytety startów:
+- A — główny cel; fazy przed nim (szczyt/tapering) są już zaplanowane.
+- B — ważny start pośredni: mini-tapering 3–5 dni przed, 2–3 lżejsze dni po. Nie przerywa fazy — uwzględnij go w kluczowych treningach tej fazy.
+- C — start treningowy: bez taperingu, potraktuj jako mocny trening w tygodniu.
 
-Zasady periodyzacji dla ${weeksUntil} tygodni:
-${weeksUntil >= 24 ? '- Baza 1 (8 tyg.) → Baza 2 (6 tyg.) → Budowanie 1 (5 tyg.) → Budowanie 2 (4 tyg.) → Szczyt (2 tyg.) → Wyścig (1 tyg.) → Regeneracja (2 tyg.)' :
-  weeksUntil >= 16 ? '- Baza (7 tyg.) → Budowanie 1 (4 tyg.) → Budowanie 2 (3 tyg.) → Szczyt (2 tyg.) → Wyścig (1 tyg.) → Regeneracja (2 tyg.)' :
-  weeksUntil >= 10 ? '- Baza (4 tyg.) → Budowanie (4 tyg.) → Szczyt (2 tyg.) → Wyścig (1 tyg.) → Regeneracja (2 tyg.)' :
-  '- Budowanie/Szczyt (weeksUntil-3 tyg.) → Tapering (2 tyg.) → Wyścig (1 tyg.) → Regeneracja (2 tyg.)'}
+STRUKTURA SEZONU — USTALONA (${totalWeeks} tyg.). Nie zmieniaj nazw, kolejności, typów ani dat faz.
+Indeks · nazwa · typ · daty · długość · starty w fazie:
+${phaseLines}
+
+Dla KAŻDEJ fazy (dokładnie ${phases.length} elementów, po jednym na indeks 0–${phases.length - 1}) podaj:
+- focus: jedno zdanie po polsku — cel fazy,
+- targetWeeklyTSS: docelowy średni TSS tygodniowo; zacznij od obecnego poziomu (${avgTSS || 'brak danych — oszacuj ostrożnie'}), w bazie i budowaniu rośnij stopniowo (co 4. tydzień lżejszy), szczyt/tapering −30–50% względem budowania, regeneracja i roztrenowanie ok. 40–50%,
+- intensity: "low" | "moderate" | "high",
+- keyWorkouts: 2–4 konkretne kluczowe treningi po polsku; jeśli w fazie jest start B lub C, jeden punkt opisuje, jak go rozegrać.
 
 Odpowiedz TYLKO tym JSON (bez markdown):
 {
-  "assessment": "2–3 zdania po polsku: ocena zawodnika i strategia roczna",
-  "raceDate": "${raceDate}",
-  "raceType": "${raceType}",
+  "assessment": "2–3 zdania po polsku: ocena zawodnika i strategia na sezon z uwzględnieniem wszystkich startów",
   "phases": [
-    {
-      "name": "Baza 1",
-      "type": "base",
-      "startDate": "${planStart}",
-      "endDate": "RRRR-MM-DD",
-      "weeks": 6,
-      "focus": "Jedno zdanie po polsku opisujące fokus fazy",
-      "targetWeeklyTSS": 280,
-      "intensity": "low",
-      "keyWorkouts": ["opis treningu 1", "opis treningu 2", "opis treningu 3"]
-    }
-  ],
-  "races": [
-    { "date": "${raceDate}", "name": "${RACE_LABELS[raceType]}", "priority": "A" }
+    { "i": 0, "focus": "…", "targetWeeklyTSS": 280, "intensity": "low", "keyWorkouts": ["…", "…"] }
   ]
-}
-Dozwolone type: "base", "build", "peak", "race", "recovery", "transition".
-Dozwolone intensity: "low", "moderate", "high".
-Fazy muszą być ciągłe: endDate jednej fazy = dzień przed startDate następnej.
-Fazy muszą pokrywać cały zakres od ${planStart} do ${planEnd}.
-Tylko JSON.`;
+}`;
 }
 
 /* ── Main prompt ── */
@@ -349,7 +366,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { data: { user }, error } = await supabase.auth.getUser(jwt);
   if (error || !user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const body = req.body as { trainingDays?: number; sport?: SportType; raceDate?: string; raceType?: RaceType };
+  const body = req.body as { trainingDays?: number; sport?: SportType };
   const sport = body.sport ?? 'triathlon';
 
   const { data: tokenRow } = await supabase.from('strava_tokens').select('*').eq('user_id', user.id).single();
@@ -377,25 +394,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   /* ── ATP path ── */
   if (sport === 'atp') {
-    const { raceDate, raceType = 'half', discipline = 'triathlon' } = body as typeof body & { discipline?: string };
-    if (!raceDate) return res.status(400).json({ error: 'raceDate required for ATP' });
-    const prompt = buildATPPrompt(summaries ?? [], raceDate, raceType as string, profile, discipline);
+    const discipline = shortStr((body as Record<string, unknown>).discipline, 20) || 'triathlon';
+    const season = parseSeason(body as Record<string, unknown>);
+    if (typeof season === 'string') return res.status(400).json({ error: season });
+    const { races, phases } = season;
+
+    const prompt = buildATPPrompt(summaries ?? [], discipline, races, phases, profile);
     let msg: Anthropic.Message;
     try {
       msg = await anthropic.messages.create({
-        model: MODEL, max_tokens: 4000, thinking: NO_THINKING,
+        model: MODEL, max_tokens: 8000, thinking: NO_THINKING,
         system: 'You are a JSON generator. Respond with ONLY valid JSON, no markdown, no code blocks. Start with { end with }.',
         messages: [{ role: 'user', content: prompt }],
       });
     } catch (e) { return aiError(res, e); }
     const rawAtp = textOf(msg);
-    let atpJson: Record<string,unknown>;
+    let ai: { assessment?: unknown; phases?: Array<Record<string, unknown>> };
     try {
       let c = rawAtp.replace(/^```json?\s*/im,'').replace(/```\s*$/im,'').trim();
       const f = c.indexOf('{'), l = c.lastIndexOf('}');
       if (f !== -1 && l > f) c = c.slice(f, l+1);
-      atpJson = JSON.parse(c);
+      ai = JSON.parse(c);
     } catch { return res.status(502).json({ error: 'AI returned invalid JSON' }); }
+
+    // Merge AI content into the fixed skeleton — dates and structure always come from the client skeleton.
+    const byIndex = new Map((Array.isArray(ai.phases) ? ai.phases : []).map((p, idx) => [Number.isInteger(p?.i) ? Number(p.i) : idx, p]));
+    const mergedPhases = phases.map((p, i) => {
+      const a = byIndex.get(i) ?? {};
+      const tss = Number(a.targetWeeklyTSS);
+      return {
+        ...p,
+        focus: shortStr(a.focus, 300),
+        targetWeeklyTSS: Number.isFinite(tss) && tss > 0 ? Math.round(tss) : 0,
+        intensity: ['low', 'moderate', 'high'].includes(String(a.intensity)) ? a.intensity : DEFAULT_INTENSITY[p.type],
+        keyWorkouts: Array.isArray(a.keyWorkouts) ? a.keyWorkouts.map(w => shortStr(w, 200)).filter(Boolean).slice(0, 5) : [],
+      };
+    });
+    const mainRace = races.filter(r => r.priority === 'A').sort((x, y) => x.date.localeCompare(y.date))[0];
+    const atpJson = {
+      assessment: shortStr(ai.assessment, 1000),
+      discipline,
+      races: [...races].sort((x, y) => x.date.localeCompare(y.date)),
+      phases: mergedPhases,
+      raceDate: mainRace.date,     // legacy fields, kept for older readers
+      raceType: mainRace.distance,
+    };
+
     const { data: saved, error: saveErr } = await supabase.from('training_plans')
       .upsert({ user_id:user.id, training_days_per_week:0, suggested_days:0, plan_json:atpJson, week_start:nextMonday(), sport_type:'atp' }, { onConflict:'user_id,week_start,sport_type' })
       .select().single();

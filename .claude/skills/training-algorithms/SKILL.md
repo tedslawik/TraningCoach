@@ -47,6 +47,16 @@ Mon is always rest; each day's description branches on these flags.
 
 `calcVDOT(distM, timeSec)`, `predictTime(distM, refDistM, refTimeSec)`, `calcRunZones(...)` → pace zones + race predictions; helpers `fmtPaceMmSs`, `fmtTimeHMMS`, `parseTimeInput`. Must stay self-consistent: predicting the reference distance must return the reference time.
 
+## Season / ATP (`season.ts`)
+
+`buildSeasonSkeleton(races, today)` computes the whole-season phase structure deterministically; the AI (`api/ai/generate-plan.ts`, `sport: 'atp'`) only fills `focus`, `targetWeeklyTSS`, `intensity`, `keyWorkouts` per phase index — it never sets dates.
+- Plan starts the first Monday on/after today; weeks Mon–Sun, UTC math.
+- Per A race, backwards from its week: taper (`taperWeeks` from `EVENT_DISTANCES`, 1–3) ← build (≤ 8 wks, split in 2 if ≥ 6) ← base in ~4-week blocks ← up to 6 wks "Przygotowanie ogólne" (first segment only, when base > 12). After it: `recoveryWeeks` of recovery.
+- B/C races don't change phases (B = mini-taper, C = train through — handled in the AI prompt).
+- Tail: B/C races after the last A → "Utrzymanie formy", then 2-week "Roztrenowanie"; if the season ends on an A race its recovery becomes the transition.
+- `validateSeasonRaces` → Polish error or null: ≥ 1 A race, ≤ 20 races, dates from plan start up to 2 years, distance must match discipline.
+The client (`ATPSection`) builds the skeleton (live preview) and POSTs `{ discipline, races, phases }`; the API validates shape and merges AI content by index.
+
 ## Other modules
 
 - `assessment.ts` — `assessAthlete(input)` → score 0–100 + label/colour, training load from weekly suffer score (<80 low, <250 …), highlights/warnings/recommendations.

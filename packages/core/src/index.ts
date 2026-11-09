@@ -7,3 +7,4 @@ export * from './pmc';
 export * from './nutrition';
 export * from './runAnalysis';
 export * from './runZones';
+export * from './season';

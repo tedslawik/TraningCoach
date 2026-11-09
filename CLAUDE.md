@@ -34,6 +34,7 @@ apps/web/src/
   context/AuthContext.tsx    session, stravaToken, signIn/Up/Out, refreshStravaToken
   context/PreferencesContext.tsx  FEATURES list + per-user feature toggles (usePreferences)
   lib/supabase.ts            browser Supabase client (anon key)
+  lib/raceEvents.ts          useRaceEvents() + fetch/save of `race_events` (direct Supabase, RLS)
   index.css                  ALL styles + design tokens (single file)
   components/                Nav, Footer, HeroSm, CtaBanner, SectionLabel (shared chrome)
     analyzer/                Analyzer (tabs) → AnalyzerInput/Analysis/Plan, ActivitiesPreview
@@ -41,6 +42,7 @@ apps/web/src/
     charts/                  ActivityCharts (983 lines, SVG), PMCChart, TrendsChart
     training/                ATPSection, TrainingPlanSection, VdotCalculator
     tri/NutritionCalculator  shared/WeekCalendar  auth/AuthModal, StravaConnectPrompt
+    events/                  RaceListEditor (shared A/B/C race rows), EventsSection (/athlete#starty), UpcomingEvents (dashboard)
   pages/                     one file per route
 packages/core/src/           pure TS, no DOM/React — re-exported from index.ts as @tricoach/core
   types.ts targets.ts        RaceType, WorkoutData, RACE_TARGETS
@@ -50,7 +52,9 @@ packages/core/src/           pure TS, no DOM/React — re-exported from index.ts
   runAnalysis.ts             analyzeRunStream, analyzeRunLaps
   runZones.ts                Daniels VDOT: calcVDOT, predictTime, calcRunZones, fmt/parse helpers
   nutrition.ts               generateNutritionPlan, DEFAULT_PRODUCTS
+  season.ts                  ATP: EVENT_DISTANCES, validateSeasonRaces, buildSeasonSkeleton (phases from A/B/C races)
 docs/features.md             analyzer/planner algorithm spec (Polish)
+supabase/migrations/         SQL to run manually in Supabase SQL Editor (no CLI in this project)
 ```
 
 Routes: `/` Home · `/tri-coach` `/run-coach` `/swim-coach` `/bike-coach` · `/athlete` · `/dashboard` (PMC, Trends, TrainingInsights) · `/plan` (ATP) · `/calculators?tab=analyzer|nutrition|predictor|vdot` · `/settings`. `/analyzer` and `/run-zones` redirect into `/calculators`.

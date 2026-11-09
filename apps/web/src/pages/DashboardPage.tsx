@@ -8,6 +8,7 @@ import TrendsChart from '../components/charts/TrendsChart';
 import PMCChart from '../components/charts/PMCChart';
 import TrainingInsights from '../components/athlete/TrainingInsights';
 import SectionLabel from '../components/SectionLabel';
+import UpcomingEvents from '../components/events/UpcomingEvents';
 
 function getMonday(d: Date) {
   const day = d.getDay() === 0 ? 7 : d.getDay();
@@ -141,6 +142,9 @@ export default function DashboardPage() {
           </div>
         </div>
       </section>
+
+      {/* ── UPCOMING RACES ── */}
+      {user && <UpcomingEvents />}
 
       {noData ? (
         /* ── NO DATA STATE ── */

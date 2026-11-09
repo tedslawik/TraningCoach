@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { assessAthlete, analyzeWorkouts, RACE_TARGETS } from '@tricoach/core';
 import type { Assessment } from '@tricoach/core';
 import SectionLabel from '../components/SectionLabel';
+import EventsSection from '../components/events/EventsSection';
 import ActivityDetailModal from '../components/athlete/ActivityDetailModal';
 import type { CalendarActivity } from '../components/shared/WeekCalendar';
 
@@ -384,6 +385,9 @@ export default function AthletePage() {
           </div>
         </div>
       </section>
+
+      {/* ── PLANOWANE STARTY ── */}
+      {session && <EventsSection />}
 
       {/* ── DATA SECTIONS — only when Strava is connected ── */}
       {!stravaToken && !loading && (
