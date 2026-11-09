@@ -1,83 +1,70 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+TriCoach — triathlon training app (UI in Polish). npm-workspaces monorepo, deployed on Vercel.
+Stack: React 18 + TS + Vite + React Router v6 · Supabase (auth + Postgres) · Strava API v3 · Anthropic SDK.
 
-## Running the project
-
-No build system. Open directly in a browser:
+## Commands
 
 ```bash
-open index.html
-# or serve locally to avoid CORS issues with file:// URLs:
-python3 -m http.server 8080
+npm run dev      # Vite dev server (apps/web) → http://localhost:5173  (api/* NOT served; use `vercel dev` for that)
+npm run build    # tsc --noEmit on packages/core, then tsc -b + vite build on apps/web — run this to verify changes
+npm run lint --workspace=apps/web
 ```
 
-## Architecture
+No test suite. "Verified" = `npm run build` passes.
 
-Multi-page static site — five HTML files sharing one CSS file and one JS file.
-
-```
-index.html           # Landing page (hero + 2×2 coach card grid) + training analyzer
-tri-coach.html       # Dedicated Tri Coach subpage
-run-coach.html       # Dedicated Run Coach subpage
-swim-coach.html      # Dedicated Swim Coach subpage
-bike-coach.html      # Dedicated Bike Coach subpage
-css/style.css        # All shared styles — 828 lines, no scoping
-js/analyzer.js       # All business logic — 3 global functions
-docs/features.md     # Algorithm spec: targets, thresholds, planner decision table
-```
-
-Nav and footer HTML are duplicated across all five pages. When editing either, update all five files.
-
-## Design system (css/style.css)
-
-Theming is entirely via CSS custom properties in `:root`. Dark mode is automatic — `@media (prefers-color-scheme: dark)` overrides the same variables, no class toggling needed.
-
-Discipline colours:
-- `--tri: #7c3aed` (purple)
-- `--swim: #2563eb` (blue)
-- `--bike: #16a34a` (green)
-- `--run: #dc2626` (red)
-
-These are used for `.section-label.tri`, `.btn-coach.tri`, `.check.tri`, `.fill-tri`, etc. — always apply the discipline suffix rather than hardcoding hex values.
-
-## Analyzer logic (js/analyzer.js)
-
-Three globally-scoped functions consumed via `onclick` attributes in `index.html`:
-
-- `switchTab(name, el)` — swaps `.active` on `.tab` and `.az-section` elements
-- `daysUntil(dateStr)` — returns integer or `null` if no date
-- `runAnalysis()` — reads form, computes, renders, then switches to the analysis tab
-
-**Key invariant:** proportions are computed from *time*, not distance. This is intentional — time reflects actual training load regardless of discipline speed differences.
-
-**Alert thresholds** (from `docs/features.md`):
-- warn if discipline % < target − 5 pp
-- warn if bike % > target + 10 pp (dominance)
-
-**Weekly plan decision variables:**
-- `needMoreSwim` — swimPct < target − 3
-- `needMoreBike` — bikePct < target − 5
-- `needMoreRun` — runPct < target − 3
-- `isTaper` — days < 14
-- `isPeak` — days > 60 or no date set
-
-Race-type targets (% of total training time):
-
-| Race | Swim | Bike | Run |
-|------|------|------|-----|
-| sprint | 15 | 45 | 40 |
-| olympic | 18 | 42 | 40 |
-| half | 20 | 45 | 35 |
-| full | 18 | 50 | 32 |
-
-## Planned migration
-
-The project is being migrated to a React + TypeScript + Vite monorepo:
+## Map
 
 ```
-apps/web/        # React 18 + TypeScript + Vite + React Router v6
-packages/core/   # Pure TypeScript — analyzer, planner, pace calculators (no DOM)
+api/                         Vercel serverless functions (Node, each file = one endpoint, self-contained)
+  auth/strava.ts             GET  start Strava OAuth (?token=<supabase jwt>, userId in state)
+  auth/callback.ts           GET  OAuth code → tokens → upsert strava_tokens
+  strava/activities.ts       GET  last 7 days: {summary, activities}            ← Analyzer
+  strava/athlete.ts          GET  ?weekStart  profile+zones+week, HR streams      ← AthletePage
+  strava/discipline.ts       GET  ?sport=run|swim|bike&weekStart&daysBack         ← *CoachPage, TrainingInsights, Vdot
+  strava/stream.ts           GET  ?activityId  streams+laps+zones+detail           ← ActivityDetailModal
+  strava/prs.ts              GET  best efforts from ~400 activities                ← RacePredictor
+  strava/profile.ts          GET  athlete (weight etc.)                            ← NutritionCalculator
+  strava/sync.ts             POST user sync / GET daily cron (CRON_SECRET) → weekly_summaries
+  training/run-zones.ts      GET/POST running_zones + run_insights                 ← Vdot, TrainingInsights
+  ai/analyze-workout.ts      POST Claude analysis of one workout                   ← ActivityDetailModal, TrainingInsights
+  ai/generate-plan.ts        GET latest / POST generate (?sport=…|atp) → training_plans ← PlannerPage, ATP, TrainingPlanSection
+apps/web/src/
+  App.tsx                    routes (see below), AuthProvider > PreferencesProvider
+  context/AuthContext.tsx    session, stravaToken, signIn/Up/Out, refreshStravaToken
+  context/PreferencesContext.tsx  FEATURES list + per-user feature toggles (usePreferences)
+  lib/supabase.ts            browser Supabase client (anon key)
+  index.css                  ALL styles + design tokens (single file)
+  components/                Nav, Footer, HeroSm, CtaBanner, SectionLabel (shared chrome)
+    analyzer/                Analyzer (tabs) → AnalyzerInput/Analysis/Plan, ActivitiesPreview
+    athlete/                 ActivityDetailModal, RacePredictor, RunSummaryNote, TrainingInsights
+    charts/                  ActivityCharts (983 lines, SVG), PMCChart, TrendsChart
+    training/                ATPSection, TrainingPlanSection, VdotCalculator
+    tri/NutritionCalculator  shared/WeekCalendar  auth/AuthModal, StravaConnectPrompt
+  pages/                     one file per route
+packages/core/src/           pure TS, no DOM/React — re-exported from index.ts as @tricoach/core
+  types.ts targets.ts        RaceType, WorkoutData, RACE_TARGETS
+  analyzer.ts planner.ts     analyzeWorkouts, daysUntil, generateWeekPlan
+  assessment.ts              assessAthlete
+  pmc.ts                     calculatePMC (CTL/ATL/TSB), predictRaceTime, formatMinutes
+  runAnalysis.ts             analyzeRunStream, analyzeRunLaps
+  runZones.ts                Daniels VDOT: calcVDOT, predictTime, calcRunZones, fmt/parse helpers
+  nutrition.ts               generateNutritionPlan, DEFAULT_PRODUCTS
+docs/features.md             analyzer/planner algorithm spec (Polish)
 ```
 
-`packages/core` will contain the business logic currently in `js/analyzer.js`, extracted as pure functions with typed inputs/outputs so it can be shared with a future React Native mobile app. When adding new analyzer or planner features, implement them in `packages/core` (not inline in components), and keep the functions free of any browser/React dependencies.
+Routes: `/` Home · `/tri-coach` `/run-coach` `/swim-coach` `/bike-coach` · `/athlete` · `/dashboard` (PMC, Trends, TrainingInsights) · `/plan` (ATP) · `/calculators?tab=analyzer|nutrition|predictor|vdot` · `/settings`. `/analyzer` and `/run-zones` redirect into `/calculators`.
+
+## Conventions
+
+- **Business logic goes in `packages/core`** as pure typed functions (shared with a future React Native app). Components only fetch + render.
+- **Frontend → API:** `fetch('/api/…', { headers: { Authorization: \`Bearer ${session.access_token}\` } })`. API verifies with `supabase.auth.getUser(jwt)` using the service-role client.
+- **API files are self-contained:** each creates its own Supabase client and has its own copy of the Strava token-refresh helper (no shared module yet). For Strava/Supabase/AI endpoint work, use the `strava-api` skill.
+- **Proportions are computed from time, not distance** (training load). Algorithm details: `training-algorithms` skill.
+- **Styling:** tokens in `:root` of `index.css`; dark mode via `@media (prefers-color-scheme: dark)` only. Discipline colours `--swim #2563eb`, `--bike #16a34a`, `--run #dc2626`, `--tri #7c3aed` — use the discipline class suffix (`.tri`, `.fill-run`…), never hardcode hex. Many components also use inline styles referencing `var(--…)`.
+- UI copy is Polish.
+
+## Env vars
+
+Client (build-time): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_STRAVA_CLIENT_ID`.
+Server: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `APP_URL`, `ANTHROPIC_API_KEY`, `CRON_SECRET`.
