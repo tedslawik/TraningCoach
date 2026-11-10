@@ -5,7 +5,7 @@ import {
 } from '@tricoach/core';
 import { useAuth } from '../../context/AuthContext';
 import { useRaceEvents } from '../../lib/raceEvents';
-import RaceListEditor, { PRIORITY_STYLE, RaceChip, newRace } from '../events/RaceListEditor';
+import RaceListEditor, { PRIORITY_STYLE, RaceChip } from '../events/RaceListEditor';
 
 interface ATPRace extends Partial<SeasonRace> { date: string; priority: RacePriority; label?: string; }
 
@@ -175,7 +175,7 @@ export default function ATPSection() {
   const { session } = useAuth();
   const [plan, setPlan]         = useState<ATPPlan | null | undefined>(undefined);
   const [discipline, setDisc]   = useState<SeasonDiscipline>('triathlon');
-  const [races, setRaces]       = useState<SeasonRace[]>([newRace<SeasonRace>('triathlon')]);
+  const [races, setRaces]       = useState<SeasonRace[]>([]);
   const [generating, setGen]    = useState(false);
   const [error, setError]       = useState<string | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
@@ -215,7 +215,7 @@ export default function ATPSection() {
     }
     return { visible, originals, hidden };
   }, [races, discipline]);
-  const view = useMemo(() => visible.length ? visible : [newRace<SeasonRace>(discipline)], [visible, discipline]);
+  const view = visible;                                              // may be empty — no placeholder rows
   // Write edits back; a race shown as B only because it is off-discipline keeps its own A.
   const setView = (next: SeasonRace[]) => setRaces([
     ...hidden,
@@ -363,6 +363,12 @@ export default function ATPSection() {
               {importMsg && <p style={{ fontSize:12, color:'var(--text-secondary)', marginTop:8, marginBottom:0 }}>{importMsg}</p>}
             </div>
 
+            {view.length === 0 && (
+              <p style={{ fontSize:12, color:'var(--text-secondary)', marginTop:-6, marginBottom:14 }}>
+                Brak startów w tej dyscyplinie — dodaj start albo zaimportuj je z profilu.
+              </p>
+            )}
+
             {/* Live structure preview */}
             {skeleton ? (
               <div style={{ marginBottom:14 }}>
@@ -372,7 +378,7 @@ export default function ATPSection() {
                 <SeasonTimeline phases={skeleton.phases} races={sortedFormRaces} />
               </div>
             ) : (
-              <p style={{ fontSize:12, color:'var(--text-secondary)', marginBottom:14 }}>{validation}</p>
+              view.length > 0 && <p style={{ fontSize:12, color:'var(--text-secondary)', marginBottom:14 }}>{validation}</p>
             )}
 
             <div style={{ display:'flex', gap:8 }}>
