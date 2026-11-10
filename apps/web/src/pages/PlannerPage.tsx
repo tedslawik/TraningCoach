@@ -20,7 +20,7 @@ interface DayPlan { day:string; date:string; sessions?:Session[]; type?:string; 
 // ATP context computed by the API (season phase for the plan's 2 weeks)
 interface AtpRaceCtx { date:string; priority:'A'|'B'|'C'; label?:string; name?:string; distance?:string; }
 interface AtpWeekCtx {
-  weekStart:string; races:AtpRaceCtx[]; targetHours?:number;
+  weekStart:string; races:AtpRaceCtx[]; targetHours?:number; deload?:boolean;
   phase: { name:string; type:string; weekInPhase:number; phaseWeeks:number; focus:string; targetWeeklyTSS:number; targetWeeklyHours?:number; hoursEstimated?:boolean; intensity:string; keyWorkouts:string[] } | null;
 }
 interface AtpContext { discipline:string; weeks:AtpWeekCtx[]; nextA:{ date:string; title:string; weeksAway:number } | null; }
@@ -170,7 +170,7 @@ function AtpContextCard({ ctx, title }: { ctx: AtpContext; title: string }) {
                 <div style={{ fontSize:11, color:'var(--text-secondary)' }}>
                   {!!w.targetHours && <strong style={{ color:'var(--text)' }}>{formatHoursMin(w.targetHours * 60)}{w.phase.hoursEstimated ? ' (szac.)' : ''} · </strong>}
                   intensywność {INTENSITY_LABEL[w.phase.intensity] ?? w.phase.intensity}{w.phase.targetWeeklyTSS ? ` · TSS fazy ≈ ${w.phase.targetWeeklyTSS}` : ''}
-                  {(w.phase.type === 'base' || w.phase.type === 'build') && w.phase.phaseWeeks >= 3 && w.phase.weekInPhase === w.phase.phaseWeeks && ' · tydzień odciążeniowy'}
+                  {(w.deload ?? ((w.phase.type === 'base' || w.phase.type === 'build') && w.phase.phaseWeeks >= 3 && w.phase.weekInPhase === w.phase.phaseWeeks)) && ' · tydzień odciążeniowy'}
                 </div>
               </>
             ) : <div style={{ fontSize:12, color:'var(--text-secondary)' }}>Poza zakresem ATP</div>}

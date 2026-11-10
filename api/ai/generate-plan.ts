@@ -189,6 +189,8 @@ interface SeasonPhaseIn {
   name: string; type: PhaseType; startDate: string; endDate: string; weeks: number; races: SeasonRaceIn[];
   /** Weekly hours computed by the client (planSeasonHours in packages/core) — deterministic, not AI. */
   targetWeeklyHours: number;
+  /** Hours for each week of the phase (deload/taper included), from planSeasonLoad. */
+  weeklyHours: number[];
   targetWeeklyTSS: number;
 }
 
@@ -224,6 +226,9 @@ function parseSeason(body: Record<string, unknown>): { races: SeasonRaceIn[]; ph
       startDate: String(raw.startDate), endDate: String(raw.endDate), weeks,
       races: Array.isArray(raw.races) ? raw.races.map(parseRace).filter((r): r is SeasonRaceIn => !!r) : [],
       targetWeeklyHours: Number(raw.targetWeeklyHours) > 0 && Number(raw.targetWeeklyHours) < 40 ? roundHalf(Number(raw.targetWeeklyHours)) : 0,
+      weeklyHours: Array.isArray(raw.weeklyHours) && raw.weeklyHours.length === weeks
+        && raw.weeklyHours.every(h => Number(h) >= 0 && Number(h) < 40)
+        ? raw.weeklyHours.map(h => roundHalf(Number(h))) : [],
       targetWeeklyTSS: 0,
     });
   }
@@ -239,7 +244,7 @@ function applySeasonLoad(phases: SeasonPhaseIn[], summaries: Array<Record<string
   const fallback = roundHalf(avgWeeklyHours(summaries, discipline)) || 5;
   return phases.map(p => {
     const h = p.targetWeeklyHours || fallback;
-    return { ...p, targetWeeklyHours: h, targetWeeklyTSS: Math.round(h * perHour * TSS_FACTOR[p.type] / 5) * 5 };
+    return { ...p, targetWeeklyHours: h, weeklyHours: p.weeklyHours.length ? p.weeklyHours : new Array(p.weeks).fill(h), targetWeeklyTSS: Math.round(h * perHour * TSS_FACTOR[p.type] / 5) * 5 };
   });
 }
 
@@ -271,7 +276,7 @@ function buildATPPrompt(
   const totalWeeks   = phases.reduce((s, p) => s + p.weeks, 0);
 
   const phaseLines = phases.map((p, i) =>
-    `${i} · ${p.name} · ${p.type} · ${p.startDate} – ${p.endDate} · ${p.weeks} tyg. · ${p.targetWeeklyHours} h/tydz. · TSS ${p.targetWeeklyTSS}/tydz.` +
+    `${i} · ${p.name} · ${p.type} · ${p.startDate} – ${p.endDate} · ${p.weeks} tyg. · ${p.targetWeeklyHours} h/tydz.${p.weeklyHours.length > 1 ? ` (kolejne tyg.: ${p.weeklyHours.join('/')} h)` : ''} · TSS ${p.targetWeeklyTSS}/tydz.` +
     (p.races.length ? ` · starty: ${p.races.map(r => `${r.priority} ${r.date} ${r.label}${r.discipline && r.discipline !== discipline ? ` (${DISCIPLINE_LABELS[r.discipline] ?? r.discipline})` : ''}`).join(', ')}` : ''),
   ).join('\n');
 
@@ -328,8 +333,9 @@ interface AtpWeek {
   phase: { name: string; type: PhaseType; weekInPhase: number; phaseWeeks: number; focus: string;
            targetWeeklyTSS: number; targetWeeklyHours: number; hoursEstimated: boolean;
            intensity: string; keyWorkouts: string[] } | null;
-  /** Total training hours for this week: phase hours, −35% in a deload week. */
+  /** Total training hours for this week: the ATP's per-week hours (older ATPs: phase hours, −35% in a deload week). */
   targetHours: number;
+  deload: boolean;
   races: AtpRace[];
 }
 interface AtpContext {
@@ -365,10 +371,15 @@ async function loadAtpContext(userId: string, sport: string, weekStart: string):
     const weekInPhase = p ? Math.floor((Date.parse(ws) - Date.parse(String(p.startDate))) / (7 * DAY_MS)) + 1 : 0;
     const phaseWeeks  = p ? Number(p.weeks) || 1 : 0;
     const hours = p ? Number(p.targetWeeklyHours) || 0 : 0;
+    const perWeek = p && Array.isArray(p.weeklyHours) ? Number((p.weeklyHours as unknown[])[weekInPhase - 1]) || 0 : 0;
+    const deload = perWeek
+      ? (type === 'base' || type === 'build') && perWeek < hours * 0.8
+      : isDeload(type, weekInPhase, phaseWeeks);
     return {
       weekStart: ws,
       races: races.filter(r => r.date >= ws && r.date <= we),
-      targetHours: hours ? roundHalf(isDeload(type, weekInPhase, phaseWeeks) ? hours * 0.65 : hours) : 0,
+      deload,
+      targetHours: perWeek || (hours ? roundHalf(deload ? hours * 0.65 : hours) : 0),
       phase: p ? {
         name: String(p.name ?? ''), type, weekInPhase, phaseWeeks,
         focus: String(p.focus ?? ''), targetWeeklyTSS: Number(p.targetWeeklyTSS) || 0,
@@ -395,7 +406,7 @@ function atpPromptBlock(ctx: AtpContext): string {
     const head = `TYDZIEŃ ${idx + 1} (od ${w.weekStart}):`;
     if (!w.phase) return `${head} poza zakresem ATP — kontynuuj logicznie poprzedni tydzień.`;
     const p = w.phase;
-    const deload = isDeload(p.type, p.weekInPhase, p.phaseWeeks);
+    const deload = w.deload;
     const lines = [
       `${head} faza „${p.name}” (${p.type}), tydzień ${p.weekInPhase}/${p.phaseWeeks}, intensywność ${INTENSITY_PL[p.intensity] ?? p.intensity}` +
         (p.targetWeeklyTSS ? `, średni tygodniowy TSS fazy ≈ ${p.targetWeeklyTSS}` : ''),

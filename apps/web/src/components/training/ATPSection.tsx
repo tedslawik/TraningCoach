@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
-  buildSeasonSkeleton, validateSeasonRaces, distanceLabel, disciplineOfDistance, seasonStart, planSeasonHours,
+  buildSeasonSkeleton, validateSeasonRaces, distanceLabel, disciplineOfDistance, seasonStart, planSeasonLoad,
   type SeasonRace, type SeasonDiscipline, type RacePriority, type SeasonPhaseType,
 } from '@tricoach/core';
 import { useAuth } from '../../context/AuthContext';
@@ -20,6 +20,7 @@ interface ATPPhase {
   focus?: string;
   targetWeeklyTSS?: number;
   targetWeeklyHours?: number;
+  weeklyHours?: number[];     // per week of the phase (deload/taper included)
   hoursEstimated?: boolean;   // older ATP: hours estimated from TSS by the API
   intensity?: 'low' | 'moderate' | 'high';
   keyWorkouts?: string[];
@@ -135,24 +136,31 @@ function PhaseBar({ phase, selected, onClick }: {
   );
 }
 
-/** Weekly-hours profile of the season, aligned with the phase bars below (same flex widths). */
+/** Weekly-hours profile of the season: one bar per week, grouped by phase (same flex widths as the phase bars). */
 function VolumeProfile({ phases, selected }: { phases: ATPPhase[]; selected?: number | null }) {
-  const max = Math.max(0, ...phases.map(p => p.targetWeeklyHours ?? 0));
+  const weeksOf = (p: ATPPhase) => p.weeklyHours?.length === p.weeks ? p.weeklyHours : new Array(p.weeks).fill(p.targetWeeklyHours ?? 0);
+  const max = Math.max(0, ...phases.flatMap(weeksOf));
   if (!max) return null;
   const H = 54;
+  const weekDate = (p: ATPPhase, k: number) => fmtDate(new Date(Date.parse(p.startDate) + k * 7 * 86400000).toISOString().slice(0, 10));
   return (
     <div style={{ marginBottom:4 }}>
       <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--text-secondary)', marginBottom:2 }}>
-        Godziny / tydzień{phases.some(p => p.hoursEstimated) ? ' (szacunkowo)' : ''}
+        Godziny / tydzień{phases.some(p => p.hoursEstimated) ? ' (szacunkowo)' : ''} · max {max} h
       </div>
       <div style={{ display:'flex', gap:3, alignItems:'flex-end', height:H + 14 }}>
         {phases.map((p, i) => {
-          const h = p.targetWeeklyHours ?? 0;
           const style = PHASE_STYLE[p.type] ?? PHASE_STYLE.base;
+          const ws = weeksOf(p);
           return (
-            <div key={i} title={`${p.name}: ${h ? `${h} h/tydz.` : 'brak'}`} style={{ flex:`${p.weeks} 0 0`, minWidth:22, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-end' }}>
-              {h > 0 && <span style={{ fontSize:9, fontWeight:700, color:'var(--text-secondary)', lineHeight:'12px' }}>{h}</span>}
-              <div style={{ width:'100%', height: Math.max(2, h / max * H), background: style.border, opacity: selected == null || selected === i ? 0.85 : 0.35, borderRadius:'3px 3px 0 0' }} />
+            <div key={i} style={{ flex:`${p.weeks} 0 0`, minWidth:22, display:'flex', flexDirection:'column', alignItems:'stretch', justifyContent:'flex-end' }}>
+              {!!p.targetWeeklyHours && <span style={{ fontSize:9, fontWeight:700, color:'var(--text-secondary)', lineHeight:'12px', textAlign:'center' }}>{p.targetWeeklyHours}</span>}
+              <div style={{ display:'flex', gap:1, alignItems:'flex-end', height:H }}>
+                {ws.map((h, k) => (
+                  <div key={k} title={`${p.name} · tydz. ${k + 1}/${p.weeks} (od ${weekDate(p, k)}): ${h} h`}
+                    style={{ flex:1, height: Math.max(2, h / max * H), background: style.border, opacity: selected == null || selected === i ? 0.85 : 0.35, borderRadius:'2px 2px 0 0' }} />
+                ))}
+              </div>
             </div>
           );
         })}
@@ -287,8 +295,8 @@ export default function ATPSection() {
   const skeleton   = useMemo(() => {
     if (validation) return null;
     const sk = buildSeasonSkeleton(view);
-    const hours = planSeasonHours(sk.phases, effectiveStart);
-    return { ...sk, phases: sk.phases.map((p, i) => ({ ...p, targetWeeklyHours: hours[i] })) };
+    const load = planSeasonLoad(sk.phases, effectiveStart);
+    return { ...sk, phases: sk.phases.map((p, i) => ({ ...p, targetWeeklyHours: load.phaseHours[i], weeklyHours: load.weekHours[i] })) };
   }, [view, validation, effectiveStart]);
 
   const changeDiscipline = (d: SeasonDiscipline) => { setDisc(d); setImportMsg(null); };
@@ -509,13 +517,20 @@ export default function ATPSection() {
                     <div style={{ fontSize:12, color:'var(--text-secondary)', marginTop:2 }}>
                       {fmtDate(selPhase.startDate)} – {fmtDate(selPhase.endDate)} · {selPhase.weeks} tyg.
                     </div>
+                    {selPhase.weeklyHours?.length === selPhase.weeks && (
+                      <div style={{ fontSize:12, color:'var(--text-secondary)', marginTop:4 }}>
+                        Tygodnie: {selPhase.weeklyHours.map((h, k) => (
+                          <span key={k}>{k ? ' · ' : ''}<strong style={{ color:'var(--text)' }}>{h} h</strong></span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div style={{ display:'flex', gap:8 }}>
                     {!!selPhase.targetWeeklyHours && (
                       <div title={selPhase.hoursEstimated ? 'Oszacowane z TSS i Twojej historii — wygeneruj ATP ponownie, aby AI ustaliło godziny' : 'Średni czas treningu w tygodniu tej fazy'}
                         style={{ textAlign:'center', background:'var(--bg-secondary)', borderRadius:'var(--radius-md)', padding:'6px 12px' }}>
                         <div style={{ fontSize:16, fontWeight:700, color:'var(--text)' }}>{selPhase.hoursEstimated ? '~' : ''}{selPhase.targetWeeklyHours} h</div>
-                        <div style={{ fontSize:10, color:'var(--text-secondary)' }}>{selPhase.hoursEstimated ? 'szac. / tydzień' : 'godzin/tydzień'}</div>
+                        <div style={{ fontSize:10, color:'var(--text-secondary)' }}>{selPhase.hoursEstimated ? 'szac. / tydzień' : 'typowy tydzień'}</div>
                       </div>
                     )}
                     {!!selPhase.targetWeeklyTSS && (

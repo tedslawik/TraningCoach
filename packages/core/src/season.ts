@@ -298,16 +298,37 @@ const MAX_WEEKLY_GROWTH = 1.08;   // ramp never exceeds ~8%/week on average
 const SEASON_GROWTH_CAP = 1.6;    // peak ≤ start × 1.6 (unless the distance cap is lower)
 const roundHalf = (h: number) => Math.round(h * 2) / 2;
 
+/** Week k (0-based) of an n-week stretch: linear share from `from` to `to`; one week → midpoint. */
+const glide = (k: number, n: number, from: number, to: number) => n <= 1 ? (from + to) / 2 : from + (to - from) * k / (n - 1);
+
+/** Deload: the last week of a base/build block of 3+ weeks. */
+export function isDeloadWeek(type: SeasonPhaseType, weekInPhase: number, phaseWeeks: number): boolean {
+  return (type === 'base' || type === 'build') && phaseWeeks >= 3 && weekInPhase === phaseWeeks;
+}
+const DELOAD_SHARE = 0.65;
+
+export interface SeasonLoad {
+  /** Typical (non-deload) week of each phase — what the phase "is". */
+  phaseHours: number[];
+  /** Planned hours for every week of each phase (deload, taper and recovery included). */
+  weekHours: number[][];
+}
+
 /**
- * Weekly hours for each phase of the skeleton.
+ * Weekly hours for every week of the skeleton.
  * startHours = the athlete's current (or chosen minimum) weekly volume — the season starts there.
- * Each A race closes a segment: base/build ramp linearly from the segment start to its peak
- * (peak = start × PEAK_GROWTH[distance], low starters lifted toward PEAK_HOURS),
- * taper/race/recovery are shares of that peak; the next segment starts at max(start, 90% of the previous peak).
+ * Each A race closes a segment: base/build ramp week by week from the segment start to its peak
+ * (peak = start × PEAK_GROWTH[distance], low starters lifted toward PEAK_HOURS), the last week of every
+ * 3+ week block is a deload (65%), taper glides 80% → 50% of peak, race week 50%, recovery 35% → 55%;
+ * the next segment starts at max(start, 90% of the previous peak).
  */
-export function planSeasonHours(phases: SeasonPhase[], startHours: number): number[] {
+export function planSeasonLoad(phases: SeasonPhase[], startHours: number): SeasonLoad {
   const start = Math.max(1, startHours || 0);
-  const out: number[] = new Array(phases.length).fill(0);
+  const weeks: number[][] = phases.map(p => new Array(p.weeks).fill(0));
+  const recovery = (pi: number, peak: number) => {
+    const n = phases[pi].weeks;
+    for (let k = 0; k < n; k++) weeks[pi][k] = peak * glide(k, n, 0.35, 0.55);
+  };
   let i = 0, segStartLevel = start, lastPeak = start;
 
   while (i < phases.length) {
@@ -315,46 +336,68 @@ export function planSeasonHours(phases: SeasonPhase[], startHours: number): numb
     let end = i;
     while (end < phases.length && phases[end].type !== 'race') end++;
     const raceIdx = end < phases.length ? end : -1;
-    const seg = phases.slice(i, raceIdx === -1 ? phases.length : raceIdx + 1);
 
     if (raceIdx === -1) {
       // Tail after the last A race: keep form, then off-season.
-      seg.forEach((p, k) => {
-        out[i + k] = p.type === 'transition' ? Math.max(2, lastPeak * LOAD_SHARE.transition)
-                   : p.type === 'recovery'   ? lastPeak * LOAD_SHARE.recovery
-                   : Math.max(start * 0.8, lastPeak * LOAD_SHARE.maintain);
-      });
+      for (let pi = i; pi < phases.length; pi++) {
+        const p = phases[pi];
+        if (p.type === 'recovery') { recovery(pi, lastPeak); continue; }
+        if (p.type === 'transition') { weeks[pi].fill(Math.max(2, lastPeak * LOAD_SHARE.transition)); continue; }
+        const h = Math.max(start * 0.8, lastPeak * LOAD_SHARE.maintain);
+        for (let k = 0; k < p.weeks; k++) weeks[pi][k] = (k + 1) % 4 === 0 ? h * DELOAD_SHARE : h;   // 3 on, 1 off
+      }
       break;
     }
 
     const aRace = phases[raceIdx].races.find(r => r.priority === 'A');
     const dist  = aRace?.distance ?? '';
     const typical = PEAK_HOURS[dist] ?? 12;
-    const ramp  = seg.filter(p => p.type === 'base' || p.type === 'build');
-    const rampWeeks = ramp.reduce((s, p) => s + p.weeks, 0);
+    const rampWeeks = phases.slice(i, raceIdx).filter(p => p.type === 'base' || p.type === 'build').reduce((s, p) => s + p.weeks, 0);
     // Scale the athlete's own volume by the distance's growth; low starters are pulled up toward the
     // typical volume (max ×1.6). Never faster than ~8%/week over the ramp.
     const target = Math.max(segStartLevel * (PEAK_GROWTH[dist] ?? 1.25), Math.min(typical, segStartLevel * SEASON_GROWTH_CAP));
     const peak = Math.max(segStartLevel * 1.05, Math.min(target, segStartLevel * MAX_WEEKLY_GROWTH ** Math.max(1, rampWeeks)));
 
     let elapsed = 0;
-    seg.forEach((p, k) => {
-      if (p.type === 'base' || p.type === 'build') {
-        const mid = elapsed + p.weeks / 2;                       // phase average = level at its midpoint
-        out[i + k] = segStartLevel + (peak - segStartLevel) * (rampWeeks ? Math.min(1, mid / rampWeeks) : 1);
-        elapsed += p.weeks;
-      } else if (p.type === 'peak')       out[i + k] = peak * LOAD_SHARE.peak;
-      else if (p.type === 'race')         out[i + k] = peak * LOAD_SHARE.race;
-      else if (p.type === 'recovery')     out[i + k] = peak * LOAD_SHARE.recovery;
-      else                                out[i + k] = Math.max(2, peak * LOAD_SHARE.transition);
-    });
+    for (let pi = i; pi <= raceIdx; pi++) {
+      const p = phases[pi], n = p.weeks;
+      // No deload right before the taper — the taper itself unloads.
+      const deload = isDeloadWeek(p.type, n, n) && phases[pi + 1]?.type !== 'peak';
+      const loadWeeks = deload ? n - 1 : n;
+      const blockLevel = segStartLevel + (peak - segStartLevel) * (rampWeeks ? (elapsed + loadWeeks / 2) / rampWeeks : 1);
+      for (let k = 0; k < n; k++) {
+        if (p.type === 'base' || p.type === 'build') {
+          // Inside a block the load steps up ~5%/week around the ramp level, then the deload week.
+          weeks[pi][k] = deload && k === n - 1
+            ? blockLevel * DELOAD_SHARE
+            : Math.max(start, Math.min(peak, blockLevel * (1 + 0.05 * (k - (loadWeeks - 1) / 2))));   // start = the athlete's floor
+        } else if (p.type === 'peak')     weeks[pi][k] = peak * glide(k, n, 0.8, 0.5);
+        else if (p.type === 'race')       weeks[pi][k] = peak * LOAD_SHARE.race;
+        else if (p.type === 'recovery')   weeks[pi][k] = peak * glide(k, n, 0.35, 0.55);
+        else                              weeks[pi][k] = Math.max(2, peak * LOAD_SHARE.transition);
+      }
+      if (p.type === 'base' || p.type === 'build') elapsed += n;
+    }
 
     // Recovery right after this race belongs to it (skeleton puts it before the next base).
     let j = raceIdx + 1;
-    while (j < phases.length && phases[j].type === 'recovery') { out[j] = peak * LOAD_SHARE.recovery; j++; }
+    while (j < phases.length && phases[j].type === 'recovery') { recovery(j, peak); j++; }
     lastPeak = peak;
     segStartLevel = Math.max(start, peak * 0.9);          // fitness mostly retained through a short recovery
     i = j;
   }
-  return out.map(roundHalf);
+
+  const weekHours = weeks.map(w => w.map(roundHalf));
+  const phaseHours = phases.map((p, pi) => {
+    const top = Math.max(...weeks[pi]);
+    const normal = p.type === 'base' || p.type === 'build' ? weeks[pi].filter(h => h >= top * 0.8) : weeks[pi];
+    const list = normal.length ? normal : weeks[pi];
+    return roundHalf(list.reduce((a, b) => a + b, 0) / list.length);
+  });
+  return { phaseHours, weekHours };
+}
+
+/** Typical weekly hours per phase (see planSeasonLoad). */
+export function planSeasonHours(phases: SeasonPhase[], startHours: number): number[] {
+  return planSeasonLoad(phases, startHours).phaseHours;
 }
