@@ -209,7 +209,7 @@ function buildATPPrompt(
 ): string {
   const pmc    = calcPMC(summaries);
   const form   = pmc.tsb > 5 ? 'wypoczęty' : pmc.tsb > -10 ? 'optymalny' : 'zmęczony';
-  const recent = summaries.slice(-8);
+  const recent = summaries.slice(0, 8);                         // summaries are newest-first
   const avg    = (k: string) => recent.length ? recent.reduce((s,r)=>s+((r[k] as number)??0),0)/recent.length : 0;
   const avgTSS = Math.round(avg('tss'));
 
@@ -278,7 +278,7 @@ interface AtpWeek {
 interface AtpContext {
   discipline: string;
   weeks: AtpWeek[];
-  nextA: { date: string; title: string; weeksAway: number } | null;
+  nextA: { date: string; title: string; weeksAway: number; distance?: string } | null;
 }
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -315,7 +315,7 @@ async function loadAtpContext(userId: string, sport: string, weekStart: string):
   const a = races.filter(r => r.priority === 'A' && r.date >= weekStart).sort((x, y) => x.date.localeCompare(y.date))[0];
   return {
     discipline, weeks,
-    nextA: a ? { date: a.date, title: raceTitle(a), weeksAway: Math.round((Date.parse(a.date) - Date.parse(weekStart)) / (7 * DAY_MS)) } : null,
+    nextA: a ? { date: a.date, title: raceTitle(a), distance: a.distance, weeksAway: Math.round((Date.parse(a.date) - Date.parse(weekStart)) / (7 * DAY_MS)) } : null,
   };
 }
 
@@ -358,6 +358,40 @@ ZASADY ATP (mają pierwszeństwo przed ogólnymi regułami poniżej):
 - W „assessment” nazwij fazę ATP i powiedz, jak te 2 tygodnie realizują jej cel.`;
 }
 
+/* ── Triathlon time split ──
+   Targets = share of training TIME per discipline for the A-race distance
+   (same numbers as RACE_TARGETS in packages/core/src/targets.ts). */
+const TRI_TARGETS: Record<string, { swim: number; bike: number; run: number; label: string; minBike: number }> = {
+  sprint:  { swim: 15, bike: 45, run: 40, label: 'Sprint',       minBike: 2 },
+  olympic: { swim: 18, bike: 42, run: 40, label: 'Olympic',      minBike: 2 },
+  half:    { swim: 20, bike: 45, run: 35, label: 'Half Ironman', minBike: 3 },
+  full:    { swim: 18, bike: 50, run: 32, label: 'Full Ironman', minBike: 3 },
+};
+
+function triSplitBlock(summaries: Array<Record<string,unknown>>, atp: AtpContext | null, trainingDays: number): string {
+  const distance = atp?.nextA?.distance && TRI_TARGETS[atp.nextA.distance] ? atp.nextA.distance : 'half';
+  const t = TRI_TARGETS[distance];
+  const last4 = summaries.slice(0, 4);                          // newest-first
+  const sum = (k: string) => last4.reduce((a, r) => a + ((r[k] as number) ?? 0), 0);
+  const swim = sum('swim_time_min'), bike = sum('bike_time_min'), run = sum('run_time_min');
+  const total = swim + bike + run;
+  const pct = (v: number) => total ? Math.round(v / total * 100) : 0;
+  const cur = { swim: pct(swim), bike: pct(bike), run: pct(run) };
+  const gaps = (['swim', 'bike', 'run'] as const)
+    .map(k => ({ k, gap: t[k] - cur[k] }))
+    .filter(g => total && Math.abs(g.gap) >= 5);
+  const names = { swim: 'pływanie', bike: 'rower', run: 'bieg' };
+  const minBike = trainingDays >= 5 ? t.minBike : Math.min(2, t.minBike);
+
+  return `
+PROPORCJE CZASU TRENINGU (cel dla ${atp?.nextA ? `startu A: ${t.label}` : `domyślnie ${t.label} — brak startu A w ATP`}):
+- Cel: pływanie ${t.swim}% · rower ${t.bike}% · bieg ${t.run}% łącznego czasu tygodnia.
+- Ostatnie 4 tyg.: ${total ? `pływanie ${cur.swim}% · rower ${cur.bike}% · bieg ${cur.run}% (${Math.round(total / 4 / 60 * 10) / 10} h/tydz.)` : 'brak danych'}.
+${gaps.length ? gaps.map(g => `- ${names[g.k]}: ${g.gap > 0 ? `poniżej celu o ${g.gap} pp → zwiększaj` : `powyżej celu o ${-g.gap} pp → zmniejszaj`} udział stopniowo (ok. 5 pp na tydzień), nie zwiększając łącznego obciążenia ponad ATP.`).join('\n') : '- Proporcje bliskie celu — utrzymaj je.'}
+- Rower: min. ${minBike} sesje/tydzień${minBike >= 3 ? ', w tym długa jazda Z2 w weekend' : ''}; brick (rower + krótki bieg) liczy się jako sesja rowerowa.
+- Licz proporcje z pola "minutes": ${gaps.length ? 'tydzień 1 przesuwa udziały o ok. 5 pp w stronę celu, tydzień 2 o kolejne ~5 pp' : 'oba tygodnie w granicach ±5 pp od celu'} (nie dotyczy tygodnia ze startem lub taperingiem).`;
+}
+
 function buildPrompt(
   summaries: Array<Record<string,unknown>>,
   recentActs: Array<Record<string,unknown>>,
@@ -368,12 +402,16 @@ function buildPrompt(
   profile: { weight?: number; ftp?: number } = {},
   atp: AtpContext | null = null,
 ): string {
-  const recent = summaries.slice(-8);
+  const recent = summaries.slice(0, 8);                         // summaries are newest-first
   const avg = (k: string) => recent.length ? recent.reduce((s,r)=>s+((r[k] as number)??0),0)/recent.length : 0;
 
   const pmc     = calcPMC(summaries);
   const form    = pmc.tsb > 5 ? 'wypoczęty' : pmc.tsb > -10 ? 'optymalny' : 'zmęczony';
   const level   = (() => {
+    if (sport === 'triathlon') {                                // all three disciplines, by weekly hours
+      const hours = (avg('swim_time_min') + avg('bike_time_min') + avg('run_time_min')) / 60;
+      return hours < 5 ? 'początkujący' : hours < 9 ? 'średniozaawansowany' : 'zaawansowany';
+    }
     const run = avg('run_dist_km'), bike = avg('bike_dist_km'), swim = avg('swim_dist_km');
     const primary = sport==='run'?run : sport==='bike'?bike : sport==='swim'?swim*10 : run;
     const th = sport==='swim' ? [30,80] : sport==='bike' ? [60,120] : [15,30];
@@ -402,6 +440,7 @@ ${profile.ftp?`- FTP: ${profile.ftp} W`:''}
 ${hrZoneContext(hrZones)}
 - Dni treningowe: ${trainingDays}/tydzień
 ${sportContext(sport, analysis)}
+${sport === 'triathlon' ? triSplitBlock(summaries, atp, trainingDays) : ''}
 ${atp ? atpPromptBlock(atp) : ''}
 
 TYDZIEŃ 1: ${days7(weekStart)}
@@ -415,15 +454,22 @@ SCHEMAT JSON (odpowiedz TYLKO tym JSON, bez markdown):
       "day": "Pon",
       "date": "${formatDate(weekStart,0)}",
       "sessions": [
-        {"type":"rest","label":"Odpoczynek","distance":"—","duration":"—","description":""}
+        {"type":"rest","label":"Odpoczynek","distance":"—","duration":"—","minutes":0,"description":""}
       ]
     },
     {
       "day": "Wt",
       "date": "${formatDate(weekStart,1)}",
       "sessions": [
-        {"type":"swim","label":"Pływanie techniczne","distance":"2.0km","duration":"50min","description":"Dryle high-elbow + 4x400m w tempie wyścigowym"},
-        {"type":"run","label":"Bieg łatwy","distance":"6km","duration":"35min","description":"Z2, tuż po pływaniu — przyzwyczajenie nóg"}
+        {"type":"swim","label":"Pływanie techniczne","distance":"2.0km","duration":"50min","minutes":50,"description":"Dryle high-elbow + 4x400m w tempie wyścigowym"},
+        {"type":"run","label":"Bieg łatwy","distance":"6km","duration":"35min","minutes":35,"description":"Z2, tuż po pływaniu — przyzwyczajenie nóg"}
+      ]
+    },
+    {
+      "day": "Śr",
+      "date": "${formatDate(weekStart,2)}",
+      "sessions": [
+        {"type":"bike","label":"Rower sweet spot","distance":"40km","duration":"1h30min","minutes":90,"description":"3x12 min 88–93% FTP, przerwy 5 min Z1"}
       ]
     }
   ],
@@ -431,6 +477,7 @@ SCHEMAT JSON (odpowiedz TYLKO tym JSON, bez markdown):
 }
 
 REGUŁY:
+- Każda sesja (poza rest) ma "minutes" — czas trwania w minutach jako liczba, zgodny z "duration"
 - Dokładnie ${trainingDays} dni z co najmniej 1 sesją, reszta = rest (sessions z type=rest)
 ${atp ? '- Obciążenie tygodni zgodnie z ATP (patrz ZASADY ATP)' : '- Tydzień 2 trudniejszy o 5-10% od tygodnia 1'}
 - Nie 2 ciężkie dni pod rząd

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import SectionLabel from '../components/SectionLabel';
+import { summarizeWeek, formatHoursMin } from '@tricoach/core';
 import ATPSection from '../components/training/ATPSection';
 
 type SportType = 'triathlon' | 'run' | 'bike' | 'swim' | 'atp';
@@ -13,7 +14,7 @@ const SPORTS: Array<{ value: SportType; icon: string; label: string; color: stri
   { value: 'swim',      icon: '🏊', label: 'Pływanie',     color: 'var(--swim)' },
 ];
 
-interface Session { type:'rest'|'swim'|'bike'|'run'|'brick'; label:string; distance:string; duration:string; description:string; }
+interface Session { type:'rest'|'swim'|'bike'|'run'|'brick'; label:string; distance:string; duration:string; minutes?:number; description:string; }
 // Supports both new format (sessions[]) and legacy flat format
 interface DayPlan { day:string; date:string; sessions?:Session[]; type?:string; label?:string; distance?:string; duration?:string; description?:string; }
 // ATP context computed by the API (season phase for the plan's 2 weeks)
@@ -85,13 +86,44 @@ function DayCard({ day }: { day: DayPlan }) {
   );
 }
 
+/** Weekly time summary shown next to the 7 day cards: total hours + split per discipline. */
+function WeekSummary({ days }: { days: DayPlan[] }) {
+  const sum = summarizeWeek(days);
+  const rows = (['swim','bike','brick','run'] as const)
+    .map(k => ({ k, min: sum.bySport[k], meta: SPORT_META[k] }))
+    .filter(r => r.min > 0);
+  const pct = (m: number) => sum.totalMin ? Math.round(m / sum.totalMin * 100) : 0;
+  return (
+    <div style={{ background:'var(--bg)', border:'0.5px solid var(--border-md)', borderRadius:'var(--radius-md)', padding:'10px', display:'flex', flexDirection:'column', gap:6, minWidth:0 }}>
+      <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--text-secondary)' }}>Suma tygodnia</div>
+      <div style={{ fontSize:20, fontWeight:800, lineHeight:1.1 }}>{sum.totalMin ? formatHoursMin(sum.totalMin) : '—'}</div>
+      <div style={{ fontSize:10, color:'var(--text-secondary)' }}>{sum.sessions} {sum.sessions === 1 ? 'sesja' : sum.sessions < 5 ? 'sesje' : 'sesji'}</div>
+      {sum.totalMin > 0 && (
+        <div style={{ display:'flex', height:6, borderRadius:3, overflow:'hidden', background:'var(--bg-secondary)' }} aria-hidden>
+          {rows.map(r => <div key={r.k} style={{ width:`${pct(r.min)}%`, background:r.meta.color }} />)}
+        </div>
+      )}
+      {rows.map(r => (
+        <div key={r.k} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11 }}>
+          <span>{r.meta.icon}</span>
+          <span style={{ fontWeight:600, color:r.meta.color }}>{formatHoursMin(r.min)}</span>
+          <span style={{ marginLeft:'auto', color:'var(--text-secondary)' }}>{pct(r.min)}%</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function WeekGrid({ days, label }: { days: DayPlan[]; label: string }) {
   const ordered = DAY_NAMES.map(dn => days.find(d=>d.day===dn) ?? { day:dn, date:'', type:'rest' as const, sport:'rest', label:'Odpoczynek', distance:'—', duration:'—', description:'' });
   return (
     <div style={{ marginBottom:'1.5rem' }}>
       <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--text-secondary)', marginBottom:10 }}>{label}</div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:8, overflowX:'auto', minWidth:700 }}>
-        {ordered.map((d,i) => <DayCard key={i} day={d} />)}
+      <div style={{ overflowX:'auto' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr) 130px', gap:8, minWidth:830 }}>
+          {ordered.map((d,i) => <DayCard key={i} day={d} />)}
+          <WeekSummary days={days} />
+        </div>
       </div>
     </div>
   );

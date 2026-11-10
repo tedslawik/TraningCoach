@@ -60,6 +60,10 @@ The client (`ATPSection`) builds the skeleton (live preview) and POSTs `{ discip
 ### Weekly plan ← ATP
 `api/ai/generate-plan.ts` (`loadAtpContext`, server-side): for the 2-week plan starting `nextMonday()`, reads the latest ATP (`training_plans`, `sport_type='atp'`) when its `discipline` equals the weekly plan's sport, and finds per week the covering phase (name, type, week N/M, focus, phase-average `targetWeeklyTSS`, intensity, key workouts), races in that week and the next A race. `atpPromptBlock` turns it into rules that override the generic ones: weekly TSS ≈ phase average ±10%, last week of a ≥3-week base/build block = deload (−30–40%), intensity by phase, races placed on their day (A taper week, B mini-taper, C replaces the key session). Context is returned by GET/POST (`atpContext`) and stored in `plan_json.atpContext`. Returns null (plan built from training data only) when there is no ATP, it is for another discipline, or doesn't cover these weeks.
 
+### Triathlon weekly plan — time split
+`triSplitBlock` in `generate-plan.ts`: target share of TIME per discipline for the next A race's distance from ATP (`TRI_TARGETS`, same numbers as `RACE_TARGETS`; default `half` without ATP), compared with the last 4 weeks of `weekly_summaries` (`*_time_min`). Gaps ≥ 5 pp are closed gradually (~5 pp per week). Bike minimum: 3 sessions/week for half/full (2 for sprint/olympic or < 5 training days), long Z2 ride at the weekend; brick counts as bike. Triathlete level = average weekly hours (< 5 h beginner, < 9 h intermediate). Note: `weekly_summaries` are fetched newest-first — take `slice(0, n)` for recent weeks.
+Sessions carry `minutes`; `summarizeWeek` / `parseDurationMin` (`weekSummary.ts`) build the planner's weekly hours column, falling back to the `duration` text for older plans.
+
 ## Other modules
 
 - `assessment.ts` — `assessAthlete(input)` → score 0–100 + label/colour, training load from weekly suffer score (<80 low, <250 …), highlights/warnings/recommendations.
