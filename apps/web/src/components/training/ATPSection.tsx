@@ -192,11 +192,26 @@ export default function ATPSection() {
   const validation = useMemo(() => validateSeasonRaces(races, discipline), [races, discipline]);
   const skeleton   = useMemo(() => validation ? null : buildSeasonSkeleton(races), [races, validation]);
 
+  /**
+   * Which races belong in a plan of discipline `d`: its own races, and for triathlon also
+   * single-sport races (as B/C — A must be triathlon). Distances are never rewritten.
+   */
+  const fitRaceToPlan = (r: SeasonRace, d: SeasonDiscipline): SeasonRace | null => {
+    const rd = disciplineOfDistance(r.distance);
+    if (rd === d) return r;
+    if (d === 'triathlon' && rd) return r.priority === 'A' ? { ...r, priority: 'B' } : r;
+    return null;
+  };
+
   const changeDiscipline = (d: SeasonDiscipline) => {
     setDisc(d);
-    setImportMsg(null);
-    // A races must be in the plan discipline: move off-discipline A races to the new discipline's default distance.
-    setRaces(rs => rs.map(r => r.priority === 'A' && disciplineOfDistance(r.distance) !== d ? { ...r, distance: DEFAULT_DISTANCE[d] } : r));
+    const real = races.filter(r => r.date);
+    const kept = real.map(r => fitRaceToPlan(r, d)).filter((r): r is SeasonRace => !!r);
+    const dropped = real.length - kept.length;
+    setRaces(kept.length ? kept : [newRace<SeasonRace>(d)]);
+    setImportMsg(dropped
+      ? `Usunięto z listy ${dropped} ${dropped === 1 ? 'start' : 'starty/startów'} z innej dyscypliny (nie pasują do planu: ${DISCIPLINES.find(x => x.value === d)?.label.toLowerCase()}). Po powrocie do poprzedniej dyscypliny przywrócisz je importem z profilu.`
+      : null);
   };
 
   // Merge the profile's upcoming events (matching this plan's discipline) into the race list.
@@ -208,18 +223,22 @@ export default function ATPSection() {
     const current  = races.filter(r => r.date);                       // drop empty placeholder rows
     const key = (r: SeasonRace) => `${r.date}|${r.distance}`;
     const have = new Set(current.map(key));
-    let demoted = 0;
-    // Skip races already on the list — and duplicates inside the profile itself.
-    const fresh = upcoming.filter(e => { const k = key(e); if (have.has(k)) return false; have.add(k); return true; });
-    const added = fresh.map(e => {
-      const offDiscipline = disciplineOfDistance(e.distance) !== discipline;
-      if (offDiscipline && e.priority === 'A') demoted++;
-      return { date: e.date, priority: offDiscipline && e.priority === 'A' ? 'B' as const : e.priority, distance: e.distance, name: e.name ?? '' };
-    });
+    let demoted = 0, skipped = 0;
+    const added: SeasonRace[] = [];
+    for (const e of upcoming) {
+      const k = key(e);
+      if (have.has(k)) continue;                                      // already listed, or duplicate in profile
+      have.add(k);
+      const r = fitRaceToPlan({ date: e.date, priority: e.priority, distance: e.distance, name: e.name ?? '' }, discipline);
+      if (!r) { skipped++; continue; }
+      if (r.priority !== e.priority) demoted++;
+      added.push(r);
+    }
     setRaces([...current, ...added].sort((a, b) => a.date.localeCompare(b.date)).concat(current.length + added.length ? [] : [newRace<SeasonRace>(discipline)]));
     setImportMsg(
-      (added.length ? `Dodano ${added.length} ${added.length === 1 ? 'start' : 'starty/startów'} z profilu.` : 'Wszystkie starty z profilu są już na liście.') +
-      (demoted ? ` ${demoted} ${demoted === 1 ? 'start A' : 'starty A'} z innej dyscypliny ${demoted === 1 ? 'dodano' : 'dodano'} jako B.` : ''),
+      (added.length ? `Dodano ${added.length} ${added.length === 1 ? 'start' : 'starty/startów'} z profilu.` : 'Brak nowych startów z profilu dla tej dyscypliny.') +
+      (demoted ? ` ${demoted} ${demoted === 1 ? 'start A' : 'starty A'} z innej dyscypliny dodano jako B.` : '') +
+      (skipped ? ` Pominięto ${skipped} z innej dyscypliny.` : ''),
     );
   };
 
