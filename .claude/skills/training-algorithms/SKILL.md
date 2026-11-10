@@ -58,6 +58,7 @@ Mon is always rest; each day's description branches on these flags.
 The client (`ATPSection`) builds the skeleton (live preview) and POSTs `{ discipline, races, phases }`; the API validates shape and merges AI content by index.
 
 ### Weekly plan ← ATP
+- **Hours:** each ATP phase has `targetWeeklyHours` (AI, step 0.5, from current avg hours, ≤ +60% over the season). Older ATPs without it get `fillPhaseHours` = TSS × athlete's own hours/TSS ratio (clamped 30–90 TSS/h), flagged `hoursEstimated`. Week `targetHours` = phase hours, ×0.65 in a deload week; triathlon split converts it into per-discipline hours (shares move ≤5 pp/week toward `TRI_TARGETS`).
 `api/ai/generate-plan.ts` (`loadAtpContext`, server-side): for the 2-week plan starting `nextMonday()`, reads the latest ATP (`training_plans`, `sport_type='atp'`) when its `discipline` equals the weekly plan's sport, and finds per week the covering phase (name, type, week N/M, focus, phase-average `targetWeeklyTSS`, intensity, key workouts), races in that week and the next A race. `atpPromptBlock` turns it into rules that override the generic ones: weekly TSS ≈ phase average ±10%, last week of a ≥3-week base/build block = deload (−30–40%), intensity by phase, races placed on their day (A taper week, B mini-taper, C replaces the key session). Context is returned by GET/POST (`atpContext`) and stored in `plan_json.atpContext`. Returns null (plan built from training data only) when there is no ATP, it is for another discipline, or doesn't cover these weeks.
 
 ### Triathlon weekly plan — time split
