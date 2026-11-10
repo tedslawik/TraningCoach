@@ -310,14 +310,15 @@ input[type=number].input-compact { width: 80px; }
 .tip-item:last-child { border-bottom: none; }
 
 /* ── FOOTER ── */
-footer { background: var(--bg); border-top: 0.5px solid var(--border-md); padding: 3rem 5vw; }
-.footer-inner { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.25rem; }
-.footer-brand { font-size: 17px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 6px; }
-.footer-tagline { font-size: 13px; color: var(--text-secondary); line-height: 1.5; max-width: 420px; }
-.footer-links { display: flex; flex-direction: row; flex-wrap: wrap; gap: 4px 8px; }
-.footer-links a { font-size: 13px; color: var(--text-secondary); text-decoration: none; transition: color 0.15s; padding: 4px 10px; border-radius: var(--radius-md); }
+footer { background: var(--bg); border-top: 0.5px solid var(--border-md); padding: 1rem 5vw; }
+.footer-inner { max-width: 1060px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 16px; }
+.footer-brand { font-size: 14px; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: baseline; gap: 8px; }
+.footer-tagline { font-size: 11px; font-weight: 400; letter-spacing: 0; color: var(--text-secondary); }
+.footer-links { display: flex; flex-wrap: wrap; gap: 2px 4px; }
+.footer-links a { font-size: 12px; color: var(--text-secondary); text-decoration: none; transition: color 0.15s; padding: 2px 8px; border-radius: var(--radius-md); }
 .footer-links a:hover { color: var(--text); background: var(--bg-secondary); }
-.footer-copy { max-width: 1060px; margin: 2rem auto 0; padding-top: 1.5rem; border-top: 0.5px solid var(--border); font-size: 12px; color: var(--text-secondary); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.footer-copy { font-size: 11px; color: var(--text-secondary); display: flex; gap: 8px; }
+@media (max-width: 700px) { .footer-tagline { display: none; } .footer-links { margin-left: -8px; } }
 
 /* ── DASHBOARD (compact density, scoped to .dashboard) ── */
 .dashboard section { padding: 1.75rem 5vw; }

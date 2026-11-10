@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 
@@ -224,18 +224,13 @@ export default function TrainingInsights() {
         {error  && <div className="alert alert-warn">{error}</div>}
 
         {sections.length > 0 && (
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))', gap:10 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:10 }}>
             {sections.map(({ def, content }) => (
-              <div key={def.label} style={{ borderLeft:`4px solid ${def.color}`, borderRadius:'var(--radius-md)', background:`${def.color}0d`, padding:'10px 14px' }}>
-                <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', color:def.color, marginBottom:5, display:'flex', alignItems:'center', gap:6 }}>
-                  {def.icon} {def.label}
-                </div>
-                <div style={{ fontSize:13, lineHeight:1.6, color:'var(--text)' }}>{content}</div>
-              </div>
+              <InsightTile key={def.label} icon={def.icon} label={def.label} color={def.color} content={content} />
             ))}
             {usage && (
               <div style={{ fontSize:11, color:'var(--text-secondary)', textAlign:'right', gridColumn:'1 / -1' }}>
-                {usage.cost} · {usage.tokens} tokenów
+                Najedź na temat (lub dotknij), aby zobaczyć analizę · {usage.cost} · {usage.tokens} tokenów
               </div>
             )}
           </div>
@@ -249,5 +244,46 @@ export default function TrainingInsights() {
         )}
       </div>
     </section>
+  );
+}
+
+/** Topic tile that reveals the full analysis in a bubble on hover, focus or tap. */
+function InsightTile({ icon, label, color, content }: { icon: string; label: string; color: string; content: string }) {
+  const [open, setOpen]   = useState(false);
+  const [alignRight, setAlignRight] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const id  = useId();
+  const teaser = content.split(/(?<=[.!?])\s/)[0];
+
+  const show = () => {
+    const r = ref.current?.getBoundingClientRect();
+    if (r) setAlignRight(r.left + 380 > window.innerWidth - 16);
+    setOpen(true);
+  };
+
+  return (
+    <div ref={ref} style={{ position:'relative' }} onMouseEnter={show} onMouseLeave={() => setOpen(false)}>
+      <button type="button" onClick={show} onFocus={show} onBlur={() => setOpen(false)}
+        onKeyDown={e => { if (e.key === 'Escape') setOpen(false); }}
+        aria-expanded={open} aria-describedby={open ? id : undefined}
+        style={{ width:'100%', textAlign:'left', cursor:'help', border:'none', borderRadius:'var(--radius-md)', background:`${color}${open ? '1f' : '0d'}`, padding:'10px 12px', fontFamily:'var(--font)', color:'var(--text)', transition:'background 0.12s', boxShadow:`inset 4px 0 0 ${color}` }}>
+        <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color, marginBottom:4, display:'flex', alignItems:'center', gap:6 }}>
+          {icon} {label}<span style={{ marginLeft:'auto', opacity:0.6, fontSize:12 }} aria-hidden>ⓘ</span>
+        </div>
+        <div style={{ fontSize:12, lineHeight:1.45, color:'var(--text-secondary)', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
+          {teaser}
+        </div>
+      </button>
+      {open && (
+        // paddingTop bridges the gap so moving the mouse into the bubble keeps it open
+        <div style={{ position:'absolute', top:'100%', [alignRight ? 'right' : 'left']:0, paddingTop:6, zIndex:50, width:'min(380px, calc(100vw - 32px))' }}>
+          <div role="tooltip" id={id}
+            style={{ background:'var(--bg)', border:'0.5px solid var(--border-md)', borderTop:`3px solid ${color}`, borderRadius:'var(--radius-md)', boxShadow:'0 10px 30px rgba(0,0,0,0.15)', padding:'12px 14px', fontSize:13, lineHeight:1.6, color:'var(--text)', maxHeight:'60vh', overflowY:'auto' }}>
+            <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color, marginBottom:6 }}>{icon} {label}</div>
+            {content}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
