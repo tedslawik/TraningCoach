@@ -4,6 +4,8 @@ interface Props {
   data: WeeklySummary[];
   metric?: 'distance' | 'time';
   height?: number;
+  /** SVG viewBox width — keep close to the rendered width so text stays legible. */
+  width?: number;
 }
 
 function weekLabel(ws: string) {
@@ -15,7 +17,7 @@ const SWIM_COLOR = '#93c5fd';
 const BIKE_COLOR = '#86efac';
 const RUN_COLOR  = '#fca5a5';
 
-export default function TrendsChart({ data, metric = 'distance', height = 180 }: Props) {
+export default function TrendsChart({ data, metric = 'distance', height = 170, width = 520 }: Props) {
   if (!data.length) return null;
 
   const last12 = [...data].sort((a, b) => a.weekStart.localeCompare(b.weekStart)).slice(-12);
@@ -37,8 +39,8 @@ export default function TrendsChart({ data, metric = 'distance', height = 180 }:
   const step    = maxVal / 4;
   const yTicks  = [0, 1, 2, 3, 4].map(i => Math.round(i * step));
 
-  const W      = 800;
-  const padL   = 40;
+  const W      = width;
+  const padL   = 38;
   const padR   = 12;
   const padT   = 8;
   const padB   = 28;
@@ -53,7 +55,7 @@ export default function TrendsChart({ data, metric = 'distance', height = 180 }:
     <div>
       {/* Chart */}
       <div style={{ width: '100%', overflowX: 'auto' }}>
-        <svg viewBox={`0 0 ${W} ${height}`} style={{ width: '100%', minWidth: 480, display: 'block' }}>
+        <svg viewBox={`0 0 ${W} ${height}`} style={{ width: '100%', minWidth: 340, display: 'block' }}>
           {/* Y grid + labels */}
           {yTicks.map(tick => {
             const y = padT + chartH - (tick / maxVal) * chartH;
@@ -84,14 +86,14 @@ export default function TrendsChart({ data, metric = 'distance', height = 180 }:
                 <rect x={x} y={baseY - swimH} width={barW} height={Math.max(swimH, 0)} fill={SWIM_COLOR} rx={2} />
                 <rect x={x} y={baseY - swimH - bikeH} width={barW} height={Math.max(bikeH, 0)} fill={BIKE_COLOR} />
                 <rect x={x} y={baseY - swimH - bikeH - runH} width={barW} height={Math.max(runH, 0)} fill={RUN_COLOR} />
-                <text
+                {(W >= 640 || i % 2 === 0 || isCurrentWeek) && <text
                   x={x + barW / 2} y={padT + chartH + 18}
                   textAnchor="middle" fontSize={9}
                   fill={isCurrentWeek ? 'var(--tri)' : 'var(--text-secondary)'}
                   fontWeight={isCurrentWeek ? 700 : 400}
                 >
                   {weekLabel(s.weekStart)}
-                </text>
+                </text>}
               </g>
             );
           })}
@@ -99,20 +101,20 @@ export default function TrendsChart({ data, metric = 'distance', height = 180 }:
       </div>
 
       {/* Legend — HTML below chart */}
-      <div style={{ display: 'flex', gap: 20, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 14, justifyContent: 'center', marginTop: 6, flexWrap: 'wrap' }}>
         {[
           ['Pływanie', SWIM_COLOR],
           ['Rower',    BIKE_COLOR],
           ['Bieg',     RUN_COLOR],
         ].map(([label, color]) => (
           <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 12, height: 12, background: color, borderRadius: 3, flexShrink: 0 }} />
-            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{label}</span>
+            <div style={{ width: 10, height: 10, background: color, borderRadius: 3, flexShrink: 0 }} />
+            <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{label}</span>
           </div>
         ))}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 12, height: 12, background: 'var(--tri)', opacity: 0.25, borderRadius: 3, flexShrink: 0 }} />
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Aktualny tydzień</span>
+          <div style={{ width: 10, height: 10, background: 'var(--tri)', opacity: 0.25, borderRadius: 3, flexShrink: 0 }} />
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Aktualny tydzień</span>
         </div>
       </div>
     </div>

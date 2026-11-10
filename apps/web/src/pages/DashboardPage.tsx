@@ -113,63 +113,65 @@ export default function DashboardPage() {
   const noData = summaries.length === 0;
 
   return (
-    <>
+    <div className="dashboard">
       {/* ── HERO ── */}
-      <section style={{ background: 'var(--bg-tertiary)', padding: '3rem 5vw 2.5rem' }}>
+      <section style={{ background: 'var(--bg-tertiary)', padding: '1.75rem 5vw 1.5rem' }}>
         <div style={{ maxWidth: 1060, margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
             <div>
-              <p style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-secondary)', marginBottom: 8 }}>Dashboard</p>
-              <h1 style={{ fontSize: 'clamp(26px,4vw,42px)', fontWeight: 700, letterSpacing: -1.5, lineHeight: 1.1 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-secondary)', marginBottom: 4 }}>Dashboard</p>
+              <h1 style={{ fontSize: 'clamp(22px,3vw,30px)', fontWeight: 700, letterSpacing: -1, lineHeight: 1.15 }}>
                 Cześć, <em style={{ fontStyle: 'normal', color: 'var(--tri)' }}>{name}</em>!
               </h1>
             </div>
 
             {/* Sync button */}
             {stravaToken && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  {lastSynced && <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Ostatnio: {lastSynced}</span>}
+                  {syncMsg && <span style={{ fontSize: 11, color: syncMsg.startsWith('Błąd') ? '#ef4444' : '#22c55e' }}>{syncMsg}</span>}
+                </div>
                 <button
                   onClick={handleSync}
                   disabled={syncing}
-                  style={{ padding: '9px 18px', borderRadius: 'var(--radius-md)', background: syncing ? 'var(--bg-secondary)' : 'var(--text)', color: syncing ? 'var(--text-secondary)' : 'var(--bg)', border: 'none', fontSize: 13, fontWeight: 600, cursor: syncing ? 'not-allowed' : 'pointer', fontFamily: 'var(--font)', transition: 'all 0.15s' }}
+                  style={{ padding: '7px 14px', borderRadius: 'var(--radius-md)', background: syncing ? 'var(--bg-secondary)' : 'var(--text)', color: syncing ? 'var(--text-secondary)' : 'var(--bg)', border: 'none', fontSize: 12, fontWeight: 600, cursor: syncing ? 'not-allowed' : 'pointer', fontFamily: 'var(--font)', transition: 'all 0.15s' }}
                 >
                   {syncing ? '↻ Synchronizacja…' : '↻ Syncuj historię'}
                 </button>
-                {lastSynced && <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Ostatnio: {lastSynced}</span>}
-                {syncMsg && <span style={{ fontSize: 11, color: syncMsg.startsWith('Błąd') ? '#ef4444' : '#22c55e' }}>{syncMsg}</span>}
               </div>
             )}
           </div>
         </div>
       </section>
 
-      {/* ── UPCOMING RACES ── */}
-      {user && <UpcomingEvents />}
-
       {noData ? (
-        /* ── NO DATA STATE ── */
-        <section>
-          <div className="section-inner narrow" style={{ textAlign: 'center', padding: '4rem 5vw' }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
-            <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 12 }}>Brak danych historycznych</h2>
-            <p style={{ fontSize: 15, color: 'var(--text-secondary)', marginBottom: 24, lineHeight: 1.6 }}>
-              Kliknij <strong>↻ Syncuj historię</strong> powyżej, żeby pobrać ostatnie 16 tygodni ze Stravy.<br />
-              Trwa to chwilę — po synchronizacji zobaczysz trendy, PMC i predyktor wyścigu.
-            </p>
-            {!stravaToken && (
-              <Link to="/athlete" className="btn-primary">Połącz Stravę →</Link>
-            )}
-          </div>
-        </section>
+        <>
+          {user && <UpcomingEvents />}
+          {/* ── NO DATA STATE ── */}
+          <section>
+            <div className="section-inner narrow" style={{ textAlign: 'center', padding: '2rem 0' }}>
+              <div style={{ fontSize: 36, marginBottom: 10 }}>📊</div>
+              <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Brak danych historycznych</h2>
+              <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 18, lineHeight: 1.6 }}>
+                Kliknij <strong>↻ Syncuj historię</strong> powyżej, żeby pobrać ostatnie 16 tygodni ze Stravy.<br />
+                Trwa to chwilę — po synchronizacji zobaczysz trendy, PMC i predyktor wyścigu.
+              </p>
+              {!stravaToken && (
+                <Link to="/athlete" className="btn-primary">Połącz Stravę →</Link>
+              )}
+            </div>
+          </section>
+        </>
       ) : (
         <>
-          {/* ── THIS WEEK vs LAST WEEK ── */}
+          {/* ── THIS WEEK + FORM ── */}
           <section>
             <div className="section-inner">
               <div className="section-header">
                 <SectionLabel discipline="tri">Ten tydzień</SectionLabel>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10 }}>
                 {[
                   { label: 'Pływanie', color: 'var(--swim)', icon: '🏊', cur: thisWeek, prev: lastWeek, dist: (s: WeeklySummary) => s.swimDistKm, time: (s: WeeklySummary) => s.swimTimeMin },
                   { label: 'Rower',    color: 'var(--bike)', icon: '🚴', cur: thisWeek, prev: lastWeek, dist: (s: WeeklySummary) => s.bikeDistKm, time: (s: WeeklySummary) => s.bikeTimeMin },
@@ -179,14 +181,14 @@ export default function DashboardPage() {
                   const prevDist = prev ? dist(prev) : null;
                   const delta = prevDist != null ? curDist - prevDist : null;
                   return (
-                    <div key={label} style={{ background: 'var(--bg)', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '1.25rem', borderTop: `3px solid ${color}` }}>
-                      <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>{icon} {label}</div>
-                      <div style={{ fontSize: 26, fontWeight: 700, color, lineHeight: 1 }}>{curDist.toFixed(1)} km</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                    <div key={label} style={{ background: 'var(--bg)', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 12px', borderTop: `3px solid ${color}`, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>{icon} {label}</div>
+                      <div style={{ fontSize: 'clamp(16px,4.5vw,22px)', fontWeight: 700, color, lineHeight: 1.1, whiteSpace: 'nowrap' }}>{curDist.toFixed(1)} km</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3 }}>
                         {cur ? `${Math.round(time(cur))} min` : '0 min'}
                         {delta != null && (
-                          <span style={{ marginLeft: 8, color: delta >= 0 ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
-                            {delta >= 0 ? '+' : ''}{delta.toFixed(1)} km vs zeszły tydzień
+                          <span title="vs zeszły tydzień" style={{ marginLeft: 6, color: delta >= 0 ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
+                            {delta >= 0 ? '+' : ''}{delta.toFixed(1)} km
                           </span>
                         )}
                       </div>
@@ -197,18 +199,18 @@ export default function DashboardPage() {
 
               {/* PMC summary */}
               {currentPMC && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginTop: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10, marginTop: 10 }}>
                   {[
-                    { label: 'CTL — forma bazowa', value: currentPMC.ctl, color: '#60a5fa', hint: currentPMC.ctl < 40 ? 'Budowanie' : currentPMC.ctl < 70 ? 'Dobra baza' : 'Wysoka forma' },
-                    { label: 'ATL — zmęczenie',    value: currentPMC.atl, color: '#fb923c', hint: currentPMC.atl > currentPMC.ctl + 10 ? 'Duże zmęczenie' : 'OK' },
-                    { label: 'Form (CTL−ATL)',      value: currentPMC.tsb, color: currentPMC.tsb >= 0 ? '#22c55e' : '#ef4444', hint: currentPMC.tsb > 5 ? 'Wypoczęty' : currentPMC.tsb > -10 ? 'Optymalny' : 'Zmęczony' },
+                    { label: 'CTL · forma bazowa', value: currentPMC.ctl, color: '#60a5fa', hint: currentPMC.ctl < 40 ? 'Budowanie' : currentPMC.ctl < 70 ? 'Dobra baza' : 'Wysoka forma' },
+                    { label: 'ATL · zmęczenie',    value: currentPMC.atl, color: '#fb923c', hint: currentPMC.atl > currentPMC.ctl + 10 ? 'Duże zmęczenie' : 'OK' },
+                    { label: 'Form · CTL−ATL',     value: currentPMC.tsb, color: currentPMC.tsb >= 0 ? '#22c55e' : '#ef4444', hint: currentPMC.tsb > 5 ? 'Wypoczęty' : currentPMC.tsb > -10 ? 'Optymalny' : 'Zmęczony' },
                   ].map(({ label, value, color, hint }) => (
-                    <div key={label} style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 2 }}>{label}</div>
+                    <div key={label} style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
                         <div style={{ fontSize: 10, color, fontWeight: 600 }}>{hint}</div>
                       </div>
-                      <div style={{ fontSize: 28, fontWeight: 800, color }}>{value > 0 ? '+' : ''}{value}</div>
+                      <div style={{ fontSize: 'clamp(16px,4.5vw,22px)', fontWeight: 800, color }}>{value > 0 ? '+' : ''}{value}</div>
                     </div>
                   ))}
                 </div>
@@ -216,28 +218,24 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          {/* ── TRENDS CHART ── */}
-          <section className="alt">
-            <div className="section-inner">
-              <div className="section-header">
-                <SectionLabel discipline="tri">Trendy objętości</SectionLabel>
-                <h2>Ostatnie 12 tygodni</h2>
-              </div>
-              <TrendsChart data={summaries} metric="distance" />
-            </div>
-          </section>
+          {/* ── UPCOMING RACES ── */}
+          {user && <UpcomingEvents />}
 
-          {/* ── PMC CHART ── */}
-          <section>
-            <div className="section-inner">
-              <div className="section-header">
-                <SectionLabel discipline="tri">Performance Management Chart</SectionLabel>
-                <h2>Forma, zmęczenie i gotowość</h2>
-                <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                  <strong>CTL</strong> (niebieska) = forma bazowa budowana przez tygodnie. <strong>ATL</strong> (pomarańczowa) = aktualne zmęczenie. <strong>Form</strong> (zielona/przerywana) = CTL−ATL — im wyższy, tym bardziej wypoczęty.
-                </p>
+          {/* ── CHARTS: trends + PMC side by side ── */}
+          <section className="alt">
+            <div className="section-inner dash-grid-2">
+              <div className="dash-card">
+                <div className="dash-card-title">Trendy objętości</div>
+                <div className="dash-card-sub">Ostatnie 12 tygodni · km</div>
+                <TrendsChart data={summaries} metric="distance" />
               </div>
-              <PMCChart data={pmc} />
+              <div className="dash-card">
+                <div className="dash-card-title">Forma i zmęczenie (PMC)</div>
+                <div className="dash-card-sub" title="CTL = forma bazowa budowana przez tygodnie · ATL = aktualne zmęczenie · Form = CTL − ATL, im wyżej, tym bardziej wypoczęty">
+                  CTL forma bazowa · ATL zmęczenie · Form = CTL − ATL
+                </div>
+                <PMCChart data={pmc} />
+              </div>
             </div>
           </section>
 
@@ -247,10 +245,10 @@ export default function DashboardPage() {
           {/* ── QUICK NAV ── */}
           <section>
             <div className="section-inner">
-              <div className="section-header center">
-                <h2>Coaching</h2>
+              <div className="section-header">
+                <SectionLabel discipline="tri">Coaching</SectionLabel>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(100px,1fr))', gap: 12 }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {[
                   { to:'/plan',       icon:'🗓️', label:'Plan',       color:'var(--tri)',  tabId: null },
                   { to:'/calculators', icon:'🧮', label:'Kalkulatory', color:'var(--tri)',  tabId: null },
@@ -259,12 +257,12 @@ export default function DashboardPage() {
                   { to:'/swim-coach', icon:'🏊', label:'Swim Coach', color:'var(--swim)', tabId: 'tab_swim' },
                   { to:'/bike-coach', icon:'🚴', label:'Bike Coach', color:'var(--bike)', tabId: 'tab_bike' },
                 ].filter(c => !c.tabId || isEnabled(c.tabId as Parameters<typeof isEnabled>[0])).map(c => (
-                  <Link key={c.to} to={c.to} style={{ display:'block', textDecoration:'none', background:'var(--bg)', border:'0.5px solid var(--border-md)', borderRadius:'var(--radius-lg)', padding:'1.25rem', textAlign:'center', transition:'transform 0.15s, box-shadow 0.15s' }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform='translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow='0 8px 24px rgba(0,0,0,0.08)'; }}
+                  <Link key={c.to} to={c.to} style={{ display:'flex', alignItems:'center', gap:8, textDecoration:'none', background:'var(--bg)', border:'0.5px solid var(--border-md)', borderRadius:'var(--radius-md)', padding:'8px 14px', transition:'transform 0.15s, box-shadow 0.15s' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform='translateY(-1px)'; (e.currentTarget as HTMLElement).style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform=''; (e.currentTarget as HTMLElement).style.boxShadow=''; }}
                   >
-                    <div style={{ fontSize: 32, marginBottom: 8 }}>{c.icon}</div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: c.color }}>{c.label}</div>
+                    <span style={{ fontSize: 18 }}>{c.icon}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: c.color }}>{c.label}</span>
                   </Link>
                 ))}
               </div>
@@ -272,6 +270,6 @@ export default function DashboardPage() {
           </section>
         </>
       )}
-    </>
+    </div>
   );
 }

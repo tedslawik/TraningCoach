@@ -210,31 +210,31 @@ export default function TrainingInsights() {
   return (
     <section className="alt">
       <div className="section-inner">
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'1.25rem', flexWrap:'wrap', gap:12 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'0.9rem', flexWrap:'wrap', gap:12 }}>
           <div>
-            <p style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--tri)', marginBottom:4 }}>AI Coach</p>
-            <h2 style={{ fontSize:'clamp(18px,2.5vw,24px)', fontWeight:700, letterSpacing:-0.5 }}>Analiza treningowa</h2>
+            <p style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--tri)', marginBottom:2 }}>AI Coach</p>
+            <h2 style={{ fontSize:'clamp(17px,2vw,20px)', fontWeight:700, letterSpacing:-0.4 }}>Analiza treningowa</h2>
           </div>
-          {!loading && <button onClick={analyze} style={{ padding:'9px 20px', borderRadius:'var(--radius-md)', background:'linear-gradient(135deg,var(--tri),#5b21b6)', color:'#fff', border:'none', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'var(--font)', display:'flex', alignItems:'center', gap:8 }}>
+          {!loading && <button onClick={analyze} style={{ padding:'7px 14px', borderRadius:'var(--radius-md)', background:'linear-gradient(135deg,var(--tri),#5b21b6)', color:'#fff', border:'none', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'var(--font)', display:'flex', alignItems:'center', gap:8 }}>
             <span>🤖</span> {text ? 'Odśwież analizę' : 'Analizuj treningi'}
           </button>}
         </div>
 
-        {loading && <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text-secondary)', fontSize:14 }}>✨ Analizuję Twoje biegi…</div>}
+        {loading && <div style={{ textAlign:'center', padding:'0.75rem', color:'var(--text-secondary)', fontSize:13 }}>✨ Analizuję Twoje biegi…</div>}
         {error  && <div className="alert alert-warn">{error}</div>}
 
         {sections.length > 0 && (
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))', gap:10 }}>
             {sections.map(({ def, content }) => (
-              <div key={def.label} style={{ borderLeft:`4px solid ${def.color}`, borderRadius:'var(--radius-md)', background:`${def.color}0d`, padding:'12px 16px' }}>
-                <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', color:def.color, marginBottom:7, display:'flex', alignItems:'center', gap:6 }}>
+              <div key={def.label} style={{ borderLeft:`4px solid ${def.color}`, borderRadius:'var(--radius-md)', background:`${def.color}0d`, padding:'10px 14px' }}>
+                <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', color:def.color, marginBottom:5, display:'flex', alignItems:'center', gap:6 }}>
                   {def.icon} {def.label}
                 </div>
-                <div style={{ fontSize:14, lineHeight:1.7, color:'var(--text)' }}>{content}</div>
+                <div style={{ fontSize:13, lineHeight:1.6, color:'var(--text)' }}>{content}</div>
               </div>
             ))}
             {usage && (
-              <div style={{ fontSize:11, color:'var(--text-secondary)', textAlign:'right', marginTop:4 }}>
+              <div style={{ fontSize:11, color:'var(--text-secondary)', textAlign:'right', gridColumn:'1 / -1' }}>
                 {usage.cost} · {usage.tokens} tokenów
               </div>
             )}
@@ -242,7 +242,7 @@ export default function TrainingInsights() {
         )}
 
         {!text && !loading && !error && (
-          <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text-secondary)', fontSize:14, lineHeight:1.6 }}>
+          <div style={{ textAlign:'center', padding:'0.75rem', color:'var(--text-secondary)', fontSize:13, lineHeight:1.6 }}>
             Kliknij przycisk powyżej — AI przeanalizuje 7 ostatnich biegów (kadencja, EF, suffer, temperatura, typ treningu) <br/>
             oraz proporcje treningowe S/B/R z ostatnich 4 tygodni.
           </div>

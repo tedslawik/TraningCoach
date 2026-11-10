@@ -14,7 +14,7 @@ export default function UpcomingEvents({ limit = 5 }: { limit?: number }) {
   return (
     <section>
       <div className="section-inner">
-        <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', flexWrap:'wrap', gap:12, marginBottom:'1rem' }}>
+        <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', flexWrap:'wrap', gap:12, marginBottom:'0.6rem' }}>
           <SectionLabel discipline="tri">Nadchodzące starty</SectionLabel>
           <Link to="/athlete#starty" style={{ fontSize:13, fontWeight:600, color:'var(--tri)' }}>
             {upcoming.length ? 'Zarządzaj startami →' : 'Dodaj starty →'}
@@ -26,14 +26,14 @@ export default function UpcomingEvents({ limit = 5 }: { limit?: number }) {
             Nie masz zaplanowanych startów. Dodaj je w profilu zawodnika — pomogą zaplanować sezon.
           </p>
         ) : (
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:12 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:10 }}>
             {upcoming.map(e => {
               const d = disciplineOfDistance(e.distance);
               const date = new Date(e.date);
               return (
-                <div key={e.id} className="card" style={{ display:'flex', gap:12, alignItems:'center', padding:'12px 14px', borderLeft:`3px solid ${d ? DISCIPLINE_META[d].color : 'var(--border-md)'}` }}>
+                <div key={e.id} className="card" style={{ display:'flex', gap:10, alignItems:'center', padding:'8px 12px', marginBottom:0, borderLeft:`3px solid ${d ? DISCIPLINE_META[d].color : 'var(--border-md)'}` }}>
                   <div style={{ textAlign:'center', minWidth:40 }}>
-                    <div style={{ fontSize:20, fontWeight:700, lineHeight:1 }}>{date.getDate()}</div>
+                    <div style={{ fontSize:18, fontWeight:700, lineHeight:1 }}>{date.getDate()}</div>
                     <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', color:'var(--text-secondary)', letterSpacing:'0.06em' }}>
                       {date.toLocaleDateString('pl-PL', { month:'short' })}
                     </div>
@@ -41,7 +41,7 @@ export default function UpcomingEvents({ limit = 5 }: { limit?: number }) {
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:2 }}>
                       <PriorityBadge p={e.priority} />
-                      <span style={{ fontSize:14, fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                      <span style={{ fontSize:13, fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
                         {e.name || distanceLabel(e.distance)}
                       </span>
                     </div>

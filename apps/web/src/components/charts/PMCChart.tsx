@@ -1,6 +1,11 @@
 import type { PMCPoint } from '@tricoach/core';
 
-interface Props { data: PMCPoint[]; height?: number; }
+interface Props {
+  data: PMCPoint[];
+  height?: number;
+  /** SVG viewBox width — keep close to the rendered width so text stays legible. */
+  width?: number;
+}
 
 function weekLabel(ws: string) {
   return new Date(ws).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
@@ -11,10 +16,10 @@ function linePath(points: [number, number][]) {
   return points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
 }
 
-export default function PMCChart({ data, height = 200 }: Props) {
+export default function PMCChart({ data, height = 170, width = 520 }: Props) {
   if (data.length < 2) return null;
 
-  const W      = 800;
+  const W      = width;
   const padL   = 42;
   const padR   = 12;
   const padT   = 8;
@@ -59,7 +64,7 @@ export default function PMCChart({ data, height = 200 }: Props) {
     <div>
       {/* Chart */}
       <div style={{ width: '100%', overflowX: 'auto' }}>
-        <svg viewBox={`0 0 ${W} ${height}`} style={{ width: '100%', minWidth: 480, display: 'block' }}>
+        <svg viewBox={`0 0 ${W} ${height}`} style={{ width: '100%', minWidth: 340, display: 'block' }}>
           <defs>
             <linearGradient id="tsb-pos" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%"   stopColor="#22c55e" stopOpacity="0.35" />
@@ -120,7 +125,7 @@ export default function PMCChart({ data, height = 200 }: Props) {
 
           {/* X labels every 2 weeks */}
           {data.map((d, i) => {
-            if (i % 2 !== 0 && i !== last) return null;
+            if (i % (W >= 640 ? 2 : 3) !== 0 && i !== last) return null;
             return (
               <text key={i} x={toX(i)} y={padT + chartH + 18} textAnchor="middle" fontSize={9} fill="var(--text-secondary)">
                 {weekLabel(d.weekStart)}
@@ -131,10 +136,10 @@ export default function PMCChart({ data, height = 200 }: Props) {
       </div>
 
       {/* Legend — HTML below chart */}
-      <div style={{ display: 'flex', gap: 24, justifyContent: 'center', marginTop: 10, flexWrap: 'wrap' }}>
-        <LegendLine color="#60a5fa" strokeWidth={3} label="CTL — forma bazowa" />
-        <LegendLine color="#fb923c" strokeWidth={2} label="ATL — zmęczenie" />
-        <LegendDashed color="#22c55e" label="Form (CTL − ATL)" />
+      <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 6, flexWrap: 'wrap' }}>
+        <LegendLine color="#60a5fa" strokeWidth={3} label="CTL" />
+        <LegendLine color="#fb923c" strokeWidth={2} label="ATL" />
+        <LegendDashed color="#22c55e" label="Form" />
         <LegendArea colorPos="#22c55e" colorNeg="#ef4444" label="Obszar formy" />
       </div>
     </div>
@@ -144,10 +149,10 @@ export default function PMCChart({ data, height = 200 }: Props) {
 function LegendLine({ color, strokeWidth, label }: { color: string; strokeWidth: number; label: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <svg width={28} height={14}>
-        <line x1={0} y1={7} x2={28} y2={7} stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+      <svg width={20} height={12}>
+        <line x1={0} y1={6} x2={20} y2={6} stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
       </svg>
-      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{label}</span>
+      <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{label}</span>
     </div>
   );
 }
@@ -155,10 +160,10 @@ function LegendLine({ color, strokeWidth, label }: { color: string; strokeWidth:
 function LegendDashed({ color, label }: { color: string; label: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <svg width={28} height={14}>
-        <line x1={0} y1={7} x2={28} y2={7} stroke={color} strokeWidth={2} strokeDasharray="5,3" strokeLinecap="round" />
+      <svg width={20} height={12}>
+        <line x1={0} y1={6} x2={20} y2={6} stroke={color} strokeWidth={2} strokeDasharray="5,3" strokeLinecap="round" />
       </svg>
-      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{label}</span>
+      <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{label}</span>
     </div>
   );
 }
@@ -167,10 +172,10 @@ function LegendArea({ colorPos, colorNeg, label }: { colorPos: string; colorNeg:
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-        <div style={{ width: 12, height: 14, background: colorPos, opacity: 0.35, borderRadius: '2px 0 0 2px' }} />
-        <div style={{ width: 12, height: 14, background: colorNeg, opacity: 0.30, borderRadius: '0 2px 2px 0' }} />
+        <div style={{ width: 9, height: 11, background: colorPos, opacity: 0.35, borderRadius: '2px 0 0 2px' }} />
+        <div style={{ width: 9, height: 11, background: colorNeg, opacity: 0.30, borderRadius: '0 2px 2px 0' }} />
       </div>
-      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{label}</span>
+      <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{label}</span>
     </div>
   );
 }
