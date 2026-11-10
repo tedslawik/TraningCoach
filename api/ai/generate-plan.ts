@@ -142,6 +142,38 @@ const DISCIPLINE_LABELS: Record<string, string> = {
   triathlon: 'Triathlon', run: 'Bieganie', bike: 'Kolarstwo', swim: 'Pływanie',
 };
 
+/* ── Weekly hours ──
+   Training time of the plan's discipline(s), from weekly_summaries (newest-first). */
+const TIME_KEYS: Record<string, string[]> = {
+  triathlon: ['swim_time_min', 'bike_time_min', 'run_time_min'],
+  swim: ['swim_time_min'], bike: ['bike_time_min'], run: ['run_time_min'],
+};
+function avgWeeklyHours(summaries: Array<Record<string,unknown>>, discipline: string, n = 8): number {
+  const recent = summaries.slice(0, n);
+  if (!recent.length) return 0;
+  const keys = TIME_KEYS[discipline] ?? TIME_KEYS.triathlon;
+  const min = recent.reduce((s, r) => s + keys.reduce((a, k) => a + ((r[k] as number) ?? 0), 0), 0) / recent.length;
+  return min / 60;
+}
+const roundHalf = (h: number) => Math.round(h * 2) / 2;
+/** Hours per TSS point from the athlete's own history; ~55 TSS/h (endurance pace) when there's no data. */
+function hoursPerTss(summaries: Array<Record<string,unknown>>, discipline: string): number {
+  const recent = summaries.slice(0, 8);
+  const tss = recent.length ? recent.reduce((s, r) => s + ((r.tss as number) ?? 0), 0) / recent.length : 0;
+  const h = avgWeeklyHours(summaries, discipline);
+  const ratio = tss > 0 && h > 0 ? h / tss : 1 / 55;
+  return Math.min(1 / 30, Math.max(1 / 90, ratio));            // clamp to a sane 30–90 TSS/h
+}
+/** ATPs generated before hours existed: estimate targetWeeklyHours from targetWeeklyTSS. */
+function fillPhaseHours(phases: Array<Record<string, unknown>>, summaries: Array<Record<string,unknown>>, discipline: string) {
+  const ratio = hoursPerTss(summaries, discipline);
+  return phases.map(p => {
+    if (Number(p.targetWeeklyHours) > 0) return p;
+    const tss = Number(p.targetWeeklyTSS);
+    return tss > 0 ? { ...p, targetWeeklyHours: roundHalf(tss * ratio), hoursEstimated: true } : p;
+  });
+}
+
 const DISCIPLINE_WORKOUTS: Record<string, string> = {
   triathlon: 'Pływanie techniczne, długa jazda Z2, bieg LSR, brick (rower+bieg)',
   run:  'LSR (długi bieg Z2), tempo/próg, interwały (400m–1600m), bieg górski, strides',
@@ -212,6 +244,7 @@ function buildATPPrompt(
   const recent = summaries.slice(0, 8);                         // summaries are newest-first
   const avg    = (k: string) => recent.length ? recent.reduce((s,r)=>s+((r[k] as number)??0),0)/recent.length : 0;
   const avgTSS = Math.round(avg('tss'));
+  const avgHours = Math.round(avgWeeklyHours(summaries, discipline) * 10) / 10;
 
   const discLabel    = DISCIPLINE_LABELS[discipline] ?? discipline;
   const discWorkouts = DISCIPLINE_WORKOUTS[discipline] ?? DISCIPLINE_WORKOUTS.triathlon;
@@ -231,6 +264,7 @@ PROFIL ZAWODNIKA:
 - Dzisiaj: ${new Date().toISOString().split('T')[0]}
 - CTL (forma): ${pmc.ctl} | ATL (zmęczenie): ${pmc.atl} | Form (TSB): ${pmc.tsb > 0?'+':''}${pmc.tsb} (${form})
 - Śr. TSS/tydzień (8 tyg.): ${avgTSS}
+- Śr. czas treningu/tydzień (8 tyg.): ${avgHours ? `${avgHours} h` : 'brak danych'}
 ${discipline === 'triathlon' || discipline === 'swim' ? `- Pływanie: ${avg('swim_dist_km').toFixed(1)} km/tyg` : ''}
 ${discipline === 'triathlon' || discipline === 'bike' ? `- Rower: ${avg('bike_dist_km').toFixed(1)} km/tyg` : ''}
 ${discipline === 'triathlon' || discipline === 'run'  ? `- Bieg: ${avg('run_dist_km').toFixed(1)} km/tyg` : ''}
@@ -253,6 +287,9 @@ ${phaseLines}
 Dla KAŻDEJ fazy (dokładnie ${phases.length} elementów, po jednym na indeks 0–${phases.length - 1}) podaj:
 - focus: jedno zdanie po polsku — cel fazy,
 - targetWeeklyTSS: docelowy średni TSS tygodniowo; zacznij od obecnego poziomu (${avgTSS || 'brak danych — oszacuj ostrożnie'}), w bazie i budowaniu rośnij stopniowo (co 4. tydzień lżejszy), szczyt/tapering −30–50% względem budowania, regeneracja i roztrenowanie ok. 40–50%,
+- targetWeeklyHours: docelowy średni czas treningu tygodniowo w godzinach (krok 0.5), spójny z targetWeeklyTSS; zacznij od obecnego poziomu (${avgHours ? `${avgHours} h` : 'brak danych — oszacuj ostrożnie'}).
+  Orientacyjne szczyty objętości (budowanie) dla amatora: sprint/olympic 6–10 h, 1/2 IM 8–12 h, IM 10–15 h, maraton 5–8 h, półmaraton 4–7 h.
+  Nie przekraczaj ok. +60% obecnego poziomu w całym sezonie ani +10% tydzień do tygodnia; tapering −30–50%, regeneracja/roztrenowanie 40–60% budowania.
 - intensity: "low" | "moderate" | "high",
 - keyWorkouts: 2–4 konkretne kluczowe treningi po polsku; jeśli w fazie jest start B lub C, jeden punkt opisuje, jak go rozegrać.
 
@@ -260,7 +297,7 @@ Odpowiedz TYLKO tym JSON (bez markdown):
 {
   "assessment": "2–3 zdania po polsku: ocena zawodnika i strategia na sezon z uwzględnieniem wszystkich startów",
   "phases": [
-    { "i": 0, "focus": "…", "targetWeeklyTSS": 280, "intensity": "low", "keyWorkouts": ["…", "…"] }
+    { "i": 0, "focus": "…", "targetWeeklyTSS": 280, "targetWeeklyHours": 7.5, "intensity": "low", "keyWorkouts": ["…", "…"] }
   ]
 }`;
 }
@@ -272,7 +309,10 @@ interface AtpRace { date: string; priority: 'A' | 'B' | 'C'; label?: string; nam
 interface AtpWeek {
   weekStart: string;
   phase: { name: string; type: PhaseType; weekInPhase: number; phaseWeeks: number; focus: string;
-           targetWeeklyTSS: number; intensity: string; keyWorkouts: string[] } | null;
+           targetWeeklyTSS: number; targetWeeklyHours: number; hoursEstimated: boolean;
+           intensity: string; keyWorkouts: string[] } | null;
+  /** Total training hours for this week: phase hours, −35% in a deload week. */
+  targetHours: number;
   races: AtpRace[];
 }
 interface AtpContext {
@@ -282,6 +322,9 @@ interface AtpContext {
 }
 
 const DAY_MS = 24 * 3600 * 1000;
+/** Last week of a base/build block of 3+ weeks is a deload week. */
+const isDeload = (type: PhaseType, weekInPhase: number, phaseWeeks: number) =>
+  (type === 'base' || type === 'build') && phaseWeeks >= 3 && weekInPhase === phaseWeeks;
 const isoAddDays = (iso: string, n: number) => new Date(Date.parse(iso + 'T00:00:00Z') + n * DAY_MS).toISOString().slice(0, 10);
 const raceTitle  = (r: AtpRace) => r.name || r.label || r.distance || 'start';
 
@@ -292,19 +335,27 @@ async function loadAtpContext(userId: string, sport: string, weekStart: string):
   if (!pj?.phases?.length) return null;
   const discipline = pj.discipline ?? 'triathlon';             // legacy ATPs were triathlon-only
   if (discipline !== sport) return null;
+  const phases = pj.phases.some(p => !(Number(p.targetWeeklyHours) > 0))
+    ? fillPhaseHours(pj.phases, (await supabase.from('weekly_summaries').select('*').eq('user_id', userId)
+        .order('week_start', { ascending: false }).limit(8)).data ?? [], discipline)
+    : pj.phases;
 
   const races = (pj.races ?? []).filter(r => r?.date && ISO_DATE.test(r.date));
   const weeks: AtpWeek[] = [0, 1].map(k => {
     const ws = isoAddDays(weekStart, 7 * k), we = isoAddDays(ws, 6);
-    const p  = pj.phases!.find(ph => ws >= String(ph.startDate) && ws <= String(ph.endDate));
+    const p  = phases.find(ph => ws >= String(ph.startDate) && ws <= String(ph.endDate));
+    const type = (p && PHASE_TYPES.has(p.type as PhaseType) ? p.type : 'base') as PhaseType;
+    const weekInPhase = p ? Math.floor((Date.parse(ws) - Date.parse(String(p.startDate))) / (7 * DAY_MS)) + 1 : 0;
+    const phaseWeeks  = p ? Number(p.weeks) || 1 : 0;
+    const hours = p ? Number(p.targetWeeklyHours) || 0 : 0;
     return {
       weekStart: ws,
       races: races.filter(r => r.date >= ws && r.date <= we),
+      targetHours: hours ? roundHalf(isDeload(type, weekInPhase, phaseWeeks) ? hours * 0.65 : hours) : 0,
       phase: p ? {
-        name: String(p.name ?? ''), type: (PHASE_TYPES.has(p.type as PhaseType) ? p.type : 'base') as PhaseType,
-        weekInPhase: Math.floor((Date.parse(ws) - Date.parse(String(p.startDate))) / (7 * DAY_MS)) + 1,
-        phaseWeeks: Number(p.weeks) || 1,
+        name: String(p.name ?? ''), type, weekInPhase, phaseWeeks,
         focus: String(p.focus ?? ''), targetWeeklyTSS: Number(p.targetWeeklyTSS) || 0,
+        targetWeeklyHours: hours, hoursEstimated: !!p.hoursEstimated,
         intensity: String(p.intensity ?? ''),
         keyWorkouts: Array.isArray(p.keyWorkouts) ? (p.keyWorkouts as unknown[]).map(String).slice(0, 5) : [],
       } : null,
@@ -327,10 +378,11 @@ function atpPromptBlock(ctx: AtpContext): string {
     const head = `TYDZIEŃ ${idx + 1} (od ${w.weekStart}):`;
     if (!w.phase) return `${head} poza zakresem ATP — kontynuuj logicznie poprzedni tydzień.`;
     const p = w.phase;
-    const deload = (p.type === 'base' || p.type === 'build') && p.phaseWeeks >= 3 && p.weekInPhase === p.phaseWeeks;
+    const deload = isDeload(p.type, p.weekInPhase, p.phaseWeeks);
     const lines = [
       `${head} faza „${p.name}” (${p.type}), tydzień ${p.weekInPhase}/${p.phaseWeeks}, intensywność ${INTENSITY_PL[p.intensity] ?? p.intensity}` +
         (p.targetWeeklyTSS ? `, średni tygodniowy TSS fazy ≈ ${p.targetWeeklyTSS}` : ''),
+      w.targetHours ? `  ŁĄCZNY CZAS TEGO TYGODNIA: ${w.targetHours} h (±10%, suma pól "minutes")${deload ? ' — już obniżony na odciążenie' : ''}` : '',
       p.focus ? `  Fokus fazy: ${p.focus}` : '',
       p.keyWorkouts.length ? `  Kluczowe treningi fazy: ${p.keyWorkouts.join('; ')}` : '',
       deload ? '  To ostatni tydzień bloku → TYDZIEŃ ODCIĄŻENIOWY: TSS −30–40% względem średniej fazy, bez ciężkich akcentów.' : '',
@@ -349,6 +401,7 @@ ${ctx.nextA ? `Najbliższy start A: ${ctx.nextA.title}, ${ctx.nextA.date} (za ${
 ${ctx.weeks.map(weekLine).join('\n')}
 
 ZASADY ATP (mają pierwszeństwo przed ogólnymi regułami poniżej):
+- Łączny czas tygodnia = „ŁĄCZNY CZAS TEGO TYGODNIA” (±10%), jeśli podany — to twardy cel objętości. W tygodniu startu A/B czas może być niższy (tapering).
 - Łączne obciążenie tygodnia ≈ średni TSS fazy z ATP (±10%), chyba że to tydzień odciążeniowy lub startowy; progresja między tygodniami wynika z ATP, nie z reguły „+5–10%”.
 - Intensywność fazy: niska → głównie Z1–Z2, max 1 akcent/tydz.; umiarkowana → 2 akcenty (próg/tempo, sweet spot); wysoka → jakość wyścigowa, krótsza objętość.
 - Wpleć kluczowe treningi fazy w tydzień (nie wszystkie muszą wystąpić co tydzień).
@@ -383,12 +436,29 @@ function triSplitBlock(summaries: Array<Record<string,unknown>>, atp: AtpContext
   const names = { swim: 'pływanie', bike: 'rower', run: 'bieg' };
   const minBike = trainingDays >= 5 ? t.minBike : Math.min(2, t.minBike);
 
+  // Per-discipline hours for each ATP week: shares move ≤5 pp/week from the current split toward the target.
+  const keys = ['swim', 'bike', 'run'] as const;
+  const shift = (from: Record<string, number>) => {
+    const next = Object.fromEntries(keys.map(k => [k, from[k] + Math.max(-5, Math.min(5, t[k] - from[k]))]));
+    const sum = keys.reduce((a, k) => a + next[k], 0);
+    return Object.fromEntries(keys.map(k => [k, next[k] / sum * 100]));
+  };
+  const tShare: Record<string, number> = { swim: t.swim, bike: t.bike, run: t.run };
+  const share1 = total ? shift(cur) : tShare;
+  const share2 = total ? shift(share1) : tShare;
+  const hoursLine = (w: AtpWeek | undefined, share: Record<string, number>, n: number) => {
+    if (!w?.targetHours) return '';
+    const h = (k: typeof keys[number]) => roundHalf(w.targetHours * share[k] / 100);
+    return `- Tydzień ${n}: ${w.targetHours} h → pływanie ≈ ${h('swim')} h · rower ≈ ${h('bike')} h · bieg ≈ ${h('run')} h.`;
+  };
+  const hoursLines = [hoursLine(atp?.weeks[0], share1, 1), hoursLine(atp?.weeks[1], share2, 2)].filter(Boolean).join('\n');
+
   return `
 PROPORCJE CZASU TRENINGU (cel dla ${atp?.nextA ? `startu A: ${t.label}` : `domyślnie ${t.label} — brak startu A w ATP`}):
 - Cel: pływanie ${t.swim}% · rower ${t.bike}% · bieg ${t.run}% łącznego czasu tygodnia.
 - Ostatnie 4 tyg.: ${total ? `pływanie ${cur.swim}% · rower ${cur.bike}% · bieg ${cur.run}% (${Math.round(total / 4 / 60 * 10) / 10} h/tydz.)` : 'brak danych'}.
 ${gaps.length ? gaps.map(g => `- ${names[g.k]}: ${g.gap > 0 ? `poniżej celu o ${g.gap} pp → zwiększaj` : `powyżej celu o ${-g.gap} pp → zmniejszaj`} udział stopniowo (ok. 5 pp na tydzień), nie zwiększając łącznego obciążenia ponad ATP.`).join('\n') : '- Proporcje bliskie celu — utrzymaj je.'}
-- Rower: min. ${minBike} sesje/tydzień${minBike >= 3 ? ', w tym długa jazda Z2 w weekend' : ''}; brick (rower + krótki bieg) liczy się jako sesja rowerowa.
+${hoursLines ? `CZAS NA DYSCYPLINY (z godzin ATP i docelowych proporcji):\n${hoursLines}\n` : ''}- Rower: min. ${minBike} sesje/tydzień${minBike >= 3 ? ', w tym długa jazda Z2 w weekend' : ''}; brick (rower + krótki bieg) liczy się jako sesja rowerowa.
 - Licz proporcje z pola "minutes": ${gaps.length ? 'tydzień 1 przesuwa udziały o ok. 5 pp w stronę celu, tydzień 2 o kolejne ~5 pp' : 'oba tygodnie w granicach ±5 pp od celu'} (nie dotyczy tygodnia ze startem lub taperingiem).`;
 }
 
@@ -501,6 +571,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { data: smr } = await supabase.from('weekly_summaries').select('swim_sessions,bike_sessions,run_sessions').eq('user_id', u2.id).order('week_start',{ascending:false}).limit(4);
     const avgS = smr?.length ? smr.reduce((s,r)=>s+(r.swim_sessions??0)+(r.bike_sessions??0)+(r.run_sessions??0),0)/smr.length : 5;
     const atpContext = sport2 === 'atp' ? null : await loadAtpContext(u2.id, sport2, nextMonday());
+    // ATPs saved before weekly hours existed: estimate them from TSS and the athlete's own hours/TSS ratio.
+    const pj = data?.plan_json as { discipline?: string; phases?: Array<Record<string, unknown>> } | undefined;
+    if (sport2 === 'atp' && pj?.phases?.some(p => !(Number(p.targetWeeklyHours) > 0))) {
+      const { data: hist } = await supabase.from('weekly_summaries').select('*').eq('user_id', u2.id).order('week_start', { ascending:false }).limit(8);
+      pj.phases = fillPhaseHours(pj.phases, hist ?? [], pj.discipline ?? 'triathlon');
+    }
     return res.json({ plan: data ?? null, suggestedDays: Math.max(3,Math.min(6,Math.round(avgS))), atpContext });
   }
 
@@ -566,10 +642,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const mergedPhases = phases.map((p, i) => {
       const a = byIndex.get(i) ?? {};
       const tss = Number(a.targetWeeklyTSS);
+      const hrs = Number(a.targetWeeklyHours);
       return {
         ...p,
         focus: shortStr(a.focus, 300),
         targetWeeklyTSS: Number.isFinite(tss) && tss > 0 ? Math.round(tss) : 0,
+        targetWeeklyHours: Number.isFinite(hrs) && hrs > 0 && hrs < 40 ? roundHalf(hrs) : 0,
         intensity: ['low', 'moderate', 'high'].includes(String(a.intensity)) ? a.intensity : DEFAULT_INTENSITY[p.type],
         keyWorkouts: Array.isArray(a.keyWorkouts) ? a.keyWorkouts.map(w => shortStr(w, 200)).filter(Boolean).slice(0, 5) : [],
       };
@@ -579,7 +657,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       assessment: shortStr(ai.assessment, 1000),
       discipline,
       races: [...races].sort((x, y) => x.date.localeCompare(y.date)),
-      phases: mergedPhases,
+      phases: fillPhaseHours(mergedPhases, summaries ?? [], discipline),
       raceDate: mainRace.date,     // legacy fields, kept for older readers
       raceType: mainRace.distance,
     };

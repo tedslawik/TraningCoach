@@ -20,8 +20,8 @@ interface DayPlan { day:string; date:string; sessions?:Session[]; type?:string; 
 // ATP context computed by the API (season phase for the plan's 2 weeks)
 interface AtpRaceCtx { date:string; priority:'A'|'B'|'C'; label?:string; name?:string; distance?:string; }
 interface AtpWeekCtx {
-  weekStart:string; races:AtpRaceCtx[];
-  phase: { name:string; type:string; weekInPhase:number; phaseWeeks:number; focus:string; targetWeeklyTSS:number; intensity:string; keyWorkouts:string[] } | null;
+  weekStart:string; races:AtpRaceCtx[]; targetHours?:number;
+  phase: { name:string; type:string; weekInPhase:number; phaseWeeks:number; focus:string; targetWeeklyTSS:number; targetWeeklyHours?:number; hoursEstimated?:boolean; intensity:string; keyWorkouts:string[] } | null;
 }
 interface AtpContext { discipline:string; weeks:AtpWeekCtx[]; nextA:{ date:string; title:string; weeksAway:number } | null; }
 interface PlanJson { assessment:string; week1:DayPlan[]; week2:DayPlan[]; atpContext?:AtpContext; }
@@ -87,7 +87,7 @@ function DayCard({ day }: { day: DayPlan }) {
 }
 
 /** Weekly time summary shown next to the 7 day cards: total hours + split per discipline. */
-function WeekSummary({ days }: { days: DayPlan[] }) {
+function WeekSummary({ days, targetHours }: { days: DayPlan[]; targetHours?: number }) {
   const sum = summarizeWeek(days);
   const rows = (['swim','bike','brick','run'] as const)
     .map(k => ({ k, min: sum.bySport[k], meta: SPORT_META[k] }))
@@ -98,6 +98,15 @@ function WeekSummary({ days }: { days: DayPlan[] }) {
       <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--text-secondary)' }}>Suma tygodnia</div>
       <div style={{ fontSize:20, fontWeight:800, lineHeight:1.1 }}>{sum.totalMin ? formatHoursMin(sum.totalMin) : '—'}</div>
       <div style={{ fontSize:10, color:'var(--text-secondary)' }}>{sum.sessions} {sum.sessions === 1 ? 'sesja' : sum.sessions < 5 ? 'sesje' : 'sesji'}</div>
+      {!!targetHours && (() => {
+        const diff = sum.totalMin / 60 - targetHours;
+        const ok = Math.abs(diff) <= targetHours * 0.1;
+        return (
+          <div title="Docelowy czas tygodnia z fazy ATP (±10%)" style={{ fontSize:10, fontWeight:600, color: ok ? 'var(--bike)' : 'var(--text-secondary)' }}>
+            🎯 cel ATP {formatHoursMin(targetHours * 60)}{!ok && sum.totalMin > 0 ? ` (${diff > 0 ? '+' : '−'}${formatHoursMin(Math.abs(diff) * 60)})` : ' ✓'}
+          </div>
+        );
+      })()}
       {sum.totalMin > 0 && (
         <div style={{ display:'flex', height:6, borderRadius:3, overflow:'hidden', background:'var(--bg-secondary)' }} aria-hidden>
           {rows.map(r => <div key={r.k} style={{ width:`${pct(r.min)}%`, background:r.meta.color }} />)}
@@ -114,7 +123,7 @@ function WeekSummary({ days }: { days: DayPlan[] }) {
   );
 }
 
-function WeekGrid({ days, label }: { days: DayPlan[]; label: string }) {
+function WeekGrid({ days, label, targetHours }: { days: DayPlan[]; label: string; targetHours?: number }) {
   const ordered = DAY_NAMES.map(dn => days.find(d=>d.day===dn) ?? { day:dn, date:'', type:'rest' as const, sport:'rest', label:'Odpoczynek', distance:'—', duration:'—', description:'' });
   return (
     <div style={{ marginBottom:'1.5rem' }}>
@@ -122,7 +131,7 @@ function WeekGrid({ days, label }: { days: DayPlan[]; label: string }) {
       <div style={{ overflowX:'auto' }}>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr) 130px', gap:8, minWidth:830 }}>
           {ordered.map((d,i) => <DayCard key={i} day={d} />)}
-          <WeekSummary days={days} />
+          <WeekSummary days={days} targetHours={targetHours} />
         </div>
       </div>
     </div>
@@ -134,6 +143,7 @@ const PHASE_COLOR: Record<string, string> = {
 };
 const PRIORITY_COLOR: Record<string, string> = { A:'#e11d48', B:'#f59e0b', C:'#64748b' };
 const INTENSITY_LABEL: Record<string, string> = { low:'niska', moderate:'umiarkowana', high:'wysoka' };
+const isoPlusDays = (iso: string, n: number) => new Date(Date.parse(iso.slice(0, 10) + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('pl-PL', { day:'numeric', month:'short' });
 
 /** Compact summary of the ATP phase(s) the 2-week plan is built for. */
@@ -158,6 +168,7 @@ function AtpContextCard({ ctx, title }: { ctx: AtpContext; title: string }) {
                   {w.phase.name} <span style={{ fontWeight:500, color:'var(--text-secondary)' }}>· tydz. {w.phase.weekInPhase}/{w.phase.phaseWeeks}</span>
                 </div>
                 <div style={{ fontSize:11, color:'var(--text-secondary)' }}>
+                  {!!w.targetHours && <strong style={{ color:'var(--text)' }}>{formatHoursMin(w.targetHours * 60)}{w.phase.hoursEstimated ? ' (szac.)' : ''} · </strong>}
                   intensywność {INTENSITY_LABEL[w.phase.intensity] ?? w.phase.intensity}{w.phase.targetWeeklyTSS ? ` · TSS fazy ≈ ${w.phase.targetWeeklyTSS}` : ''}
                   {(w.phase.type === 'base' || w.phase.type === 'build') && w.phase.phaseWeeks >= 3 && w.phase.weekInPhase === w.phase.phaseWeeks && ' · tydzień odciążeniowy'}
                 </div>
@@ -286,6 +297,14 @@ export default function PlannerPage() {
   const sp         = SPORTS.find(s => s.value === activeSport)!;
   const planJson   = currentPlan?.plan_json ?? null;
   const week1start = currentPlan?.week_start ?? '';
+  // Target hours per plan week: from the ATP snapshot saved with the plan, else the current ATP if it covers the same week.
+  const targetHoursFor = (i: number) => {
+    const ws = planJson?.atpContext?.weeks[i]?.weekStart ?? '';
+    const snap = planJson?.atpContext?.weeks[i]?.targetHours;
+    if (snap) return snap;
+    const cur = atpCtx[activeSport]?.weeks.find(w => w.weekStart === (ws || (week1start && isoPlusDays(week1start, 7 * i))));
+    return cur?.targetHours || undefined;
+  };
   const week2date  = week1start ? (() => { const d=new Date(week1start); d.setDate(d.getDate()+7); return d.toLocaleDateString('pl-PL',{day:'numeric',month:'long'}); })() : '';
 
   return (
@@ -370,8 +389,8 @@ export default function PlannerPage() {
                 </div>
               )}
 
-              {planJson.week1 && <WeekGrid days={planJson.week1} label={`Tydzień 1 — od ${week1start ? new Date(week1start).toLocaleDateString('pl-PL',{day:'numeric',month:'long'}) : ''}`} />}
-              {planJson.week2 && <WeekGrid days={planJson.week2} label={`Tydzień 2 — od ${week2date}`} />}
+              {planJson.week1 && <WeekGrid days={planJson.week1} targetHours={targetHoursFor(0)} label={`Tydzień 1 — od ${week1start ? new Date(week1start).toLocaleDateString('pl-PL',{day:'numeric',month:'long'}) : ''}`} />}
+              {planJson.week2 && <WeekGrid days={planJson.week2} targetHours={targetHoursFor(1)} label={`Tydzień 2 — od ${week2date}`} />}
 
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12, marginTop:8 }}>
                 <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
