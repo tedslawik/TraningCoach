@@ -281,6 +281,17 @@ export const PEAK_HOURS: Record<string, number> = {
   pool1500: 6, ow3k: 6, ow5k: 7, ow10k: 8,
 };
 
+/**
+ * How much a block before an A race of this distance grows the athlete's OWN volume (peak = start × growth).
+ * Longer races need a bigger build; PEAK_HOURS only lifts low starters toward a typical amateur volume.
+ */
+export const PEAK_GROWTH: Record<string, number> = {
+  sprint: 1.15, olympic: 1.2, half: 1.3, full: 1.4,
+  '5k': 1.15, '10k': 1.15, halfmarathon: 1.2, marathon: 1.3,
+  granfondo: 1.25, race100: 1.2, race200: 1.3, mtb: 1.2,
+  pool1500: 1.15, ow3k: 1.2, ow5k: 1.25, ow10k: 1.3,
+};
+
 /** Share of the segment peak, per phase type outside the base→build ramp. */
 const LOAD_SHARE = { peak: 0.65, race: 0.5, recovery: 0.45, transition: 0.35, maintain: 0.8 } as const;
 const MAX_WEEKLY_GROWTH = 1.08;   // ramp never exceeds ~8%/week on average
@@ -290,8 +301,9 @@ const roundHalf = (h: number) => Math.round(h * 2) / 2;
 /**
  * Weekly hours for each phase of the skeleton.
  * startHours = the athlete's current (or chosen minimum) weekly volume — the season starts there.
- * Each A race closes a segment: base/build ramp linearly from the segment start to its peak,
- * taper/race/recovery are shares of that peak; the next segment starts at max(start, 85% of the previous peak).
+ * Each A race closes a segment: base/build ramp linearly from the segment start to its peak
+ * (peak = start × PEAK_GROWTH[distance], low starters lifted toward PEAK_HOURS),
+ * taper/race/recovery are shares of that peak; the next segment starts at max(start, 90% of the previous peak).
  */
 export function planSeasonHours(phases: SeasonPhase[], startHours: number): number[] {
   const start = Math.max(1, startHours || 0);
@@ -316,13 +328,14 @@ export function planSeasonHours(phases: SeasonPhase[], startHours: number): numb
     }
 
     const aRace = phases[raceIdx].races.find(r => r.priority === 'A');
-    const cap   = PEAK_HOURS[aRace?.distance ?? ''] ?? 12;
+    const dist  = aRace?.distance ?? '';
+    const typical = PEAK_HOURS[dist] ?? 12;
     const ramp  = seg.filter(p => p.type === 'base' || p.type === 'build');
     const rampWeeks = ramp.reduce((s, p) => s + p.weeks, 0);
-    const peak = Math.max(
-      segStartLevel * 1.05,
-      Math.min(cap, segStartLevel * SEASON_GROWTH_CAP, segStartLevel * MAX_WEEKLY_GROWTH ** Math.max(1, rampWeeks)),
-    );
+    // Scale the athlete's own volume by the distance's growth; low starters are pulled up toward the
+    // typical volume (max ×1.6). Never faster than ~8%/week over the ramp.
+    const target = Math.max(segStartLevel * (PEAK_GROWTH[dist] ?? 1.25), Math.min(typical, segStartLevel * SEASON_GROWTH_CAP));
+    const peak = Math.max(segStartLevel * 1.05, Math.min(target, segStartLevel * MAX_WEEKLY_GROWTH ** Math.max(1, rampWeeks)));
 
     let elapsed = 0;
     seg.forEach((p, k) => {
@@ -340,7 +353,7 @@ export function planSeasonHours(phases: SeasonPhase[], startHours: number): numb
     let j = raceIdx + 1;
     while (j < phases.length && phases[j].type === 'recovery') { out[j] = peak * LOAD_SHARE.recovery; j++; }
     lastPeak = peak;
-    segStartLevel = Math.max(start, peak * 0.85);
+    segStartLevel = Math.max(start, peak * 0.9);          // fitness mostly retained through a short recovery
     i = j;
   }
   return out.map(roundHalf);
