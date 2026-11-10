@@ -59,7 +59,12 @@ const raceLabel = (r: ATPRace) => r.label ?? (r.distance ? distanceLabel(r.dista
 
 /** Races from a saved plan, as editable form rows (handles legacy single-race plans). */
 function racesFromPlan(pj: ATPPlanJson): SeasonRace[] {
-  const withDistance = (pj.races ?? []).filter(r => r.distance);
+  const seen = new Set<string>();
+  const withDistance = (pj.races ?? []).filter(r => {
+    const k = `${r.date}|${r.distance}`;
+    if (!r.distance || seen.has(k)) return false;
+    seen.add(k); return true;
+  });
   if (withDistance.length) return withDistance.map(r => ({ date: r.date, priority: r.priority, distance: r.distance!, name: r.name ?? '' }));
   if (pj.raceDate && pj.raceType) return [{ date: pj.raceDate, priority: 'A', distance: pj.raceType, name: '' }];
   return [];
@@ -204,7 +209,9 @@ export default function ATPSection() {
     const key = (r: SeasonRace) => `${r.date}|${r.distance}`;
     const have = new Set(current.map(key));
     let demoted = 0;
-    const added = upcoming.filter(e => !have.has(key(e))).map(e => {
+    // Skip races already on the list — and duplicates inside the profile itself.
+    const fresh = upcoming.filter(e => { const k = key(e); if (have.has(k)) return false; have.add(k); return true; });
+    const added = fresh.map(e => {
       const offDiscipline = disciplineOfDistance(e.distance) !== discipline;
       if (offDiscipline && e.priority === 'A') demoted++;
       return { date: e.date, priority: offDiscipline && e.priority === 'A' ? 'B' as const : e.priority, distance: e.distance, name: e.name ?? '' };
@@ -300,13 +307,19 @@ export default function ATPSection() {
             <label style={{ fontSize:12, color:'var(--text-secondary)', display:'block', marginBottom:6 }}>Starty w sezonie</label>
             <div style={{ marginBottom:14 }}>
               <RaceListEditor races={races} onChange={setRaces} primaryDiscipline={discipline}
-                actions={
+                actions={<>
                   <button type="button" onClick={importFromProfile} disabled={eventsLoading}
-                    title="Dodaj do listy starty zapisane w profilu zawodnika"
+                    title="Dodaj do listy starty zapisane w profilu zawodnika (bez duplikatów)"
                     style={{ padding:'7px 14px', borderRadius:'var(--radius-md)', border:'0.5px solid var(--border-md)', background:'var(--bg)', color:'var(--text)', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'var(--font)' }}>
                     ⬇ Dodaj starty z profilu
                   </button>
-                } />
+                  {races.length > 1 && (
+                    <button type="button" onClick={() => { setRaces([newRace<SeasonRace>(discipline)]); setImportMsg(null); }}
+                      style={{ padding:'7px 14px', borderRadius:'var(--radius-md)', border:'none', background:'none', color:'var(--text-secondary)', fontSize:13, cursor:'pointer', fontFamily:'var(--font)', textDecoration:'underline' }}>
+                      Wyczyść listę
+                    </button>
+                  )}
+                </>} />
               {importMsg && <p style={{ fontSize:12, color:'var(--text-secondary)', marginTop:8, marginBottom:0 }}>{importMsg}</p>}
             </div>
 

@@ -103,6 +103,17 @@ const TRANSITION_WEEKS = 2;
 const MAX_RACES = 20;
 const MAX_HORIZON_WEEKS = 104;
 
+/** Error message if two races share the same date and distance, else null. */
+export function findDuplicateRace(races: SeasonRace[]): string | null {
+  const seen = new Set<string>();
+  for (const r of races) {
+    const k = `${r.date}|${r.distance}`;
+    if (r.date && seen.has(k)) return `Start ${r.date} (${distanceLabel(r.distance)}) jest na liście więcej niż raz — usuń duplikat.`;
+    seen.add(k);
+  }
+  return null;
+}
+
 /**
  * Returns a Polish error message, or null when the race list is usable.
  * A races must match the plan discipline (they drive periodization); B/C races may be any discipline.
@@ -127,6 +138,8 @@ export function validateSeasonRaces(
       return `Start A (${r.date}, ${distanceLabel(r.distance)}) musi być w dyscyplinie planu — starty z innych dyscyplin oznacz jako B lub C.`;
   }
   if (!races.some(r => r.priority === 'A')) return 'Oznacz co najmniej jeden start jako A (główny cel sezonu).';
+  const dup = findDuplicateRace(races);
+  if (dup) return dup;
   return null;
 }
 
@@ -248,7 +261,7 @@ export function validateEvents(events: SeasonRace[]): string | null {
     if (!disciplineOfDistance(e.distance)) return 'Wybierz dystans dla każdego startu.';
     if ((e.name ?? '').length > 60) return 'Nazwa startu może mieć maksymalnie 60 znaków.';
   }
-  return null;
+  return findDuplicateRace(events);
 }
 
 /** Whole days from today (local calendar date) to `date`; negative for past dates. */

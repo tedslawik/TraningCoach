@@ -9,6 +9,8 @@ export interface RaceEvent extends SeasonRace { id?: string }
 const COLUMNS = 'id, date, priority, distance, name';
 
 function friendly(err: { message: string; code?: string }): Error {
+  if (err.code === '23505')
+    return new Error('Taki start (ta sama data i dystans) jest już zapisany — usuń duplikat z listy.');
   if (err.code === '42P01' || err.code === 'PGRST205' || /race_events/.test(err.message) && /exist|find/i.test(err.message))
     return new Error('Brak tabeli race_events w bazie — uruchom migrację supabase/migrations/20261109120000_race_events.sql.');
   return new Error(err.message);
