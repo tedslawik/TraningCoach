@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
-  buildSeasonSkeleton, validateSeasonRaces, distanceLabel, disciplineOfDistance, seasonStart, DEFAULT_DISTANCE,
+  buildSeasonSkeleton, validateSeasonRaces, distanceLabel, disciplineOfDistance, seasonStart,
   type SeasonRace, type SeasonDiscipline, type RacePriority, type SeasonPhaseType,
 } from '@tricoach/core';
 import { useAuth } from '../../context/AuthContext';
