@@ -57,6 +57,18 @@ function fmtDate(d: string) {
 }
 const raceLabel = (r: ATPRace) => r.label ?? (r.distance ? distanceLabel(r.distance) : '');
 
+/**
+ * How a race appears in a plan of discipline `d`: its own races as-is; in a triathlon plan
+ * also single-sport races, as B/C (A must be triathlon). Other races are not shown (null).
+ * Distances are never rewritten.
+ */
+function fitRaceToPlan(r: SeasonRace, d: SeasonDiscipline): SeasonRace | null {
+  const rd = disciplineOfDistance(r.distance);
+  if (rd === d) return r;
+  if (d === 'triathlon' && rd) return r.priority === 'A' ? { ...r, priority: 'B' } : r;
+  return null;
+}
+
 /** Races from a saved plan, as editable form rows (handles legacy single-race plans). */
 function racesFromPlan(pj: ATPPlanJson): SeasonRace[] {
   const seen = new Set<string>();
@@ -185,34 +197,39 @@ export default function ATPSection() {
     const pj = plan?.plan_json;
     if (!pj) return;
     const saved = racesFromPlan(pj);
-    if (saved.length) setRaces(saved);
+    // Merge into the list instead of replacing it, so races of other disciplines stay.
+    if (saved.length) setRaces(prev => {
+      const key = (r: SeasonRace) => `${r.date}|${r.distance}`;
+      const savedKeys = new Set(saved.map(key));
+      return [...prev.filter(r => r.date && !savedKeys.has(key(r))), ...saved].sort((a, b) => a.date.localeCompare(b.date));
+    });
     if (pj.discipline) setDisc(pj.discipline);
   }, [plan]);
 
-  const validation = useMemo(() => validateSeasonRaces(races, discipline), [races, discipline]);
-  const skeleton   = useMemo(() => validation ? null : buildSeasonSkeleton(races), [races, validation]);
+  // `races` holds every race across disciplines; each discipline tab edits only its view.
+  const { visible, originals, hidden } = useMemo(() => {
+    const visible: SeasonRace[] = [], originals: SeasonRace[] = [], hidden: SeasonRace[] = [];
+    for (const r of races) {
+      const f = fitRaceToPlan(r, discipline);
+      if (f) { visible.push(f); originals.push(r); } else hidden.push(r);
+    }
+    return { visible, originals, hidden };
+  }, [races, discipline]);
+  const view = useMemo(() => visible.length ? visible : [newRace<SeasonRace>(discipline)], [visible, discipline]);
+  // Write edits back; a race shown as B only because it is off-discipline keeps its own A.
+  const setView = (next: SeasonRace[]) => setRaces([
+    ...hidden,
+    ...next.map((r, i) => {
+      const orig = originals[i], shown = visible[i];
+      return orig && shown && orig.priority !== shown.priority && r.priority === shown.priority
+        ? { ...r, priority: orig.priority } : r;
+    }),
+  ]);
 
-  /**
-   * Which races belong in a plan of discipline `d`: its own races, and for triathlon also
-   * single-sport races (as B/C — A must be triathlon). Distances are never rewritten.
-   */
-  const fitRaceToPlan = (r: SeasonRace, d: SeasonDiscipline): SeasonRace | null => {
-    const rd = disciplineOfDistance(r.distance);
-    if (rd === d) return r;
-    if (d === 'triathlon' && rd) return r.priority === 'A' ? { ...r, priority: 'B' } : r;
-    return null;
-  };
+  const validation = useMemo(() => validateSeasonRaces(view, discipline), [view, discipline]);
+  const skeleton   = useMemo(() => validation ? null : buildSeasonSkeleton(view), [view, validation]);
 
-  const changeDiscipline = (d: SeasonDiscipline) => {
-    setDisc(d);
-    const real = races.filter(r => r.date);
-    const kept = real.map(r => fitRaceToPlan(r, d)).filter((r): r is SeasonRace => !!r);
-    const dropped = real.length - kept.length;
-    setRaces(kept.length ? kept : [newRace<SeasonRace>(d)]);
-    setImportMsg(dropped
-      ? `Usunięto z listy ${dropped} ${dropped === 1 ? 'start' : 'starty/startów'} z innej dyscypliny (nie pasują do planu: ${DISCIPLINES.find(x => x.value === d)?.label.toLowerCase()}). Po powrocie do poprzedniej dyscypliny przywrócisz je importem z profilu.`
-      : null);
-  };
+  const changeDiscipline = (d: SeasonDiscipline) => { setDisc(d); setImportMsg(null); };
 
   // Merge the profile's upcoming events (matching this plan's discipline) into the race list.
   const importFromProfile = () => {
@@ -220,25 +237,24 @@ export default function ATPSection() {
     const from = seasonStart();
     const upcoming = profileEvents.filter(e => e.date >= from);
     if (!upcoming.length) { setImportMsg('Brak nadchodzących startów w profilu — dodaj je na stronie Zawodnik.'); return; }
-    const current  = races.filter(r => r.date);                       // drop empty placeholder rows
+    const current = races.filter(r => r.date);                        // drop empty placeholder rows
     const key = (r: SeasonRace) => `${r.date}|${r.distance}`;
     const have = new Set(current.map(key));
-    let demoted = 0, skipped = 0;
     const added: SeasonRace[] = [];
     for (const e of upcoming) {
       const k = key(e);
       if (have.has(k)) continue;                                      // already listed, or duplicate in profile
       have.add(k);
-      const r = fitRaceToPlan({ date: e.date, priority: e.priority, distance: e.distance, name: e.name ?? '' }, discipline);
-      if (!r) { skipped++; continue; }
-      if (r.priority !== e.priority) demoted++;
-      added.push(r);
+      added.push({ date: e.date, priority: e.priority, distance: e.distance, name: e.name ?? '' });
     }
-    setRaces([...current, ...added].sort((a, b) => a.date.localeCompare(b.date)).concat(current.length + added.length ? [] : [newRace<SeasonRace>(discipline)]));
+    setRaces([...current, ...added].sort((a, b) => a.date.localeCompare(b.date)));
+    const here    = added.filter(r => fitRaceToPlan(r, discipline));
+    const demoted = here.filter(r => fitRaceToPlan(r, discipline)!.priority !== r.priority).length;
+    const other   = added.length - here.length;
     setImportMsg(
-      (added.length ? `Dodano ${added.length} ${added.length === 1 ? 'start' : 'starty/startów'} z profilu.` : 'Brak nowych startów z profilu dla tej dyscypliny.') +
-      (demoted ? ` ${demoted} ${demoted === 1 ? 'start A' : 'starty A'} z innej dyscypliny dodano jako B.` : '') +
-      (skipped ? ` Pominięto ${skipped} z innej dyscypliny.` : ''),
+      (here.length ? `Dodano ${here.length} ${here.length === 1 ? 'start' : 'starty/startów'} do tego planu.` : 'Brak nowych startów z profilu dla tej dyscypliny.') +
+      (demoted ? ` ${demoted} ${demoted === 1 ? 'start A' : 'starty A'} z innej dyscypliny ${demoted === 1 ? 'jest' : 'są'} tu jako B.` : '') +
+      (other ? ` ${other} z innych dyscyplin zobaczysz w ich zakładkach.` : ''),
     );
   };
 
@@ -252,7 +268,7 @@ export default function ATPSection() {
         headers: { 'Content-Type':'application/json', Authorization:`Bearer ${session.access_token}` },
         body: JSON.stringify({
           sport: 'atp', discipline,
-          races: races.map(withLabel),
+          races: view.map(withLabel),
           phases: skeleton.phases.map(p => ({ ...p, races: p.races.map(withLabel) })),
         }),
       });
@@ -277,7 +293,7 @@ export default function ATPSection() {
     ? (selPhase.races?.length ? selPhase.races : planRaces.filter(r => r.date >= selPhase.startDate && r.date <= selPhase.endDate))
     : [];
   const aRaces    = planRaces.filter(r => r.priority === 'A');
-  const sortedFormRaces = [...races].sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
+  const sortedFormRaces = [...view].sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
 
   return (
     <section className="alt">
@@ -325,15 +341,15 @@ export default function ATPSection() {
             {/* Race list */}
             <label style={{ fontSize:12, color:'var(--text-secondary)', display:'block', marginBottom:6 }}>Starty w sezonie</label>
             <div style={{ marginBottom:14 }}>
-              <RaceListEditor races={races} onChange={setRaces} primaryDiscipline={discipline}
+              <RaceListEditor races={view} onChange={setView} primaryDiscipline={discipline}
                 actions={<>
                   <button type="button" onClick={importFromProfile} disabled={eventsLoading}
                     title="Dodaj do listy starty zapisane w profilu zawodnika (bez duplikatów)"
                     style={{ padding:'7px 14px', borderRadius:'var(--radius-md)', border:'0.5px solid var(--border-md)', background:'var(--bg)', color:'var(--text)', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'var(--font)' }}>
                     ⬇ Dodaj starty z profilu
                   </button>
-                  {races.length > 1 && (
-                    <button type="button" onClick={() => { setRaces([newRace<SeasonRace>(discipline)]); setImportMsg(null); }}
+                  {visible.length > 0 && (
+                    <button type="button" onClick={() => { setView([]); setImportMsg(null); }}
                       style={{ padding:'7px 14px', borderRadius:'var(--radius-md)', border:'none', background:'none', color:'var(--text-secondary)', fontSize:13, cursor:'pointer', fontFamily:'var(--font)', textDecoration:'underline' }}>
                       Wyczyść listę
                     </button>
