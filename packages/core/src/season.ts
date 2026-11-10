@@ -269,3 +269,79 @@ export function daysUntilDate(date: string, today: Date = new Date()): number {
   const t = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
   return Math.round((parseISO(date) - t) / DAY);
 }
+
+/* ── Season load (weekly hours per phase) ──
+   Deterministic: same races + start hours → same numbers. The AI never picks volume. */
+
+/** Typical amateur peak weekly hours (build phase) per A-race distance. */
+export const PEAK_HOURS: Record<string, number> = {
+  sprint: 9, olympic: 10, half: 12, full: 14,
+  '5k': 6, '10k': 6.5, halfmarathon: 7, marathon: 8,
+  granfondo: 11, race100: 9, race200: 12, mtb: 9,
+  pool1500: 6, ow3k: 6, ow5k: 7, ow10k: 8,
+};
+
+/** Share of the segment peak, per phase type outside the base→build ramp. */
+const LOAD_SHARE = { peak: 0.65, race: 0.5, recovery: 0.45, transition: 0.35, maintain: 0.8 } as const;
+const MAX_WEEKLY_GROWTH = 1.08;   // ramp never exceeds ~8%/week on average
+const SEASON_GROWTH_CAP = 1.6;    // peak ≤ start × 1.6 (unless the distance cap is lower)
+const roundHalf = (h: number) => Math.round(h * 2) / 2;
+
+/**
+ * Weekly hours for each phase of the skeleton.
+ * startHours = the athlete's current (or chosen minimum) weekly volume — the season starts there.
+ * Each A race closes a segment: base/build ramp linearly from the segment start to its peak,
+ * taper/race/recovery are shares of that peak; the next segment starts at max(start, 85% of the previous peak).
+ */
+export function planSeasonHours(phases: SeasonPhase[], startHours: number): number[] {
+  const start = Math.max(1, startHours || 0);
+  const out: number[] = new Array(phases.length).fill(0);
+  let i = 0, segStartLevel = start, lastPeak = start;
+
+  while (i < phases.length) {
+    // Segment = phases up to and including the next A-race week ('race' phase).
+    let end = i;
+    while (end < phases.length && phases[end].type !== 'race') end++;
+    const raceIdx = end < phases.length ? end : -1;
+    const seg = phases.slice(i, raceIdx === -1 ? phases.length : raceIdx + 1);
+
+    if (raceIdx === -1) {
+      // Tail after the last A race: keep form, then off-season.
+      seg.forEach((p, k) => {
+        out[i + k] = p.type === 'transition' ? Math.max(2, lastPeak * LOAD_SHARE.transition)
+                   : p.type === 'recovery'   ? lastPeak * LOAD_SHARE.recovery
+                   : Math.max(start * 0.8, lastPeak * LOAD_SHARE.maintain);
+      });
+      break;
+    }
+
+    const aRace = phases[raceIdx].races.find(r => r.priority === 'A');
+    const cap   = PEAK_HOURS[aRace?.distance ?? ''] ?? 12;
+    const ramp  = seg.filter(p => p.type === 'base' || p.type === 'build');
+    const rampWeeks = ramp.reduce((s, p) => s + p.weeks, 0);
+    const peak = Math.max(
+      segStartLevel * 1.05,
+      Math.min(cap, segStartLevel * SEASON_GROWTH_CAP, segStartLevel * MAX_WEEKLY_GROWTH ** Math.max(1, rampWeeks)),
+    );
+
+    let elapsed = 0;
+    seg.forEach((p, k) => {
+      if (p.type === 'base' || p.type === 'build') {
+        const mid = elapsed + p.weeks / 2;                       // phase average = level at its midpoint
+        out[i + k] = segStartLevel + (peak - segStartLevel) * (rampWeeks ? Math.min(1, mid / rampWeeks) : 1);
+        elapsed += p.weeks;
+      } else if (p.type === 'peak')       out[i + k] = peak * LOAD_SHARE.peak;
+      else if (p.type === 'race')         out[i + k] = peak * LOAD_SHARE.race;
+      else if (p.type === 'recovery')     out[i + k] = peak * LOAD_SHARE.recovery;
+      else                                out[i + k] = Math.max(2, peak * LOAD_SHARE.transition);
+    });
+
+    // Recovery right after this race belongs to it (skeleton puts it before the next base).
+    let j = raceIdx + 1;
+    while (j < phases.length && phases[j].type === 'recovery') { out[j] = peak * LOAD_SHARE.recovery; j++; }
+    lastPeak = peak;
+    segStartLevel = Math.max(start, peak * 0.85);
+    i = j;
+  }
+  return out.map(roundHalf);
+}

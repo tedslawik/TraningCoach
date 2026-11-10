@@ -185,7 +185,12 @@ const DISCIPLINE_WORKOUTS: Record<string, string> = {
    @tricoach/core buildSeasonSkeleton. The AI fills phase content only — never dates. */
 type PhaseType = 'base' | 'build' | 'peak' | 'race' | 'recovery' | 'transition';
 interface SeasonRaceIn  { date: string; priority: 'A' | 'B' | 'C'; distance: string; label?: string; name?: string; discipline?: string }
-interface SeasonPhaseIn { name: string; type: PhaseType; startDate: string; endDate: string; weeks: number; races: SeasonRaceIn[] }
+interface SeasonPhaseIn {
+  name: string; type: PhaseType; startDate: string; endDate: string; weeks: number; races: SeasonRaceIn[];
+  /** Weekly hours computed by the client (planSeasonHours in packages/core) — deterministic, not AI. */
+  targetWeeklyHours: number;
+  targetWeeklyTSS: number;
+}
 
 const PHASE_TYPES = new Set<PhaseType>(['base', 'build', 'peak', 'race', 'recovery', 'transition']);
 const ISO_DATE    = /^\d{4}-\d{2}-\d{2}$/;
@@ -218,9 +223,24 @@ function parseSeason(body: Record<string, unknown>): { races: SeasonRaceIn[]; ph
       name: shortStr(raw.name, 60) || String(raw.type), type: raw.type as PhaseType,
       startDate: String(raw.startDate), endDate: String(raw.endDate), weeks,
       races: Array.isArray(raw.races) ? raw.races.map(parseRace).filter((r): r is SeasonRaceIn => !!r) : [],
+      targetWeeklyHours: Number(raw.targetWeeklyHours) > 0 && Number(raw.targetWeeklyHours) < 40 ? roundHalf(Number(raw.targetWeeklyHours)) : 0,
+      targetWeeklyTSS: 0,
     });
   }
   return { races: races as SeasonRaceIn[], phases };
+}
+
+/** TSS per hour relative to the athlete's average, by phase (more intensity in build/peak). */
+const TSS_FACTOR: Record<PhaseType, number> = { base: 0.95, build: 1.05, peak: 1.1, race: 1.15, recovery: 0.8, transition: 0.75 };
+
+/** Fills targetWeeklyTSS from the phase hours and the athlete's own TSS/h (fallback: flat current hours). */
+function applySeasonLoad(phases: SeasonPhaseIn[], summaries: Array<Record<string,unknown>>, discipline: string): SeasonPhaseIn[] {
+  const perHour = 1 / hoursPerTss(summaries, discipline);
+  const fallback = roundHalf(avgWeeklyHours(summaries, discipline)) || 5;
+  return phases.map(p => {
+    const h = p.targetWeeklyHours || fallback;
+    return { ...p, targetWeeklyHours: h, targetWeeklyTSS: Math.round(h * perHour * TSS_FACTOR[p.type] / 5) * 5 };
+  });
 }
 
 const DEFAULT_INTENSITY: Record<PhaseType, 'low' | 'moderate' | 'high'> = {
@@ -251,7 +271,7 @@ function buildATPPrompt(
   const totalWeeks   = phases.reduce((s, p) => s + p.weeks, 0);
 
   const phaseLines = phases.map((p, i) =>
-    `${i} · ${p.name} · ${p.type} · ${p.startDate} – ${p.endDate} · ${p.weeks} tyg.` +
+    `${i} · ${p.name} · ${p.type} · ${p.startDate} – ${p.endDate} · ${p.weeks} tyg. · ${p.targetWeeklyHours} h/tydz. · TSS ${p.targetWeeklyTSS}/tydz.` +
     (p.races.length ? ` · starty: ${p.races.map(r => `${r.priority} ${r.date} ${r.label}${r.discipline && r.discipline !== discipline ? ` (${DISCIPLINE_LABELS[r.discipline] ?? r.discipline})` : ''}`).join(', ')}` : ''),
   ).join('\n');
 
@@ -280,16 +300,13 @@ Priorytety startów:
 - C — start treningowy: bez taperingu, potraktuj jako mocny trening w tygodniu.
 - Start z innej dyscypliny niż plan (oznaczony „inna dyscyplina”, np. maraton w planie triathlonowym): wpleć go w fazę — przed nim przesuń akcent na tę dyscyplinę, po nim zaplanuj regenerację adekwatną do dystansu (po maratonie 1–2 tyg. bez intensywnego biegania), a pozostałe dyscypliny utrzymuj lekko.
 
-STRUKTURA SEZONU — USTALONA (${totalWeeks} tyg.). Nie zmieniaj nazw, kolejności, typów ani dat faz.
-Indeks · nazwa · typ · daty · długość · starty w fazie:
+STRUKTURA SEZONU I OBCIĄŻENIE — USTALONE (${totalWeeks} tyg.). Nie zmieniaj nazw, kolejności, typów, dat ani godzin/TSS faz.
+Punkt startowy objętości: ${phases[0]?.targetWeeklyHours ?? '?'} h/tydz. (wybrany przez zawodnika lub jego obecna średnia).
+Indeks · nazwa · typ · daty · długość · godziny i TSS tygodniowo · starty w fazie:
 ${phaseLines}
 
 Dla KAŻDEJ fazy (dokładnie ${phases.length} elementów, po jednym na indeks 0–${phases.length - 1}) podaj:
-- focus: jedno zdanie po polsku — cel fazy,
-- targetWeeklyTSS: docelowy średni TSS tygodniowo; zacznij od obecnego poziomu (${avgTSS || 'brak danych — oszacuj ostrożnie'}), w bazie i budowaniu rośnij stopniowo (co 4. tydzień lżejszy), szczyt/tapering −30–50% względem budowania, regeneracja i roztrenowanie ok. 40–50%,
-- targetWeeklyHours: docelowy średni czas treningu tygodniowo w godzinach (krok 0.5), spójny z targetWeeklyTSS; zacznij od obecnego poziomu (${avgHours ? `${avgHours} h` : 'brak danych — oszacuj ostrożnie'}).
-  Orientacyjne szczyty objętości (budowanie) dla amatora: sprint/olympic 6–10 h, 1/2 IM 8–12 h, IM 10–15 h, maraton 5–8 h, półmaraton 4–7 h.
-  Nie przekraczaj ok. +60% obecnego poziomu w całym sezonie ani +10% tydzień do tygodnia; tapering −30–50%, regeneracja/roztrenowanie 40–60% budowania.
+- focus: jedno zdanie po polsku — cel fazy (dopasowany do podanej objętości),
 - intensity: "low" | "moderate" | "high",
 - keyWorkouts: 2–4 konkretne kluczowe treningi po polsku; jeśli w fazie jest start B lub C, jeden punkt opisuje, jak go rozegrać.
 
@@ -297,7 +314,7 @@ Odpowiedz TYLKO tym JSON (bez markdown):
 {
   "assessment": "2–3 zdania po polsku: ocena zawodnika i strategia na sezon z uwzględnieniem wszystkich startów",
   "phases": [
-    { "i": 0, "focus": "…", "targetWeeklyTSS": 280, "targetWeeklyHours": 7.5, "intensity": "low", "keyWorkouts": ["…", "…"] }
+    { "i": 0, "focus": "…", "intensity": "low", "keyWorkouts": ["…", "…"] }
   ]
 }`;
 }
@@ -617,7 +634,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const discipline = shortStr((body as Record<string, unknown>).discipline, 20) || 'triathlon';
     const season = parseSeason(body as Record<string, unknown>);
     if (typeof season === 'string') return res.status(400).json({ error: season });
-    const { races, phases } = season;
+    const { races } = season;
+    const phases = applySeasonLoad(season.phases, summaries ?? [], discipline);
 
     const prompt = buildATPPrompt(summaries ?? [], discipline, races, phases, profile);
     let msg: Anthropic.Message;
@@ -641,13 +659,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const byIndex = new Map((Array.isArray(ai.phases) ? ai.phases : []).map((p, idx) => [Number.isInteger(p?.i) ? Number(p.i) : idx, p]));
     const mergedPhases = phases.map((p, i) => {
       const a = byIndex.get(i) ?? {};
-      const tss = Number(a.targetWeeklyTSS);
-      const hrs = Number(a.targetWeeklyHours);
       return {
         ...p,
         focus: shortStr(a.focus, 300),
-        targetWeeklyTSS: Number.isFinite(tss) && tss > 0 ? Math.round(tss) : 0,
-        targetWeeklyHours: Number.isFinite(hrs) && hrs > 0 && hrs < 40 ? roundHalf(hrs) : 0,
         intensity: ['low', 'moderate', 'high'].includes(String(a.intensity)) ? a.intensity : DEFAULT_INTENSITY[p.type],
         keyWorkouts: Array.isArray(a.keyWorkouts) ? a.keyWorkouts.map(w => shortStr(w, 200)).filter(Boolean).slice(0, 5) : [],
       };
@@ -657,7 +671,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       assessment: shortStr(ai.assessment, 1000),
       discipline,
       races: [...races].sort((x, y) => x.date.localeCompare(y.date)),
-      phases: fillPhaseHours(mergedPhases, summaries ?? [], discipline),
+      phases: mergedPhases,
+      startHours: phases[0]?.targetWeeklyHours ?? null,
       raceDate: mainRace.date,     // legacy fields, kept for older readers
       raceType: mainRace.distance,
     };

@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
-  buildSeasonSkeleton, validateSeasonRaces, distanceLabel, disciplineOfDistance, seasonStart,
+  buildSeasonSkeleton, validateSeasonRaces, distanceLabel, disciplineOfDistance, seasonStart, planSeasonHours,
   type SeasonRace, type SeasonDiscipline, type RacePriority, type SeasonPhaseType,
 } from '@tricoach/core';
 import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 import { useRaceEvents } from '../../lib/raceEvents';
 import RaceListEditor, { PRIORITY_STYLE, RaceChip } from '../events/RaceListEditor';
 
@@ -29,6 +30,7 @@ interface ATPPlanJson {
   discipline?: SeasonDiscipline;
   races: ATPRace[];
   phases: ATPPhase[];
+  startHours?: number | null;   // season starting volume (h/week) the load was computed from
   raceDate?: string;   // legacy single-race plans
   raceType?: string;
 }
@@ -202,6 +204,8 @@ function SeasonTimeline({ phases, races, selected, onSelect }: {
 
 export default function ATPSection() {
   const { session } = useAuth();
+  const [startHours, setStartHours] = useState('');                 // '' → use the current average
+  const [recentWeeks, setRecentWeeks] = useState<Array<{ swim_time_min?: number; bike_time_min?: number; run_time_min?: number }>>([]);
   const [plan, setPlan]         = useState<ATPPlan | null | undefined>(undefined);
   const [discipline, setDisc]   = useState<SeasonDiscipline>('triathlon');
   const [races, setRaces]       = useState<SeasonRace[]>([]);
@@ -233,7 +237,17 @@ export default function ATPSection() {
       return [...prev.filter(r => r.date && !savedKeys.has(key(r))), ...saved].sort((a, b) => a.date.localeCompare(b.date));
     });
     if (pj.discipline) setDisc(pj.discipline);
+    if (pj.startHours) setStartHours(String(pj.startHours));
   }, [plan]);
+
+  // Last 8 weeks of training time → default starting volume.
+  useEffect(() => {
+    const uid = session?.user.id;
+    if (!uid) return;
+    supabase.from('weekly_summaries').select('swim_time_min,bike_time_min,run_time_min')
+      .eq('user_id', uid).order('week_start', { ascending: false }).limit(8)
+      .then(({ data }) => setRecentWeeks(data ?? []));
+  }, [session?.user.id]);
 
   // `races` holds every race across disciplines; each discipline tab edits only its view.
   const { visible, originals, hidden } = useMemo(() => {
@@ -261,7 +275,21 @@ export default function ATPSection() {
   ]);
 
   const validation = useMemo(() => validateSeasonRaces(view, discipline), [view, discipline]);
-  const skeleton   = useMemo(() => validation ? null : buildSeasonSkeleton(view), [view, validation]);
+  const currentHours = useMemo(() => {
+    if (!recentWeeks.length) return 0;
+    type TimeKey = 'swim_time_min' | 'bike_time_min' | 'run_time_min';
+    const keys: TimeKey[] = discipline === 'triathlon' ? ['swim_time_min', 'bike_time_min', 'run_time_min'] : [`${discipline}_time_min` as TimeKey];
+    const min = recentWeeks.reduce((sum, w) => sum + keys.reduce((acc, k) => acc + (w[k] ?? 0), 0), 0) / recentWeeks.length;
+    return Math.round(min / 60 * 2) / 2;
+  }, [recentWeeks, discipline]);
+  const chosenStart = Number(startHours.replace(',', '.'));
+  const effectiveStart = chosenStart > 0 ? Math.min(35, chosenStart) : currentHours || 5;
+  const skeleton   = useMemo(() => {
+    if (validation) return null;
+    const sk = buildSeasonSkeleton(view);
+    const hours = planSeasonHours(sk.phases, effectiveStart);
+    return { ...sk, phases: sk.phases.map((p, i) => ({ ...p, targetWeeklyHours: hours[i] })) };
+  }, [view, validation, effectiveStart]);
 
   const changeDiscipline = (d: SeasonDiscipline) => { setDisc(d); setImportMsg(null); };
 
@@ -397,6 +425,20 @@ export default function ATPSection() {
                 Brak startów w tej dyscyplinie — dodaj start albo zaimportuj je z profilu.
               </p>
             )}
+
+            {/* Starting volume */}
+            <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', marginBottom:14 }}>
+              <label htmlFor="atp-start-hours" style={{ fontSize:12, color:'var(--text-secondary)' }}>Punkt startowy — godzin treningu w tygodniu:</label>
+              <input id="atp-start-hours" type="number" inputMode="decimal" min={1} max={35} step={0.5}
+                value={startHours} onChange={e => setStartHours(e.target.value)}
+                placeholder={currentHours ? String(currentHours) : '5'}
+                style={{ width:80, padding:'6px 8px', borderRadius:'var(--radius-md)', border:'0.5px solid var(--border-md)', background:'var(--bg)', color:'var(--text)', fontSize:13, fontFamily:'var(--font)' }} />
+              <span style={{ fontSize:12, color:'var(--text-secondary)' }}>
+                {chosenStart > 0
+                  ? <>średnia z ostatnich 8 tyg.: {currentHours ? `${currentHours} h` : 'brak danych'} · <button type="button" onClick={() => setStartHours('')} style={{ background:'none', border:'none', padding:0, color:'var(--tri)', fontSize:12, cursor:'pointer', fontFamily:'var(--font)', textDecoration:'underline' }}>użyj średniej</button></>
+                  : `puste = średnia z ostatnich 8 tyg. (${currentHours ? `${currentHours} h` : 'brak danych — przyjmuję 5 h'}). Wpisz więcej, jeśli wracasz po przerwie.`}
+              </span>
+            </div>
 
             {/* Live structure preview */}
             {skeleton ? (
