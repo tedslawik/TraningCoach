@@ -220,6 +220,11 @@ export default function ATPSection() {
   const setView = (next: SeasonRace[]) => setRaces([
     ...hidden,
     ...next.map((r, i) => {
+      // Untouched rows are the same objects (also after a removal) → restore the stored race.
+      const j = visible.indexOf(r);
+      if (j >= 0) return originals[j];
+      // An edited row is a new object at the same index (edits never change the list length).
+      if (next.length !== visible.length) return r;                  // newly added row
       const orig = originals[i], shown = visible[i];
       return orig && shown && orig.priority !== shown.priority && r.priority === shown.priority
         ? { ...r, priority: orig.priority } : r;
