@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
+import Logo from './Logo';
 
 export default function Nav() {
   const { user, signOut } = useAuth();
@@ -12,7 +13,7 @@ export default function Nav() {
   return (
     <>
       <nav>
-        <Link to="/" className="nav-logo" onClick={close}>TriCoach</Link>
+        <Link to="/" className="nav-logo" onClick={close}><Logo size={26} />TriCoach</Link>
         <ul className="nav-links">
           {isEnabled('tab_tri')  && <li><NavLink to="/tri-coach">Tri Coach</NavLink></li>}
           {isEnabled('tab_run')  && <li><NavLink to="/run-coach">Run Coach</NavLink></li>}

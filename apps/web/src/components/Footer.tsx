@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { usePreferences } from '../context/PreferencesContext';
+import Logo from './Logo';
 
 export default function Footer() {
   const { isEnabled } = usePreferences();
@@ -8,6 +9,7 @@ export default function Footer() {
     <footer>
       <div className="footer-inner">
         <div className="footer-brand">
+          <Logo size={18} />
           TriCoach
           <span className="footer-tagline">Plany treningowe dla triathlonistów amatorów</span>
         </div>
