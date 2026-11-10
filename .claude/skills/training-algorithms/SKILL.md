@@ -54,7 +54,7 @@ Mon is always rest; each day's description branches on these flags.
 - Per A race, backwards from its week: taper (`taperWeeks` from `EVENT_DISTANCES`, 1–3) ← build (≤ 8 wks, split in 2 if ≥ 6) ← base in ~4-week blocks ← up to 6 wks "Przygotowanie ogólne" (first segment only, when base > 12). After it: `recoveryWeeks` of recovery.
 - B/C races don't change phases (B = mini-taper, C = train through — handled in the AI prompt).
 - Tail: B/C races after the last A → "Utrzymanie formy", then 2-week "Roztrenowanie"; if the season ends on an A race its recovery becomes the transition.
-- `validateSeasonRaces` → Polish error or null: ≥ 1 A race, ≤ 20 races, dates from plan start up to 2 years, distance must match discipline.
+- `validateSeasonRaces` → Polish error or null: ≥ 1 A race, ≤ 20 races, dates from plan start up to 2 years; A races must match the plan discipline, B/C races may be any discipline (prompt tells the AI how to fit off-discipline races, e.g. marathon recovery).
 The client (`ATPSection`) builds the skeleton (live preview) and POSTs `{ discipline, races, phases }`; the API validates shape and merges AI content by index.
 
 ## Other modules

@@ -152,7 +152,7 @@ const DISCIPLINE_WORKOUTS: Record<string, string> = {
 /* Season input sent by the client: races + the deterministic phase skeleton from
    @tricoach/core buildSeasonSkeleton. The AI fills phase content only — never dates. */
 type PhaseType = 'base' | 'build' | 'peak' | 'race' | 'recovery' | 'transition';
-interface SeasonRaceIn  { date: string; priority: 'A' | 'B' | 'C'; distance: string; label?: string; name?: string }
+interface SeasonRaceIn  { date: string; priority: 'A' | 'B' | 'C'; distance: string; label?: string; name?: string; discipline?: string }
 interface SeasonPhaseIn { name: string; type: PhaseType; startDate: string; endDate: string; weeks: number; races: SeasonRaceIn[] }
 
 const PHASE_TYPES = new Set<PhaseType>(['base', 'build', 'peak', 'race', 'recovery', 'transition']);
@@ -165,7 +165,8 @@ function parseRace(r: unknown): SeasonRaceIn | null {
   const distance = shortStr(o.distance, 30);
   if (!distance) return null;
   return { date: String(o.date), priority: o.priority as 'A' | 'B' | 'C', distance,
-           label: shortStr(o.label, 40) || distance, name: shortStr(o.name, 60) || undefined };
+           label: shortStr(o.label, 40) || distance, name: shortStr(o.name, 60) || undefined,
+           discipline: shortStr(o.discipline, 20) || undefined };
 }
 
 function parseSeason(body: Record<string, unknown>): { races: SeasonRaceIn[]; phases: SeasonPhaseIn[] } | string {
@@ -194,8 +195,9 @@ const DEFAULT_INTENSITY: Record<PhaseType, 'low' | 'moderate' | 'high'> = {
   base: 'low', build: 'moderate', peak: 'high', race: 'high', recovery: 'low', transition: 'low',
 };
 
-function raceLine(r: SeasonRaceIn): string {
-  return `${r.date} · ${r.priority} · ${r.label}${r.name ? ` · „${r.name}”` : ''}`;
+function raceLine(r: SeasonRaceIn, planDiscipline: string): string {
+  const disc = r.discipline && r.discipline !== planDiscipline ? ` [${DISCIPLINE_LABELS[r.discipline] ?? r.discipline} — inna dyscyplina]` : '';
+  return `${r.date} · ${r.priority} · ${r.label}${disc}${r.name ? ` · „${r.name}”` : ''}`;
 }
 
 function buildATPPrompt(
@@ -217,7 +219,7 @@ function buildATPPrompt(
 
   const phaseLines = phases.map((p, i) =>
     `${i} · ${p.name} · ${p.type} · ${p.startDate} – ${p.endDate} · ${p.weeks} tyg.` +
-    (p.races.length ? ` · starty: ${p.races.map(r => `${r.priority} ${r.date} ${r.label}`).join(', ')}` : ''),
+    (p.races.length ? ` · starty: ${p.races.map(r => `${r.priority} ${r.date} ${r.label}${r.discipline && r.discipline !== discipline ? ` (${DISCIPLINE_LABELS[r.discipline] ?? r.discipline})` : ''}`).join(', ')}` : ''),
   ).join('\n');
 
   return `Jesteś ekspertem w periodyzacji sportowej. Uzupełnij Annual Training Plan (ATP) na cały sezon.
@@ -236,12 +238,13 @@ ${profile.ftp ? `- FTP: ${profile.ftp} W` : ''}
 ${profile.weight ? `- Waga: ${profile.weight} kg` : ''}
 
 STARTY W SEZONIE (data · priorytet · dystans · nazwa):
-${races.map(raceLine).join('\n')}
+${races.map(r => raceLine(r, discipline)).join('\n')}
 
 Priorytety startów:
 - A — główny cel; fazy przed nim (szczyt/tapering) są już zaplanowane.
 - B — ważny start pośredni: mini-tapering 3–5 dni przed, 2–3 lżejsze dni po. Nie przerywa fazy — uwzględnij go w kluczowych treningach tej fazy.
 - C — start treningowy: bez taperingu, potraktuj jako mocny trening w tygodniu.
+- Start z innej dyscypliny niż plan (oznaczony „inna dyscyplina”, np. maraton w planie triathlonowym): wpleć go w fazę — przed nim przesuń akcent na tę dyscyplinę, po nim zaplanuj regenerację adekwatną do dystansu (po maratonie 1–2 tyg. bez intensywnego biegania), a pozostałe dyscypliny utrzymuj lekko.
 
 STRUKTURA SEZONU — USTALONA (${totalWeeks} tyg.). Nie zmieniaj nazw, kolejności, typów ani dat faz.
 Indeks · nazwa · typ · daty · długość · starty w fazie:

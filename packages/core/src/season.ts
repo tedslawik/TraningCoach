@@ -103,7 +103,10 @@ const TRANSITION_WEEKS = 2;
 const MAX_RACES = 20;
 const MAX_HORIZON_WEEKS = 104;
 
-/** Returns a Polish error message, or null when the race list is usable. */
+/**
+ * Returns a Polish error message, or null when the race list is usable.
+ * A races must match the plan discipline (they drive periodization); B/C races may be any discipline.
+ */
 export function validateSeasonRaces(
   races: SeasonRace[],
   discipline: SeasonDiscipline,
@@ -112,14 +115,16 @@ export function validateSeasonRaces(
   if (races.length === 0) return 'Dodaj co najmniej jeden start.';
   if (races.length > MAX_RACES) return `Maksymalnie ${MAX_RACES} startów w sezonie.`;
   const start = parseISO(seasonStart(today));
-  const allowed = new Set(distancesFor(discipline).map(d => d.value));
   for (const r of races) {
     if (!ISO_RE.test(r.date)) return 'Uzupełnij datę każdego startu.';
     const ms = parseISO(r.date);
     if (ms < start) return `Start ${r.date} wypada przed początkiem planu (${toISO(start)}).`;
     if ((ms - start) / WEEK > MAX_HORIZON_WEEKS) return `Start ${r.date} jest dalej niż 2 lata — skróć horyzont.`;
     if (!['A', 'B', 'C'].includes(r.priority)) return 'Nieprawidłowy priorytet startu.';
-    if (!allowed.has(r.distance)) return `Dystans „${distanceLabel(r.distance)}” nie pasuje do wybranej dyscypliny.`;
+    const d = disciplineOfDistance(r.distance);
+    if (!d) return 'Wybierz dystans dla każdego startu.';
+    if (r.priority === 'A' && d !== discipline)
+      return `Start A (${r.date}, ${distanceLabel(r.distance)}) musi być w dyscyplinie planu — starty z innych dyscyplin oznacz jako B lub C.`;
   }
   if (!races.some(r => r.priority === 'A')) return 'Oznacz co najmniej jeden start jako A (główny cel sezonu).';
   return null;

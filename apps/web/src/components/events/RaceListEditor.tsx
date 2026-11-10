@@ -50,6 +50,7 @@ export function RaceChip({ r }: { r: Partial<SeasonRace> & { date: string; prior
   return (
     <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, background:'var(--bg)', border:'0.5px solid var(--border)', borderRadius:'var(--radius-md)', padding:'5px 9px' }}>
       <PriorityBadge p={r.priority} />
+      {r.distance && disciplineOfDistance(r.distance) && <span aria-hidden>{DISCIPLINE_META[disciplineOfDistance(r.distance)!].icon}</span>}
       <span style={{ fontWeight:600 }}>{new Date(r.date).toLocaleDateString('pl-PL', { day:'numeric', month:'short' })}</span>
       <span style={{ color:'var(--text-secondary)' }}>{r.name ? `${r.name} · ` : ''}{label}</span>
     </div>
@@ -71,24 +72,27 @@ export function PriorityLegend() {
 }
 
 /**
- * Editable list of races (date · A/B/C · distance · name).
- * With `discipline` set, every row uses that discipline's distances (ATP);
- * without it, each row gets its own discipline picker (user profile).
+ * Editable list of races (date · A/B/C · discipline · distance · name).
+ * With `primaryDiscipline` set (ATP), new rows default to it and only races in that
+ * discipline can be A — races from other disciplines are limited to B/C.
  */
-export default function RaceListEditor<T extends SeasonRace>({ races, onChange, discipline, max = 20, actions }: {
+export default function RaceListEditor<T extends SeasonRace>({ races, onChange, primaryDiscipline, max = 20, actions }: {
   races: T[];
   onChange: (races: T[]) => void;
-  discipline?: SeasonDiscipline;
+  primaryDiscipline?: SeasonDiscipline;
   max?: number;
   actions?: ReactNode;
 }) {
   const update = (i: number, patch: Partial<SeasonRace>) => onChange(races.map((r, j) => j === i ? { ...r, ...patch } : r));
-  const rowDiscipline = (r: SeasonRace): SeasonDiscipline => discipline ?? disciplineOfDistance(r.distance) ?? 'triathlon';
+  const rowDiscipline = (r: SeasonRace): SeasonDiscipline => disciplineOfDistance(r.distance) ?? primaryDiscipline ?? 'triathlon';
+  const canBeA = (d: SeasonDiscipline) => !primaryDiscipline || d === primaryDiscipline;
   const addRace = () => {
     const last = races[races.length - 1];
-    const d = discipline ?? (last ? rowDiscipline(last) : 'triathlon');
+    const d = primaryDiscipline ?? (last ? rowDiscipline(last) : 'triathlon');
     onChange([...races, newRace<T>(d, races.some(r => r.priority === 'A') ? 'B' : 'A')]);
   };
+  const changeDiscipline = (i: number, r: SeasonRace, nd: SeasonDiscipline) =>
+    update(i, { distance: DEFAULT_DISTANCE[nd], ...(r.priority === 'A' && !canBeA(nd) ? { priority: 'B' as const } : {}) });
 
   return (
     <div>
@@ -100,21 +104,23 @@ export default function RaceListEditor<T extends SeasonRace>({ races, onChange, 
               <input type="date" value={r.date} onChange={e => update(i, { date: e.target.value })}
                 aria-label="Data startu" style={{ ...inputStyle, flex:'1 1 140px' }} />
               <div role="group" aria-label="Priorytet" style={{ display:'flex', gap:3 }}>
-                {(['A','B','C'] as const).map(p => (
-                  <button key={p} type="button" onClick={() => update(i, { priority: p })} title={PRIORITY_STYLE[p].hint} aria-pressed={r.priority === p}
-                    style={{ width:34, padding:'7px 0', borderRadius:'var(--radius-md)', border:`1.5px solid ${r.priority===p ? PRIORITY_STYLE[p].color : 'var(--border-md)'}`, background: r.priority===p ? PRIORITY_STYLE[p].color : 'var(--bg)', color: r.priority===p ? '#fff' : 'var(--text-secondary)', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:'var(--font)' }}>
-                    {p}
-                  </button>
-                ))}
+                {(['A','B','C'] as const).map(p => {
+                  const blocked = p === 'A' && !canBeA(d);
+                  return (
+                    <button key={p} type="button" onClick={() => update(i, { priority: p })} disabled={blocked} aria-pressed={r.priority === p}
+                      title={blocked ? `Start A musi być w dyscyplinie planu (${DISCIPLINE_META[primaryDiscipline!].label}) — inne dyscypliny tylko jako B/C` : PRIORITY_STYLE[p].hint}
+                      style={{ width:34, padding:'7px 0', borderRadius:'var(--radius-md)', border:`1.5px solid ${r.priority===p ? PRIORITY_STYLE[p].color : 'var(--border-md)'}`, background: r.priority===p ? PRIORITY_STYLE[p].color : 'var(--bg)', color: r.priority===p ? '#fff' : 'var(--text-secondary)', fontSize:13, fontWeight:800, cursor: blocked ? 'not-allowed' : 'pointer', opacity: blocked ? 0.35 : 1, fontFamily:'var(--font)' }}>
+                      {p}
+                    </button>
+                  );
+                })}
               </div>
-              {!discipline && (
-                <select value={d} onChange={e => { const nd = e.target.value as SeasonDiscipline; update(i, { distance: DEFAULT_DISTANCE[nd] }); }}
-                  aria-label="Dyscyplina" style={{ ...inputStyle, flex:'1 1 130px' }}>
-                  {(Object.keys(DISCIPLINE_META) as SeasonDiscipline[]).map(k => (
-                    <option key={k} value={k}>{DISCIPLINE_META[k].icon} {DISCIPLINE_META[k].label}</option>
-                  ))}
-                </select>
-              )}
+              <select value={d} onChange={e => changeDiscipline(i, r, e.target.value as SeasonDiscipline)}
+                aria-label="Dyscyplina" style={{ ...inputStyle, flex:'1 1 130px' }}>
+                {(Object.keys(DISCIPLINE_META) as SeasonDiscipline[]).map(k => (
+                  <option key={k} value={k}>{DISCIPLINE_META[k].icon} {DISCIPLINE_META[k].label}</option>
+                ))}
+              </select>
               <select value={r.distance} onChange={e => update(i, { distance: e.target.value })}
                 aria-label="Dystans" style={{ ...inputStyle, flex:'1 1 150px' }}>
                 {distancesFor(d).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}

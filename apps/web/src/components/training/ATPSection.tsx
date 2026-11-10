@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
-  buildSeasonSkeleton, validateSeasonRaces, distancesFor, distanceLabel, disciplineOfDistance, seasonStart, DEFAULT_DISTANCE,
+  buildSeasonSkeleton, validateSeasonRaces, distanceLabel, disciplineOfDistance, seasonStart, DEFAULT_DISTANCE,
   type SeasonRace, type SeasonDiscipline, type RacePriority, type SeasonPhaseType,
 } from '@tricoach/core';
 import { useAuth } from '../../context/AuthContext';
@@ -190,8 +190,8 @@ export default function ATPSection() {
   const changeDiscipline = (d: SeasonDiscipline) => {
     setDisc(d);
     setImportMsg(null);
-    const allowed = new Set(distancesFor(d).map(x => x.value));
-    setRaces(rs => rs.map(r => allowed.has(r.distance) ? r : { ...r, distance: DEFAULT_DISTANCE[d] }));
+    // A races must be in the plan discipline: move off-discipline A races to the new discipline's default distance.
+    setRaces(rs => rs.map(r => r.priority === 'A' && disciplineOfDistance(r.distance) !== d ? { ...r, distance: DEFAULT_DISTANCE[d] } : r));
   };
 
   // Merge the profile's upcoming events (matching this plan's discipline) into the race list.
@@ -200,24 +200,26 @@ export default function ATPSection() {
     const from = seasonStart();
     const upcoming = profileEvents.filter(e => e.date >= from);
     if (!upcoming.length) { setImportMsg('Brak nadchodzących startów w profilu — dodaj je na stronie Zawodnik.'); return; }
-    const matching = upcoming.filter(e => disciplineOfDistance(e.distance) === discipline);
     const current  = races.filter(r => r.date);                       // drop empty placeholder rows
     const key = (r: SeasonRace) => `${r.date}|${r.distance}`;
     const have = new Set(current.map(key));
-    const added = matching.filter(e => !have.has(key(e)))
-      .map(e => ({ date: e.date, priority: e.priority, distance: e.distance, name: e.name ?? '' }));
+    let demoted = 0;
+    const added = upcoming.filter(e => !have.has(key(e))).map(e => {
+      const offDiscipline = disciplineOfDistance(e.distance) !== discipline;
+      if (offDiscipline && e.priority === 'A') demoted++;
+      return { date: e.date, priority: offDiscipline && e.priority === 'A' ? 'B' as const : e.priority, distance: e.distance, name: e.name ?? '' };
+    });
     setRaces([...current, ...added].sort((a, b) => a.date.localeCompare(b.date)).concat(current.length + added.length ? [] : [newRace<SeasonRace>(discipline)]));
-    const skipped = upcoming.length - matching.length;
     setImportMsg(
-      (added.length ? `Dodano ${added.length} ${added.length === 1 ? 'start' : 'starty/startów'} z profilu.` : 'Wszystkie pasujące starty z profilu są już na liście.') +
-      (skipped ? ` Pominięto ${skipped} z innej dyscypliny niż ${DISCIPLINES.find(d => d.value === discipline)?.label.toLowerCase()}.` : ''),
+      (added.length ? `Dodano ${added.length} ${added.length === 1 ? 'start' : 'starty/startów'} z profilu.` : 'Wszystkie starty z profilu są już na liście.') +
+      (demoted ? ` ${demoted} ${demoted === 1 ? 'start A' : 'starty A'} z innej dyscypliny ${demoted === 1 ? 'dodano' : 'dodano'} jako B.` : ''),
     );
   };
 
   const handleGenerate = async () => {
     if (!session || !skeleton) return;
     setGen(true); setError(null);
-    const withLabel = (r: SeasonRace) => ({ ...r, name: r.name?.trim() || undefined, label: distanceLabel(r.distance) });
+    const withLabel = (r: SeasonRace) => ({ ...r, name: r.name?.trim() || undefined, label: distanceLabel(r.distance), discipline: disciplineOfDistance(r.distance) ?? discipline });
     try {
       const res = await fetch('/api/ai/generate-plan', {
         method: 'POST',
@@ -297,7 +299,7 @@ export default function ATPSection() {
             {/* Race list */}
             <label style={{ fontSize:12, color:'var(--text-secondary)', display:'block', marginBottom:6 }}>Starty w sezonie</label>
             <div style={{ marginBottom:14 }}>
-              <RaceListEditor races={races} onChange={setRaces} discipline={discipline}
+              <RaceListEditor races={races} onChange={setRaces} primaryDiscipline={discipline}
                 actions={
                   <button type="button" onClick={importFromProfile} disabled={eventsLoading}
                     title="Dodaj do listy starty zapisane w profilu zawodnika"
