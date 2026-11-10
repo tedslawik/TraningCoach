@@ -57,6 +57,9 @@ Mon is always rest; each day's description branches on these flags.
 - `validateSeasonRaces` → Polish error or null: ≥ 1 A race, ≤ 20 races, dates from plan start up to 2 years; A races must match the plan discipline, B/C races may be any discipline (prompt tells the AI how to fit off-discipline races, e.g. marathon recovery).
 The client (`ATPSection`) builds the skeleton (live preview) and POSTs `{ discipline, races, phases }`; the API validates shape and merges AI content by index.
 
+### Weekly plan ← ATP
+`api/ai/generate-plan.ts` (`loadAtpContext`, server-side): for the 2-week plan starting `nextMonday()`, reads the latest ATP (`training_plans`, `sport_type='atp'`) when its `discipline` equals the weekly plan's sport, and finds per week the covering phase (name, type, week N/M, focus, phase-average `targetWeeklyTSS`, intensity, key workouts), races in that week and the next A race. `atpPromptBlock` turns it into rules that override the generic ones: weekly TSS ≈ phase average ±10%, last week of a ≥3-week base/build block = deload (−30–40%), intensity by phase, races placed on their day (A taper week, B mini-taper, C replaces the key session). Context is returned by GET/POST (`atpContext`) and stored in `plan_json.atpContext`. Returns null (plan built from training data only) when there is no ATP, it is for another discipline, or doesn't cover these weeks.
+
 ## Other modules
 
 - `assessment.ts` — `assessAthlete(input)` → score 0–100 + label/colour, training load from weekly suffer score (<80 low, <250 …), highlights/warnings/recommendations.

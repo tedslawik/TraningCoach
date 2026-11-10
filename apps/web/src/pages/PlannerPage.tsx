@@ -16,7 +16,14 @@ const SPORTS: Array<{ value: SportType; icon: string; label: string; color: stri
 interface Session { type:'rest'|'swim'|'bike'|'run'|'brick'; label:string; distance:string; duration:string; description:string; }
 // Supports both new format (sessions[]) and legacy flat format
 interface DayPlan { day:string; date:string; sessions?:Session[]; type?:string; label?:string; distance?:string; duration?:string; description?:string; }
-interface PlanJson { assessment:string; week1:DayPlan[]; week2:DayPlan[]; }
+// ATP context computed by the API (season phase for the plan's 2 weeks)
+interface AtpRaceCtx { date:string; priority:'A'|'B'|'C'; label?:string; name?:string; distance?:string; }
+interface AtpWeekCtx {
+  weekStart:string; races:AtpRaceCtx[];
+  phase: { name:string; type:string; weekInPhase:number; phaseWeeks:number; focus:string; targetWeeklyTSS:number; intensity:string; keyWorkouts:string[] } | null;
+}
+interface AtpContext { discipline:string; weeks:AtpWeekCtx[]; nextA:{ date:string; title:string; weeksAway:number } | null; }
+interface PlanJson { assessment:string; week1:DayPlan[]; week2:DayPlan[]; atpContext?:AtpContext; }
 interface TrainingPlan { id:string; training_days_per_week:number; suggested_days:number; plan_json:PlanJson; week_start:string; created_at:string; sport_type:SportType; }
 
 const SPORT_META: Record<string, { icon:string; color:string; bg:string }> = {
@@ -90,8 +97,55 @@ function WeekGrid({ days, label }: { days: DayPlan[]; label: string }) {
   );
 }
 
-function GenerateModal({ suggestedDays, sport, onGenerate, onClose, generating }: {
-  suggestedDays:number; sport:SportType; onGenerate:(days:number)=>void; onClose:()=>void; generating:boolean;
+const PHASE_COLOR: Record<string, string> = {
+  base:'#2563eb', build:'#ea580c', peak:'#7c3aed', race:'#16a34a', recovery:'#9ca3af', transition:'#9ca3af',
+};
+const PRIORITY_COLOR: Record<string, string> = { A:'#e11d48', B:'#f59e0b', C:'#64748b' };
+const INTENSITY_LABEL: Record<string, string> = { low:'niska', moderate:'umiarkowana', high:'wysoka' };
+const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('pl-PL', { day:'numeric', month:'short' });
+
+/** Compact summary of the ATP phase(s) the 2-week plan is built for. */
+function AtpContextCard({ ctx, title }: { ctx: AtpContext; title: string }) {
+  return (
+    <div style={{ background:'var(--bg)', border:'0.5px solid var(--border)', borderRadius:'var(--radius-lg)', padding:'0.9rem 1.1rem', marginBottom:'1.25rem' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', flexWrap:'wrap', gap:8, marginBottom:8 }}>
+        <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--text-secondary)' }}>📅 {title}</div>
+        {ctx.nextA && (
+          <div style={{ fontSize:12, color:'var(--text-secondary)' }}>
+            Start A: <strong style={{ color:'var(--text)' }}>{ctx.nextA.title}</strong> · {fmtDay(ctx.nextA.date)} · za {ctx.nextA.weeksAway} tyg.
+          </div>
+        )}
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(240px, 1fr))', gap:8 }}>
+        {ctx.weeks.map((w, i) => (
+          <div key={w.weekStart} style={{ background:'var(--bg-secondary)', borderRadius:'var(--radius-md)', padding:'8px 10px', borderLeft:`3px solid ${w.phase ? PHASE_COLOR[w.phase.type] ?? 'var(--border-md)' : 'var(--border-md)'}` }}>
+            <div style={{ fontSize:11, color:'var(--text-secondary)', marginBottom:2 }}>Tydzień {i + 1} · od {fmtDay(w.weekStart)}</div>
+            {w.phase ? (
+              <>
+                <div style={{ fontSize:13, fontWeight:700 }}>
+                  {w.phase.name} <span style={{ fontWeight:500, color:'var(--text-secondary)' }}>· tydz. {w.phase.weekInPhase}/{w.phase.phaseWeeks}</span>
+                </div>
+                <div style={{ fontSize:11, color:'var(--text-secondary)' }}>
+                  intensywność {INTENSITY_LABEL[w.phase.intensity] ?? w.phase.intensity}{w.phase.targetWeeklyTSS ? ` · TSS fazy ≈ ${w.phase.targetWeeklyTSS}` : ''}
+                  {(w.phase.type === 'base' || w.phase.type === 'build') && w.phase.phaseWeeks >= 3 && w.phase.weekInPhase === w.phase.phaseWeeks && ' · tydzień odciążeniowy'}
+                </div>
+              </>
+            ) : <div style={{ fontSize:12, color:'var(--text-secondary)' }}>Poza zakresem ATP</div>}
+            {w.races.map(r => (
+              <div key={r.date + r.priority} style={{ fontSize:11, marginTop:4, display:'flex', gap:5, alignItems:'center' }}>
+                <span style={{ fontSize:9, fontWeight:800, color:'#fff', background:PRIORITY_COLOR[r.priority], borderRadius:3, padding:'0 4px' }}>{r.priority}</span>
+                {fmtDay(r.date)} · {r.name || r.label || r.distance}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GenerateModal({ suggestedDays, sport, onGenerate, onClose, generating, atp }: {
+  suggestedDays:number; sport:SportType; onGenerate:(days:number)=>void; onClose:()=>void; generating:boolean; atp?: AtpContext | null;
 }) {
   const [days, setDays] = useState(suggestedDays);
   const sp = SPORTS.find(s=>s.value===sport)!;
@@ -107,6 +161,12 @@ function GenerateModal({ suggestedDays, sport, onGenerate, onClose, generating }
         <p style={{ fontSize:13, color:'var(--text-secondary)', textAlign:'center', marginBottom:'2rem', lineHeight:1.6 }}>
           Claude przeanalizuje Twoje dotychczasowe treningi i ułoży 2-tygodniowy plan {sport === 'triathlon' ? 'triathlonowy' : `${sp.label.toLowerCase()}owy`}.
         </p>
+        {atp?.weeks[0]?.phase && (
+          <div style={{ marginTop:'-1.25rem', marginBottom:'1.5rem', padding:'8px 12px', borderRadius:'var(--radius-md)', background:'var(--bg-secondary)', fontSize:12, color:'var(--text-secondary)', textAlign:'center' }}>
+            📅 Dopasowany do ATP: <strong style={{ color:'var(--text)' }}>{atp.weeks[0].phase.name}</strong> (tydz. {atp.weeks[0].phase.weekInPhase}/{atp.weeks[0].phase.phaseWeeks})
+            {atp.weeks.some(w => w.races.length) && ' · uwzględni starty w tych tygodniach'}
+          </div>
+        )}
 
         <div style={{ marginBottom:'1.5rem' }}>
           <div style={{ fontSize:13, fontWeight:600, marginBottom:8 }}>Ile dni treningowych w tygodniu?</div>
@@ -137,7 +197,8 @@ function GenerateModal({ suggestedDays, sport, onGenerate, onClose, generating }
 export default function PlannerPage() {
   const { session } = useAuth();
   const [activeSport, setActiveSport] = useState<SportType>('triathlon');
-  const [plans, setPlans]             = useState<Partial<Record<SportType, TrainingPlan>>>({});
+  const [plans, setPlans]             = useState<Partial<Record<SportType, TrainingPlan | null>>>({});
+  const [atpCtx, setAtpCtx]           = useState<Partial<Record<SportType, AtpContext | null>>>({});
   const [suggestedDays, setSuggested] = useState(5);
   const [loading, setLoading]         = useState(false);
   const [showModal, setShowModal]     = useState(false);
@@ -148,20 +209,22 @@ export default function PlannerPage() {
   const currentPlan = plans[activeSport] ?? null;
 
   const fetchPlan = async (sport: SportType) => {
-    if (!session || plans[sport] !== undefined) return; // already fetched or cached
-    setLoading(true);
+    if (!session || sport === 'atp') return;
+    // Refetch on every tab visit — the ATP context changes when the season plan is regenerated.
+    if (plans[sport] === undefined) setLoading(true);
     try {
       const res = await fetch(`/api/ai/generate-plan?sport=${sport}`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (res.ok) {
         const d = await res.json();
-        setPlans(p => ({ ...p, [sport]: d.plan }));
+        setPlans(p => ({ ...p, [sport]: d.plan ?? null }));
+        setAtpCtx(c => ({ ...c, [sport]: d.atpContext ?? null }));
         setSuggested(d.suggestedDays ?? 5);
       } else {
-        setPlans(p => ({ ...p, [sport]: undefined }));
+        setPlans(p => ({ ...p, [sport]: null }));
       }
-    } catch { setPlans(p => ({ ...p, [sport]: undefined })); }
+    } catch { setPlans(p => ({ ...p, [sport]: null })); }
     finally { setLoading(false); }
   };
 
@@ -180,6 +243,7 @@ export default function PlannerPage() {
       const data = await res.json().catch(() => ({ error: `Serwer nie odpowiedział poprawnie (${res.status}) — spróbuj ponownie za chwilę.` }));
       if (!res.ok) throw new Error(data.error ?? 'Błąd');
       setPlans(p => ({ ...p, [activeSport]: data.plan }));
+      setAtpCtx(c => ({ ...c, [activeSport]: data.atpContext ?? null }));
       setSuggested(data.suggestedDays ?? days);
       if (data.usage) setLastUsage(data.usage);
       setShowModal(false);
@@ -220,6 +284,18 @@ export default function PlannerPage() {
       <section style={{ display: activeSport === 'atp' ? 'none' : undefined }}>
         <div style={{ maxWidth:1060, margin:'0 auto', padding:'2rem 5vw' }}>
           {loading && <p style={{ color:'var(--text-secondary)', fontSize:14 }}>Ładowanie planu…</p>}
+
+          {!loading && atpCtx[activeSport] && (
+            <AtpContextCard ctx={atpCtx[activeSport]!} title="Kontekst z planu rocznego (ATP) — najbliższe 2 tygodnie" />
+          )}
+          {!loading && atpCtx[activeSport] === null && activeSport !== 'atp' && (
+            <div style={{ fontSize:12, color:'var(--text-secondary)', marginBottom:'1.25rem', padding:'8px 12px', background:'var(--bg-secondary)', borderRadius:'var(--radius-md)' }}>
+              Brak planu rocznego (ATP) dla tej dyscypliny na najbliższe tygodnie — plan tygodniowy powstanie tylko na podstawie Twoich treningów.{' '}
+              <button onClick={() => setActiveSport('atp')} style={{ background:'none', border:'none', padding:0, color:'var(--tri)', fontWeight:600, cursor:'pointer', fontFamily:'var(--font)', fontSize:12 }}>
+                Utwórz ATP →
+              </button>
+            </div>
+          )}
           {error && <div className="alert alert-warn" style={{ marginBottom:16 }}>{error}</div>}
 
           {!loading && !currentPlan && (
@@ -246,6 +322,13 @@ export default function PlannerPage() {
                   ↻ Nowy plan {sp.label}
                 </button>
               </div>
+
+              {planJson.atpContext?.weeks[0]?.phase && (
+                <div style={{ fontSize:12, color:'var(--text-secondary)', marginTop:'-0.75rem', marginBottom:'1rem' }}>
+                  📅 Plan zbudowany dla fazy ATP: <strong style={{ color:'var(--text)' }}>{planJson.atpContext.weeks[0].phase.name}</strong>
+                  {' '}(tydz. {planJson.atpContext.weeks[0].phase.weekInPhase}/{planJson.atpContext.weeks[0].phase.phaseWeeks})
+                </div>
+              )}
 
               {/* Assessment */}
               {planJson.assessment && (
@@ -283,7 +366,7 @@ export default function PlannerPage() {
       </section>
 
       {showModal && (
-        <GenerateModal suggestedDays={suggestedDays} sport={activeSport} onGenerate={handleGenerate} onClose={()=>setShowModal(false)} generating={generating} />
+        <GenerateModal suggestedDays={suggestedDays} sport={activeSport} onGenerate={handleGenerate} onClose={()=>setShowModal(false)} generating={generating} atp={atpCtx[activeSport]} />
       )}
     </>
   );

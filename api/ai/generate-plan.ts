@@ -266,6 +266,98 @@ Odpowiedz TYLKO tym JSON (bez markdown):
 }
 
 /* ── Main prompt ── */
+/* ── ATP context for the weekly plan ──
+   The weekly plan follows the user's saved season plan (ATP) when its discipline matches. */
+interface AtpRace { date: string; priority: 'A' | 'B' | 'C'; label?: string; name?: string; distance?: string; discipline?: string }
+interface AtpWeek {
+  weekStart: string;
+  phase: { name: string; type: PhaseType; weekInPhase: number; phaseWeeks: number; focus: string;
+           targetWeeklyTSS: number; intensity: string; keyWorkouts: string[] } | null;
+  races: AtpRace[];
+}
+interface AtpContext {
+  discipline: string;
+  weeks: AtpWeek[];
+  nextA: { date: string; title: string; weeksAway: number } | null;
+}
+
+const DAY_MS = 24 * 3600 * 1000;
+const isoAddDays = (iso: string, n: number) => new Date(Date.parse(iso + 'T00:00:00Z') + n * DAY_MS).toISOString().slice(0, 10);
+const raceTitle  = (r: AtpRace) => r.name || r.label || r.distance || 'start';
+
+async function loadAtpContext(userId: string, sport: string, weekStart: string): Promise<AtpContext | null> {
+  const { data } = await supabase.from('training_plans').select('plan_json')
+    .eq('user_id', userId).eq('sport_type', 'atp').order('created_at', { ascending: false }).limit(1).maybeSingle();
+  const pj = data?.plan_json as { discipline?: string; phases?: Array<Record<string, unknown>>; races?: AtpRace[] } | undefined;
+  if (!pj?.phases?.length) return null;
+  const discipline = pj.discipline ?? 'triathlon';             // legacy ATPs were triathlon-only
+  if (discipline !== sport) return null;
+
+  const races = (pj.races ?? []).filter(r => r?.date && ISO_DATE.test(r.date));
+  const weeks: AtpWeek[] = [0, 1].map(k => {
+    const ws = isoAddDays(weekStart, 7 * k), we = isoAddDays(ws, 6);
+    const p  = pj.phases!.find(ph => ws >= String(ph.startDate) && ws <= String(ph.endDate));
+    return {
+      weekStart: ws,
+      races: races.filter(r => r.date >= ws && r.date <= we),
+      phase: p ? {
+        name: String(p.name ?? ''), type: (PHASE_TYPES.has(p.type as PhaseType) ? p.type : 'base') as PhaseType,
+        weekInPhase: Math.floor((Date.parse(ws) - Date.parse(String(p.startDate))) / (7 * DAY_MS)) + 1,
+        phaseWeeks: Number(p.weeks) || 1,
+        focus: String(p.focus ?? ''), targetWeeklyTSS: Number(p.targetWeeklyTSS) || 0,
+        intensity: String(p.intensity ?? ''),
+        keyWorkouts: Array.isArray(p.keyWorkouts) ? (p.keyWorkouts as unknown[]).map(String).slice(0, 5) : [],
+      } : null,
+    };
+  });
+  if (!weeks.some(w => w.phase)) return null;                  // ATP doesn't cover these weeks (outdated)
+
+  const a = races.filter(r => r.priority === 'A' && r.date >= weekStart).sort((x, y) => x.date.localeCompare(y.date))[0];
+  return {
+    discipline, weeks,
+    nextA: a ? { date: a.date, title: raceTitle(a), weeksAway: Math.round((Date.parse(a.date) - Date.parse(weekStart)) / (7 * DAY_MS)) } : null,
+  };
+}
+
+const DAY_NAMES = ['Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Nd'];
+const INTENSITY_PL: Record<string, string> = { low: 'niska', moderate: 'umiarkowana', high: 'wysoka' };
+
+function atpPromptBlock(ctx: AtpContext): string {
+  const weekLine = (w: AtpWeek, idx: number) => {
+    const head = `TYDZIEŃ ${idx + 1} (od ${w.weekStart}):`;
+    if (!w.phase) return `${head} poza zakresem ATP — kontynuuj logicznie poprzedni tydzień.`;
+    const p = w.phase;
+    const deload = (p.type === 'base' || p.type === 'build') && p.phaseWeeks >= 3 && p.weekInPhase === p.phaseWeeks;
+    const lines = [
+      `${head} faza „${p.name}” (${p.type}), tydzień ${p.weekInPhase}/${p.phaseWeeks}, intensywność ${INTENSITY_PL[p.intensity] ?? p.intensity}` +
+        (p.targetWeeklyTSS ? `, średni tygodniowy TSS fazy ≈ ${p.targetWeeklyTSS}` : ''),
+      p.focus ? `  Fokus fazy: ${p.focus}` : '',
+      p.keyWorkouts.length ? `  Kluczowe treningi fazy: ${p.keyWorkouts.join('; ')}` : '',
+      deload ? '  To ostatni tydzień bloku → TYDZIEŃ ODCIĄŻENIOWY: TSS −30–40% względem średniej fazy, bez ciężkich akcentów.' : '',
+      ...w.races.map(r => {
+        const day = DAY_NAMES[Math.round((Date.parse(r.date) - Date.parse(w.weekStart)) / DAY_MS)] ?? '';
+        const off = r.discipline && r.discipline !== ctx.discipline ? `, ${DISCIPLINE_LABELS[r.discipline] ?? r.discipline}` : '';
+        return `  START ${r.priority}: ${raceTitle(r)} (${r.label ?? r.distance ?? ''}${off}) — ${day} ${r.date}`;
+      }),
+    ];
+    return lines.filter(Boolean).join('\n');
+  };
+
+  return `
+KONTEKST Z PLANU ROCZNEGO (ATP) — plan MUSI być z nim spójny:
+${ctx.nextA ? `Najbliższy start A: ${ctx.nextA.title}, ${ctx.nextA.date} (za ${ctx.nextA.weeksAway} tyg.)` : 'Brak kolejnego startu A w ATP.'}
+${ctx.weeks.map(weekLine).join('\n')}
+
+ZASADY ATP (mają pierwszeństwo przed ogólnymi regułami poniżej):
+- Łączne obciążenie tygodnia ≈ średni TSS fazy z ATP (±10%), chyba że to tydzień odciążeniowy lub startowy; progresja między tygodniami wynika z ATP, nie z reguły „+5–10%”.
+- Intensywność fazy: niska → głównie Z1–Z2, max 1 akcent/tydz.; umiarkowana → 2 akcenty (próg/tempo, sweet spot); wysoka → jakość wyścigowa, krótsza objętość.
+- Wpleć kluczowe treningi fazy w tydzień (nie wszystkie muszą wystąpić co tydzień).
+- Start w tygodniu: wpisz go jako sesję w dniu startu (label „START <priorytet>: nazwa”, type wg dyscypliny startu), dzień przed — odpoczynek lub krótki rozruch, dzień po — regeneracja.
+  A: cały tydzień to tapering (objętość −40–60%, krótkie akcenty w tempie startowym). B: mini-tapering 3–4 dni przed. C: bez taperingu, start zastępuje akcent tygodnia.
+- Faza regeneracji/roztrenowania: tylko lekkie sesje, dużo swobody, bez interwałów.
+- W „assessment” nazwij fazę ATP i powiedz, jak te 2 tygodnie realizują jej cel.`;
+}
+
 function buildPrompt(
   summaries: Array<Record<string,unknown>>,
   recentActs: Array<Record<string,unknown>>,
@@ -274,6 +366,7 @@ function buildPrompt(
   sport: Exclude<SportType,'atp'>,
   hrZones: Array<{min:number;max:number}> | null,
   profile: { weight?: number; ftp?: number } = {},
+  atp: AtpContext | null = null,
 ): string {
   const recent = summaries.slice(-8);
   const avg = (k: string) => recent.length ? recent.reduce((s,r)=>s+((r[k] as number)??0),0)/recent.length : 0;
@@ -309,13 +402,14 @@ ${profile.ftp?`- FTP: ${profile.ftp} W`:''}
 ${hrZoneContext(hrZones)}
 - Dni treningowe: ${trainingDays}/tydzień
 ${sportContext(sport, analysis)}
+${atp ? atpPromptBlock(atp) : ''}
 
 TYDZIEŃ 1: ${days7(weekStart)}
 TYDZIEŃ 2: ${days7(w2s.toISOString().split('T')[0])}
 
 SCHEMAT JSON (odpowiedz TYLKO tym JSON, bez markdown):
 {
-  "assessment": "2-3 zdania: ocena zawodnika, aktualny Form i priorytet na 2 tygodnie",
+  "assessment": "2-3 zdania: ocena zawodnika, aktualny Form i priorytet na 2 tygodnie${atp ? ' (z nazwą fazy ATP)' : ''}",
   "week1": [
     {
       "day": "Pon",
@@ -338,7 +432,7 @@ SCHEMAT JSON (odpowiedz TYLKO tym JSON, bez markdown):
 
 REGUŁY:
 - Dokładnie ${trainingDays} dni z co najmniej 1 sesją, reszta = rest (sessions z type=rest)
-- Tydzień 2 trudniejszy o 5-10% od tygodnia 1
+${atp ? '- Obciążenie tygodni zgodnie z ATP (patrz ZASADY ATP)' : '- Tydzień 2 trudniejszy o 5-10% od tygodnia 1'}
 - Nie 2 ciężkie dni pod rząd
 - MOŻESZ planować 2-3 sesje w jednym dniu (rano + wieczór) jeśli zawodnik tego potrzebuje
   Typowe kombinacje: swim+run, swim+bike, bike+run (brick), lekki bieg+siłownia
@@ -356,11 +450,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { data: { user: u2 }, error: e2 } = await supabase.auth.getUser(jwt2);
     if (e2 || !u2) return res.status(401).json({ error: 'Unauthorized' });
     const sport2 = (req.query.sport as SportType) ?? 'triathlon';
-    const { data, error: dbErr } = await supabase.from('training_plans').select('*').eq('user_id', u2.id).eq('sport_type', sport2).order('created_at', { ascending:false }).limit(1).single();
-    if (dbErr || !data) return res.status(404).json({ error: 'No plan found' });
+    const { data } = await supabase.from('training_plans').select('*').eq('user_id', u2.id).eq('sport_type', sport2).order('created_at', { ascending:false }).limit(1).maybeSingle();
     const { data: smr } = await supabase.from('weekly_summaries').select('swim_sessions,bike_sessions,run_sessions').eq('user_id', u2.id).order('week_start',{ascending:false}).limit(4);
     const avgS = smr?.length ? smr.reduce((s,r)=>s+(r.swim_sessions??0)+(r.bike_sessions??0)+(r.run_sessions??0),0)/smr.length : 5;
-    return res.json({ plan: data, suggestedDays: Math.max(3,Math.min(6,Math.round(avgS))) });
+    const atpContext = sport2 === 'atp' ? null : await loadAtpContext(u2.id, sport2, nextMonday());
+    return res.json({ plan: data ?? null, suggestedDays: Math.max(3,Math.min(6,Math.round(avgS))), atpContext });
   }
 
   if (req.method !== 'POST') return res.status(405).end();
@@ -457,7 +551,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'trainingDays must be 2–7' });
 
   const weekStart     = nextMonday();
-  const prompt        = buildPrompt(summaries ?? [], recentActs, trainingDays, weekStart, sport as Exclude<SportType,'atp'>, hrZones, profile);
+  const atpContext    = await loadAtpContext(user.id, sport, weekStart);
+  const prompt        = buildPrompt(summaries ?? [], recentActs, trainingDays, weekStart, sport as Exclude<SportType,'atp'>, hrZones, profile, atpContext);
   const avgSessions   = (summaries ?? []).slice(0,4).reduce((s,r)=>s+((r.swim_sessions as number)??0)+((r.bike_sessions as number)??0)+((r.run_sessions as number)??0),0) / Math.max(1, Math.min((summaries??[]).length,4));
   const suggestedDays = Math.max(3, Math.min(6, Math.round(avgSessions)));
 
@@ -489,6 +584,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     planJson = JSON.parse(cleaned);
+    if (atpContext) planJson.atpContext = atpContext;            // which ATP phase this plan was built for
   } catch {
     // Log first 500 chars for debugging
     console.error('[generate-plan] Invalid JSON, first 500 chars:', raw.slice(0, 500));
@@ -503,5 +599,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { input_tokens, output_tokens } = message.usage;
 
-  res.json({ plan: saved, suggestedDays, usage: { inputTokens: input_tokens, outputTokens: output_tokens, costUsd: costUsd(message.usage) } });
+  res.json({ plan: saved, suggestedDays, atpContext, usage: { inputTokens: input_tokens, outputTokens: output_tokens, costUsd: costUsd(message.usage) } });
 }
